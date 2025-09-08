@@ -1,0 +1,36 @@
+{
+  "name": "whatsapp-automation-app",
+  "version": "1.0.0",
+  "description": "Mobile app with Node.js backend for automated WhatsApp messaging using Baileys",
+  "main": "server-supabase.js",
+  "scripts": {
+    "start": "node server-supabase.js",
+    "dev": "nodemon server-supabase.js",
+    "mobile": "cd mobile && npm start"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.4",
+    "@whiskeysockets/baileys": "^6.7.18",
+    "axios": "^1.11.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "moment": "^2.29.4",
+    "node-fetch": "^3.3.2",
+    "qrcode": "^1.5.3",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "whatsapp",
+    "baileys",
+    "automation",
+    "mobile",
+    "react-native"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
