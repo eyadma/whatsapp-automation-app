@@ -510,20 +510,9 @@ async function connectWhatsApp(userId, sessionId = null) {
   try {
     console.log(`🚀 Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
     
-    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
-    console.log(`📁 Session directory: ${sessionDir}`);
-    
-    if (!fs.existsSync(sessionDir)) {
-      console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
-      fs.mkdirSync(sessionDir, { recursive: true });
-    }
-    
-    console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
-    console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
-
-    console.log(`🔐 Loading auth state for user: ${userId}`);
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    console.log(`✅ Auth state loaded for user: ${userId}`);
+    console.log(`🔐 Loading auth state from cloud storage for user: ${userId}`);
+    const { state, saveCreds } = await sessionStorage.getAuthState(userId, sessionId || 'default');
+    console.log(`✅ Auth state loaded from cloud storage for user: ${userId}`);
 
     console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
     const sock = makeWASocket({
@@ -659,7 +648,10 @@ async function connectWhatsApp(userId, sessionId = null) {
       }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', async (creds) => {
+      console.log(`💾 Saving credentials to cloud storage for user: ${userId}, session: ${sessionId || 'default'}`);
+      await sessionStorage.saveAuthState(userId, sessionId || 'default', creds);
+    });
     
     // Add error handling for the socket
     sock.ev.on('error', (error) => {
@@ -1257,11 +1249,12 @@ app.post('/api/whatsapp/delete-session/:userId', async (req, res) => {
       .delete()
       .eq('session_id', userId);
 
-    // Delete session files
-    const sessionDir = path.join(__dirname, 'sessions', userId);
-    if (fs.existsSync(sessionDir)) {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`🗂️ Deleted session directory for user: ${userId}`);
+    // Delete session files from cloud storage
+    try {
+      await sessionStorage.deleteSessionData(userId, 'default');
+      console.log(`🗂️ Deleted session data from cloud storage for user: ${userId}`);
+    } catch (deleteError) {
+      console.log(`⚠️ Error deleting from cloud storage (continuing):`, deleteError.message);
     }
 
     console.log(`✅ Session completely deleted for user: ${userId}`);
@@ -1343,11 +1336,12 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
       .delete()
       .eq('session_id', userId);
 
-    // Delete session files completely
-    const sessionDir = path.join(__dirname, 'sessions', userId);
-    if (fs.existsSync(sessionDir)) {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`🗂️ Deleted session directory for user: ${userId}`);
+    // Delete session files from cloud storage
+    try {
+      await sessionStorage.deleteSessionData(userId, 'default');
+      console.log(`🗂️ Deleted session data from cloud storage for user: ${userId}`);
+    } catch (deleteError) {
+      console.log(`⚠️ Error deleting from cloud storage (continuing):`, deleteError.message);
     }
 
     // Wait a moment before creating new connection
