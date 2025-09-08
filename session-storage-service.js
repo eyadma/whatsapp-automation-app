@@ -145,70 +145,13 @@ class SessionStorageService {
 
   // Get auth state for Baileys (compatible with useMultiFileAuthState)
   async getAuthState(userId, sessionId) {
-    if (!this.useCloudStorage) {
-      // Fallback to local storage
-      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
-      const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
-      return await useMultiFileAuthState(sessionDir);
-    }
-
-    try {
-      // Create a temporary directory for this session
-      const tempDir = path.join(__dirname, 'temp-sessions', userId, sessionId);
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      // Download session files from cloud storage to temp directory
-      const folderPath = `sessions/${userId}/${sessionId}/`;
-      const { data: files } = await this.supabase.storage
-        .from(this.bucketName)
-        .list(folderPath);
-
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const filePath = `${folderPath}${file.name}`;
-          const { data, error } = await this.supabase.storage
-            .from(this.bucketName)
-            .download(filePath);
-
-          if (error) throw error;
-
-          const localFilePath = path.join(tempDir, file.name);
-          fs.writeFileSync(localFilePath, await data.arrayBuffer());
-        }
-      }
-
-      // Use the temp directory with useMultiFileAuthState
-      const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
-      const { state, saveCreds } = await useMultiFileAuthState(tempDir);
-
-      // Override saveCreds to upload to cloud storage
-      const originalSaveCreds = saveCreds;
-      const cloudSaveCreds = async (creds) => {
-        // Save locally first
-        await originalSaveCreds(creds);
-        
-        // Then upload to cloud storage
-        try {
-          const credsPath = path.join(tempDir, 'creds.json');
-          if (fs.existsSync(credsPath)) {
-            const credsContent = fs.readFileSync(credsPath);
-            await this.uploadSessionFile(userId, sessionId, 'creds.json', credsContent);
-          }
-        } catch (error) {
-          console.error('Error uploading creds to cloud:', error);
-        }
-      };
-
-      return { state, saveCreds: cloudSaveCreds };
-    } catch (error) {
-      console.error(`❌ Error getting auth state from cloud:`, error);
-      // Fallback to local storage
-      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
-      const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
-      return await useMultiFileAuthState(sessionDir);
-    }
+    // Always use local storage for now to ensure WhatsApp connection works
+    // We can sync to cloud storage after the connection is established
+    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
+    const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
+    
+    console.log(`📁 Using local storage for session: ${sessionDir}`);
+    return await useMultiFileAuthState(sessionDir);
   }
 
   // Delete session data (alias for deleteSession)

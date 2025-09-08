@@ -649,8 +649,15 @@ async function connectWhatsApp(userId, sessionId = null) {
     });
 
     sock.ev.on('creds.update', async (creds) => {
-      console.log(`💾 Saving credentials to cloud storage for user: ${userId}, session: ${sessionId || 'default'}`);
-      await sessionStorage.saveAuthState(userId, sessionId || 'default', creds);
+      console.log(`💾 Saving credentials for user: ${userId}, session: ${sessionId || 'default'}`);
+      // Save locally first (handled by useMultiFileAuthState)
+      // Then sync to cloud storage
+      try {
+        await sessionStorage.saveAuthState(userId, sessionId || 'default', creds);
+        console.log(`☁️ Synced credentials to cloud storage`);
+      } catch (error) {
+        console.error('Error syncing to cloud storage:', error);
+      }
     });
     
     // Add error handling for the socket
