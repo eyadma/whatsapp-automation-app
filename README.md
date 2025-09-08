@@ -1,266 +1,131 @@
-# 🚀 **WhatsApp Cloud API Project**
+# 🚀 **WhatsApp Automation App**
 
-A Node.js server for sending WhatsApp messages using the official Meta WhatsApp Cloud API.
+A full-stack WhatsApp automation application with React Native frontend and Node.js backend, featuring multi-session support, cloud storage, and admin impersonation capabilities.
 
 ## ✅ **Features**
 
-- ✅ **Send individual messages** to WhatsApp users
-- ✅ **Send bulk messages** to multiple users
-- ✅ **Message status tracking** 
-- ✅ **Rate limiting protection**
-- ✅ **Error handling** and logging
-- ✅ **RESTful API** endpoints
-- ✅ **No Puppeteer** - Pure HTTP API calls
-- ✅ **Low resource usage** - Minimal CPU/Memory
-- ✅ **Server friendly** - Works on any hosting
+### **Frontend (React Native)**
+- ✅ **Multi-platform support** - iOS, Android, and Web
+- ✅ **Dark mode** - Complete theming support
+- ✅ **WhatsApp session management** - Create, connect, and manage multiple sessions
+- ✅ **Message sending** - Send individual and bulk messages
+- ✅ **Customer management** - Add, edit, and manage customers
+- ✅ **Admin features** - User impersonation and control
+- ✅ **Real-time status** - Live connection status updates
+- ✅ **Multi-language support** - Arabic, Hebrew, and English
+
+### **Backend (Node.js)**
+- ✅ **WhatsApp integration** - Using Baileys library
+- ✅ **Multi-session support** - Handle multiple WhatsApp connections
+- ✅ **Cloud storage** - Supabase Storage for session persistence
+- ✅ **RESTful API** - Complete API endpoints
+- ✅ **Background processing** - Async message sending
+- ✅ **Database integration** - Supabase PostgreSQL
+- ✅ **Admin features** - User management and impersonation
+
+### **Database (Supabase)**
+- ✅ **User management** - Profiles and authentication
+- ✅ **Session storage** - WhatsApp session data
+- ✅ **Customer data** - Customer information and preferences
+- ✅ **Message history** - Track all sent messages
+- ✅ **Template system** - Message templates in multiple languages
+- ✅ **Analytics** - Session metrics and usage statistics
 
 ## 🚀 **Quick Start**
 
 ### **1. Install Dependencies**
 ```bash
+# Backend dependencies
 npm install
+
+# Frontend dependencies
+cd mobile && npm install
 ```
 
 ### **2. Set Up Environment Variables**
-```bash
-cp env.example .env
-```
-
-Edit `.env` file with your WhatsApp Cloud API credentials:
+Create `.env` file in the root directory:
 ```env
-WHATSAPP_ACCESS_TOKEN=your_access_token_here
-WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
-PORT=3001
+SUPABASE_URL=your_supabase_url_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+SUPABASE_ANON_KEY=your_anon_key_here
+PORT=3000
 ```
 
-### **3. Start the Server**
+### **3. Set Up Database**
+```bash
+# Run database setup
+node setup-supabase.js
+node setup-supabase-storage.js
+```
+
+### **4. Start the Backend**
 ```bash
 npm start
 ```
 
-The server will run on `http://localhost:3001`
-
-## 📋 **API Endpoints**
-
-### **Health Check**
+### **5. Start the Frontend**
 ```bash
-GET /api/health
+cd mobile && npm start
 ```
 
-### **Test Configuration**
-```bash
-GET /api/test
+## 📱 **Platform Support**
+
+- **iOS** - Native iOS app
+- **Android** - Native Android app  
+- **Web** - Progressive Web App (PWA)
+- **Desktop** - Electron wrapper (optional)
+
+## 🔧 **Architecture**
+
 ```
-
-### **Send Single Message**
-```bash
-POST /api/messages/send
-Content-Type: application/json
-
-{
-  "to": "972501234567",
-  "text": "Hello from WhatsApp Cloud API!"
-}
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   React Native  │    │   Node.js API   │    │   Supabase      │
+│   Frontend      │◄──►│   Backend       │◄──►│   Database      │
+│                 │    │                 │    │                 │
+│ • WhatsApp UI   │    │ • Baileys API   │    │ • PostgreSQL    │
+│ • Session Mgmt  │    │ • Multi-session │    │ • Storage       │
+│ • Admin Panel   │    │ • Cloud Storage │    │ • Auth          │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
-
-### **Send Bulk Messages**
-```bash
-POST /api/messages/send-bulk
-Content-Type: application/json
-
-{
-  "messages": [
-    {
-      "to": "972501234567",
-      "text": "Hello John!"
-    },
-    {
-      "to": "972507654321", 
-      "text": "Hello Jane!"
-    }
-  ]
-}
-```
-
-### **Get Message Status**
-```bash
-GET /api/messages/status/{messageId}
-```
-
-## 🔧 **Setup WhatsApp Cloud API**
-
-### **Step 1: Create Facebook Developer Account**
-1. Go to https://developers.facebook.com/
-2. Click "Get Started" or "Log In"
-3. Create a new app (Business type)
-4. Add "WhatsApp" product to your app
-
-### **Step 2: Configure WhatsApp Business**
-1. In your app dashboard, go to "WhatsApp" > "Getting Started"
-2. Add your phone number for testing
-3. Get your access token and phone number ID
-
-### **Step 3: Test the Setup**
-```bash
-# Test the server
-curl http://localhost:3001/api/test
-
-# Test sending a message
-curl -X POST http://localhost:3001/api/messages/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "to": "972501234567",
-    "text": "Hello from WhatsApp Cloud API!"
-  }'
-```
-
-## 📱 **Usage Examples**
-
-### **JavaScript/Node.js**
-```javascript
-// Send single message
-const response = await fetch('http://localhost:3001/api/messages/send', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    to: '972501234567',
-    text: 'Hello from WhatsApp Cloud API!'
-  })
-});
-
-const result = await response.json();
-console.log(result);
-```
-
-### **Python**
-```python
-import requests
-
-# Send single message
-response = requests.post('http://localhost:3001/api/messages/send', 
-  json={
-    'to': '972501234567',
-    'text': 'Hello from WhatsApp Cloud API!'
-  }
-)
-
-result = response.json()
-print(result)
-```
-
-### **cURL**
-```bash
-# Send single message
-curl -X POST http://localhost:3001/api/messages/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "to": "972501234567",
-    "text": "Hello from WhatsApp Cloud API!"
-  }'
-
-# Send bulk messages
-curl -X POST http://localhost:3001/api/messages/send-bulk \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {
-        "to": "972501234567",
-        "text": "Hello John!"
-      },
-      {
-        "to": "972507654321",
-        "text": "Hello Jane!"
-      }
-    ]
-  }'
-```
-
-## 💰 **Pricing**
-
-### **Free Tier:**
-- 1,000 messages/month
-- Perfect for testing and small usage
-
-### **Paid Tier:**
-- $0.005 per message (after free tier)
-- Very affordable for business use
-
-## 🔒 **Security**
-
-- Store your access token securely
-- Use environment variables
-- Don't commit `.env` file to version control
-- Use HTTPS in production
 
 ## 🚀 **Deployment**
 
-### **Heroku**
-```bash
-# Create Heroku app
-heroku create your-whatsapp-api
+### **Backend (Railway)**
+1. Connect GitHub repository to Railway
+2. Set environment variables
+3. Deploy automatically
 
-# Set environment variables
-heroku config:set WHATSAPP_ACCESS_TOKEN=your_token
-heroku config:set WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+### **Frontend (Netlify)**
+1. Build web version: `cd mobile && npx expo export --platform web`
+2. Deploy `dist` folder to Netlify
 
-# Deploy
-git push heroku main
-```
+### **Database (Supabase)**
+- Already configured and ready
+- Cloud storage for sessions
+- RLS policies for security
 
-### **Railway**
-```bash
-# Connect to Railway
-railway login
-railway init
+## 📊 **API Endpoints**
 
-# Set environment variables
-railway variables set WHATSAPP_ACCESS_TOKEN=your_token
-railway variables set WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+### **WhatsApp Management**
+- `GET /api/whatsapp/status/:userId/:sessionId` - Get connection status
+- `POST /api/whatsapp/connect/:userId/:sessionId` - Connect session
+- `POST /api/whatsapp/disconnect/:userId/:sessionId` - Disconnect session
+- `GET /api/whatsapp/qr/:userId/:sessionId` - Get QR code
 
-# Deploy
-railway up
-```
+### **Message Sending**
+- `POST /api/messages/send` - Send single message
+- `POST /api/messages/send-background` - Send bulk messages
 
-### **VPS/Docker**
-```bash
-# Build Docker image
-docker build -t whatsapp-cloud-api .
+### **Customer Management**
+- `GET /api/customers/:userId` - Get user's customers
+- `POST /api/customers/fetch/:userId` - Fetch from external API
 
-# Run container
-docker run -p 3001:3001 \
-  -e WHATSAPP_ACCESS_TOKEN=your_token \
-  -e WHATSAPP_PHONE_NUMBER_ID=your_phone_id \
-  whatsapp-cloud-api
-```
+## 🔒 **Security Features**
 
-## 🐛 **Troubleshooting**
-
-### **Common Issues:**
-
-1. **"WhatsApp credentials not configured"**
-   - Check your `.env` file
-   - Verify environment variables are set
-
-2. **"Invalid phone number"**
-   - Use international format (e.g., 972501234567)
-   - Remove + symbol
-
-3. **"Rate limit exceeded"**
-   - Wait between messages
-   - Check your WhatsApp Business API limits
-
-4. **"Access token expired"**
-   - Generate new access token
-   - Update your `.env` file
-
-## 📞 **Support**
-
-If you need help:
-1. Check the troubleshooting section
-2. Review WhatsApp Cloud API documentation
-3. Check server logs for detailed error messages
+- **Row Level Security (RLS)** - Database-level user isolation
+- **Admin impersonation** - Secure user switching
+- **Cloud storage** - Encrypted session storage
+- **Environment variables** - Secure credential management
 
 ## 📄 **License**
 
@@ -268,4 +133,4 @@ MIT License - feel free to use this project for your own applications.
 
 ---
 
-**🎯 This project provides a clean, scalable solution for WhatsApp messaging without the resource issues of Puppeteer-based solutions!** 
+**🎯 A complete WhatsApp automation solution with enterprise-grade features!**
