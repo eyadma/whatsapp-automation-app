@@ -9,14 +9,18 @@ class SessionStorageService {
     this.supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     this.bucketName = 'whatsapp-sessions';
     
-    if (this.supabaseUrl && this.supabaseServiceKey) {
-      this.supabase = createClient(this.supabaseUrl, this.supabaseServiceKey);
-      this.useCloudStorage = true;
-      console.log('☁️ Using Supabase Storage for sessions');
-    } else {
-      this.useCloudStorage = false;
-      console.log('💾 Using local file storage for sessions');
-    }
+    // Force local storage for testing
+    this.useCloudStorage = false;
+    console.log('💾 Using local file storage for sessions (testing mode)');
+    
+    // if (this.supabaseUrl && this.supabaseServiceKey) {
+    //   this.supabase = createClient(this.supabaseUrl, this.supabaseServiceKey);
+    //   this.useCloudStorage = true;
+    //   console.log('☁️ Using Supabase Storage for sessions');
+    // } else {
+    //   this.useCloudStorage = false;
+    //   console.log('💾 Using local file storage for sessions');
+    // }
   }
 
   // Get session file path
@@ -145,8 +149,7 @@ class SessionStorageService {
 
   // Get auth state for Baileys (compatible with useMultiFileAuthState)
   async getAuthState(userId, sessionId) {
-    // Always use local storage for now to ensure WhatsApp connection works
-    // We can sync to cloud storage after the connection is established
+    // Always use local storage for testing
     const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
     const { useMultiFileAuthState } = require('@whiskeysockets/baileys');
     
@@ -156,35 +159,20 @@ class SessionStorageService {
 
   // Delete session data (alias for deleteSession)
   async deleteSessionData(userId, sessionId) {
-    return await this.deleteSession(userId, sessionId);
+    // Always use local storage for testing
+    return await this.deleteLocalSession(userId, sessionId);
   }
 
   // Save auth state (for compatibility)
   async saveAuthState(userId, sessionId, creds) {
-    if (!this.useCloudStorage) {
-      // Fallback to local storage
-      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
-      if (!fs.existsSync(sessionDir)) {
-        fs.mkdirSync(sessionDir, { recursive: true });
-      }
-      const credsPath = path.join(sessionDir, 'creds.json');
-      fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
-      return;
+    // Always use local storage for testing
+    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true });
     }
-
-    try {
-      const credsContent = JSON.stringify(creds, null, 2);
-      await this.uploadSessionFile(userId, sessionId, 'creds.json', credsContent);
-    } catch (error) {
-      console.error('Error saving auth state to cloud:', error);
-      // Fallback to local storage
-      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
-      if (!fs.existsSync(sessionDir)) {
-        fs.mkdirSync(sessionDir, { recursive: true });
-      }
-      const credsPath = path.join(sessionDir, 'creds.json');
-      fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
-    }
+    const credsPath = path.join(sessionDir, 'creds.json');
+    fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
+    console.log(`💾 Saved auth state to local storage: ${credsPath}`);
   }
 
   // Local storage fallback methods
