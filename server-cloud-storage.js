@@ -205,7 +205,40 @@ app.get('/api/whatsapp/status/:userId', async (req, res) => {
   }
 });
 
-// 2. Connect WhatsApp
+// 2. Connect WhatsApp (with sessionId in URL path)
+app.post('/api/whatsapp/connect/:userId/:sessionId', async (req, res) => {
+  const { userId, sessionId } = req.params;
+  const { sessionName, isDefault } = req.body;
+  
+  try {
+    console.log(`🔗 Connecting WhatsApp for user: ${userId}, session: ${sessionId}`);
+    
+    // Create session
+    const createResult = await sessionStorageManager.createSession(userId, {
+      sessionId,
+      name: sessionName || `Session ${sessionId}`,
+      isDefault: isDefault || false
+    });
+    
+    if (!createResult.success) {
+      return res.status(500).json({ success: false, error: createResult.error });
+    }
+    
+    // Connect WhatsApp
+    const result = await connectWhatsApp(userId, sessionId);
+    
+    res.json({
+      success: true,
+      sessionId: result.sessionId,
+      message: 'WhatsApp connection initiated'
+    });
+  } catch (error) {
+    console.error(`❌ Error connecting WhatsApp:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2b. Connect WhatsApp (with sessionId in request body - for backward compatibility)
 app.post('/api/whatsapp/connect/:userId', async (req, res) => {
   const { userId } = req.params;
   const { sessionId, sessionName, isDefault } = req.body;
@@ -240,7 +273,28 @@ app.post('/api/whatsapp/connect/:userId', async (req, res) => {
   }
 });
 
-// 3. Disconnect WhatsApp
+// 3. Disconnect WhatsApp (with sessionId in URL path)
+app.post('/api/whatsapp/disconnect/:userId/:sessionId', async (req, res) => {
+  const { userId, sessionId } = req.params;
+  
+  try {
+    console.log(`🔌 Disconnecting WhatsApp for user: ${userId}, session: ${sessionId}`);
+    
+    const result = await sessionStorageManager.disconnectSession(userId, sessionId);
+    
+    if (result.success) {
+      removeConnection(userId, sessionId);
+      res.json({ success: true, message: 'WhatsApp disconnected successfully' });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    console.error(`❌ Error disconnecting WhatsApp:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3b. Disconnect WhatsApp (with sessionId in request body - for backward compatibility)
 app.post('/api/whatsapp/disconnect/:userId', async (req, res) => {
   const { userId } = req.params;
   const { sessionId } = req.body;
