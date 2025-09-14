@@ -2,11 +2,12 @@
   "name": "whatsapp-automation-app",
   "version": "1.0.0",
   "description": "Mobile app with Node.js backend for automated WhatsApp messaging using Baileys",
-  "main": "server-supabase.js",
+  "main": "server-cloud-storage.js",
   "scripts": {
-    "start": "node server-supabase.js",
-    "dev": "nodemon server-supabase.js",
-    "mobile": "cd mobile && npm start"
+    "start": "node server-cloud-storage.js",
+    "dev": "nodemon server-cloud-storage.js",
+    "mobile": "cd mobile && npm start",
+    "legacy": "node server-supabase.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",

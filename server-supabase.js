@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const supabase = require('./config/supabase');
+const EnhancedSessionStorageManager = require('./enhanced-session-storage-manager');
 require('dotenv').config();
 
 const app = express();
@@ -24,6 +25,12 @@ const userSessions = new Map(); // userId -> Set of active sessionIds
 
 // Background message processing management
 const backgroundProcesses = new Map();
+
+// Enhanced session storage manager with cloud integration
+const sessionStorageManager = new EnhancedSessionStorageManager();
+
+// Start periodic sync to cloud storage (every 5 minutes)
+sessionStorageManager.startPeriodicSync(300000);
 
 // Utility function to convert WhatsApp phone numbers to Israeli local format
 function convertWhatsAppPhoneToLocal(whatsappPhoneNumber) {
@@ -556,27 +563,15 @@ async function connectWhatsApp(userId, sessionId = null) {
   try {
     console.log(`🚀 Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
     
-    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
-    console.log(`📁 Session directory: ${sessionDir}`);
+    // Use the enhanced session storage manager
+    const result = await sessionStorageManager.connectWhatsApp(userId, sessionId);
     
-    if (!fs.existsSync(sessionDir)) {
-      console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
-      fs.mkdirSync(sessionDir, { recursive: true });
+    if (!result.success) {
+      throw new Error(result.error);
     }
     
-    console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
-    console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
-
-    console.log(`🔐 Loading auth state for user: ${userId}`);
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    console.log(`✅ Auth state loaded for user: ${userId}`);
-
-    console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
-    const sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: true
-    });
-    console.log(`✅ WhatsApp socket created for user: ${userId}`);
+    console.log(`✅ WhatsApp connection initiated for user: ${userId}, session: ${sessionId}`);
+    return result;
 
     // Handle connection updates
     sock.ev.on('connection.update', async (update) => {
