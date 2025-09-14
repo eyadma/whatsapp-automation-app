@@ -146,6 +146,7 @@ async function connectWhatsApp(userId, sessionId = null) {
     const result = await sessionStorageManager.connectWhatsApp(userId, sessionId);
     
     if (!result.success) {
+      console.error(`❌ Session storage manager failed:`, result.error);
       throw new Error(result.error);
     }
     
@@ -153,6 +154,7 @@ async function connectWhatsApp(userId, sessionId = null) {
     return result;
   } catch (error) {
     console.error(`❌ Error connecting WhatsApp for user ${userId}:`, error);
+    console.error(`❌ Error stack:`, error.stack);
     throw error;
   }
 }
@@ -212,8 +214,10 @@ app.post('/api/whatsapp/connect/:userId/:sessionId', async (req, res) => {
   
   try {
     console.log(`🔗 Connecting WhatsApp for user: ${userId}, session: ${sessionId}`);
+    console.log(`📋 Request body:`, { sessionName, isDefault });
     
     // Create session
+    console.log(`📝 Creating session in database...`);
     const createResult = await sessionStorageManager.createSession(userId, {
       sessionId,
       name: sessionName || `Session ${sessionId}`,
@@ -221,11 +225,21 @@ app.post('/api/whatsapp/connect/:userId/:sessionId', async (req, res) => {
     });
     
     if (!createResult.success) {
-      return res.status(500).json({ success: false, error: createResult.error });
+      console.error(`❌ Failed to create session:`, createResult.error);
+      return res.status(500).json({ 
+        success: false, 
+        error: `Failed to create session: ${createResult.error}`,
+        step: 'session_creation'
+      });
     }
     
+    console.log(`✅ Session created successfully`);
+    
     // Connect WhatsApp
+    console.log(`🔗 Initiating WhatsApp connection...`);
     const result = await connectWhatsApp(userId, sessionId);
+    
+    console.log(`✅ WhatsApp connection result:`, result);
     
     res.json({
       success: true,
@@ -234,7 +248,13 @@ app.post('/api/whatsapp/connect/:userId/:sessionId', async (req, res) => {
     });
   } catch (error) {
     console.error(`❌ Error connecting WhatsApp:`, error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error(`❌ Error stack:`, error.stack);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      step: 'whatsapp_connection',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

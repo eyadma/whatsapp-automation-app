@@ -78,34 +78,52 @@ class EnhancedSessionStorageManager {
       const localSessionPath = path.join(__dirname, 'sessions', userId, sessionId);
       
       // Check if session exists in cloud storage
-      const { exists } = await this.storageService.sessionExists(userId, sessionId);
-      
-      if (exists) {
-        console.log(`📥 Session exists in cloud, restoring...`);
-        const restoreResult = await this.storageService.restoreSessionFromCloud(userId, sessionId, localSessionPath);
+      try {
+        const { exists } = await this.storageService.sessionExists(userId, sessionId);
         
-        if (!restoreResult.success) {
-          console.warn(`⚠️ Failed to restore from cloud: ${restoreResult.error}`);
+        if (exists) {
+          console.log(`📥 Session exists in cloud, restoring...`);
+          const restoreResult = await this.storageService.restoreSessionFromCloud(userId, sessionId, localSessionPath);
+          
+          if (!restoreResult.success) {
+            console.warn(`⚠️ Failed to restore from cloud: ${restoreResult.error}`);
+          }
         }
+      } catch (storageError) {
+        console.warn(`⚠️ Cloud storage check failed: ${storageError.message}`);
+        // Continue with local session creation
       }
 
       // Create local directory if it doesn't exist
       if (!fs.existsSync(localSessionPath)) {
         fs.mkdirSync(localSessionPath, { recursive: true });
+        console.log(`📁 Created local session directory: ${localSessionPath}`);
       }
 
       // Load auth state
+      console.log(`🔐 Loading auth state for session: ${sessionId}`);
       const { state, saveCreds } = await useMultiFileAuthState(localSessionPath);
+      console.log(`✅ Auth state loaded for session: ${sessionId}`);
       
       // Create WhatsApp socket
+      console.log(`🔗 Creating WhatsApp socket for session: ${sessionId}`);
       const sock = makeWASocket({
         auth: state,
         printQRInTerminal: true,
         logger: {
-          level: 'info',
-          child: () => ({ level: 'info', trace: () => {}, debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, fatal: () => {} })
+          level: 'silent', // Reduce logging to avoid issues
+          child: () => ({ 
+            level: 'silent', 
+            trace: () => {}, 
+            debug: () => {}, 
+            info: () => {}, 
+            warn: () => {}, 
+            error: () => {}, 
+            fatal: () => {} 
+          })
         }
       });
+      console.log(`✅ WhatsApp socket created for session: ${sessionId}`);
 
       // Store connection
       if (!this.activeSessions.has(userId)) {
@@ -123,7 +141,19 @@ class EnhancedSessionStorageManager {
       return { success: true, sessionId, qrCode: null };
     } catch (error) {
       console.error(`❌ Error connecting WhatsApp:`, error);
-      await this.updateSessionStatus(userId, sessionId, 'error');
+      console.error(`❌ Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        userId,
+        sessionId
+      });
+      
+      try {
+        await this.updateSessionStatus(userId, sessionId, 'error');
+      } catch (statusError) {
+        console.error(`❌ Failed to update session status:`, statusError);
+      }
+      
       return { success: false, error: error.message };
     }
   }
