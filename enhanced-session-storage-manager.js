@@ -20,17 +20,63 @@ class EnhancedSessionStorageManager {
       const sessionId = sessionData.sessionId || `session_${Date.now()}_${uuidv4().substr(0, 8)}`;
       const localSessionPath = path.join(__dirname, 'sessions', userId, sessionId);
       
-      console.log(`🚀 Creating new session: ${sessionId} for user: ${userId}`);
+      console.log(`🚀 Creating/updating session: ${sessionId} for user: ${userId}`);
       
       // Create local directory
       if (!fs.existsSync(localSessionPath)) {
         fs.mkdirSync(localSessionPath, { recursive: true });
       }
 
-      // Store session metadata in database
+      // Check if session already exists
+      const { data: existingSession, error: checkError } = await supabase
+        .from('whatsapp_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('session_id', sessionId)
+        .single();
+
+      if (existingSession && !checkError) {
+        console.log(`📋 Session already exists: ${sessionId}, updating...`);
+        
+        // Update existing session
+        const { data: updatedSession, error: updateError } = await supabase
+          .from('whatsapp_sessions')
+          .update({
+            session_name: sessionData.name || existingSession.session_name,
+            session_alias: sessionData.alias || existingSession.session_alias,
+            phone_number: sessionData.phoneNumber || existingSession.phone_number,
+            connection_type: sessionData.connectionType || existingSession.connection_type,
+            max_connections: sessionData.maxConnections || existingSession.max_connections,
+            status: 'initializing',
+            is_default: sessionData.isDefault !== undefined ? sessionData.isDefault : existingSession.is_default,
+            is_active: true,
+            last_activity: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('session_id', sessionId)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        // Store metadata in memory
+        this.sessionMetadata.set(sessionId, {
+          userId,
+          sessionId,
+          localPath: localSessionPath,
+          status: 'initializing',
+          createdAt: new Date(existingSession.created_at),
+          lastActivity: new Date()
+        });
+
+        console.log(`✅ Session updated: ${sessionId}`);
+        return { success: true, sessionId, session: updatedSession, action: 'updated' };
+      }
+
+      // Create new session
       const { data: dbSession, error: dbError } = await supabase
         .from('whatsapp_sessions')
-        .upsert({
+        .insert({
           user_id: userId,
           session_id: sessionId,
           session_name: sessionData.name || 'New Session',
@@ -60,7 +106,7 @@ class EnhancedSessionStorageManager {
       });
 
       console.log(`✅ Session created: ${sessionId}`);
-      return { success: true, sessionId, session: dbSession };
+      return { success: true, sessionId, session: dbSession, action: 'created' };
     } catch (error) {
       console.error(`❌ Error creating session:`, error);
       return { success: false, error: error.message };
@@ -108,9 +154,15 @@ class EnhancedSessionStorageManager {
       console.log(`🔗 Creating WhatsApp socket for session: ${sessionId}`);
       const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
+        printQRInTerminal: false, // Disable deprecated option
         logger: {
-          level: 'silent', // Reduce logging to avoid issues
+          level: 'silent',
+          trace: () => {},
+          debug: () => {},
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+          fatal: () => {},
           child: () => ({ 
             level: 'silent', 
             trace: () => {}, 
