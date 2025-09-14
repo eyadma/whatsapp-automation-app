@@ -182,6 +182,19 @@ class EnhancedSessionStorageManager {
       }
       this.activeSessions.get(userId).set(sessionId, sock);
 
+      // Ensure session metadata exists
+      if (!this.sessionMetadata.has(sessionId)) {
+        this.sessionMetadata.set(sessionId, {
+          userId,
+          sessionId,
+          localPath: localSessionPath,
+          status: 'connecting',
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          qrCode: null
+        });
+      }
+
       // Set up event handlers
       this.setupEventHandlers(sock, userId, sessionId, localSessionPath, saveCreds);
 
@@ -189,7 +202,9 @@ class EnhancedSessionStorageManager {
       await this.updateSessionStatus(userId, sessionId, 'connecting');
 
       console.log(`✅ WhatsApp connection initiated for session: ${sessionId}`);
-      return { success: true, sessionId, qrCode: null };
+      
+      // Return the session ID - QR code will be available via getQRCode method
+      return { success: true, sessionId };
     } catch (error) {
       console.error(`❌ Error connecting WhatsApp:`, error);
       console.error(`❌ Error details:`, {

@@ -369,6 +369,36 @@ app.get('/api/whatsapp/qr/:userId', async (req, res) => {
   }
 });
 
+// 4b. Generate QR Code (mobile app endpoint)
+app.get('/api/whatsapp/generate-qr/:userId/:sessionId', async (req, res) => {
+  const { userId, sessionId } = req.params;
+  
+  try {
+    console.log(`📱 Generating QR code for user: ${userId}, session: ${sessionId}`);
+    
+    // Get QR code from session storage manager
+    const qrResult = sessionStorageManager.getQRCode(userId, sessionId);
+    
+    if (!qrResult.success) {
+      return res.status(500).json({ success: false, error: qrResult.error });
+    }
+    
+    if (!qrResult.qrCode) {
+      return res.json({ success: false, message: 'No QR code available. Please ensure the session is connected.' });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        qrCode: qrResult.qrCode
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Error generating QR code:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 5. Get User Sessions
 app.get('/api/sessions/:userId', async (req, res) => {
   const { userId } = req.params;
