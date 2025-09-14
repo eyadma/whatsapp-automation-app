@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const supabase = require('./config/supabase');
-const SessionStorageService = require('./session-storage-service');
 require('dotenv').config();
 
 const app = express();
@@ -25,9 +24,6 @@ const userSessions = new Map(); // userId -> Set of active sessionIds
 
 // Background message processing management
 const backgroundProcesses = new Map();
-
-// Initialize session storage service
-const sessionStorage = new SessionStorageService();
 
 // Utility function to convert WhatsApp phone numbers to Israeli local format
 function convertWhatsAppPhoneToLocal(whatsappPhoneNumber) {
@@ -150,10 +146,10 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
     return;
   }
 
-  // Create a map of customer ID to processed message
+  // Create a map of customer ID to processed message group
   const messageMap = new Map();
   processedMessages.forEach(pm => {
-    messageMap.set(pm.customerId, pm.message);
+    messageMap.set(pm.customerId, pm);
   });
 
   for (let i = 0; i < customers.length; i++) {
@@ -166,52 +162,92 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
         break;
       }
 
-      // Get the pre-processed message for this customer
-      const personalizedMessage = messageMap.get(customer.id);
+      // Get the pre-processed message group for this customer
+      const customerMessageGroup = messageMap.get(customer.id);
       
-      if (!personalizedMessage) {
+      if (!customerMessageGroup) {
         console.warn(`⚠️ No processed message found for customer ${customer.name} (ID: ${customer.id})`);
         process.failed++;
         continue;
       }
 
-      console.log(`📝 Using pre-processed message for ${customer.name}:`, personalizedMessage.substring(0, 100) + '...');
+      const { messages, languages, phone, phone2 } = customerMessageGroup;
+      console.log(`📝 Processing ${messages.length} messages for ${customer.name} in languages:`, languages);
 
-      // Format phone number for WhatsApp
-      let phoneNumber = customer.phone;
-      if (!phoneNumber.startsWith('+')) {
-        if (phoneNumber.startsWith('972')) {
-          phoneNumber = '+' + phoneNumber;
-        } else if (phoneNumber.startsWith('0')) {
-          phoneNumber = '+972' + phoneNumber.substring(1);
-        } else {
-          phoneNumber = '+972' + phoneNumber;
+      // Send each message for this customer
+      for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
+        const message = messages[msgIndex];
+        const language = languages[msgIndex] || 'unknown';
+        
+        console.log(`📤 Sending message ${msgIndex + 1}/${messages.length} to ${customer.name} (${language}):`, message.substring(0, 100) + '...');
+
+        // Send to primary phone number
+        let phoneNumber = phone;
+        if (!phoneNumber.startsWith('+')) {
+          if (phoneNumber.startsWith('972')) {
+            phoneNumber = '+' + phoneNumber;
+          } else if (phoneNumber.startsWith('0')) {
+            phoneNumber = '+972' + phoneNumber.substring(1);
+          } else {
+            phoneNumber = '+972' + phoneNumber;
+          }
+        }
+
+        // Create JID for primary phone
+        const jid = `${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`;
+        
+        // Send message to primary phone
+        await connection.sock.sendMessage(jid, { text: message });
+        console.log(`✅ Background message ${msgIndex + 1}/${messages.length} sent to ${customer.name} (${language}) - primary phone`);
+        
+        // Send to secondary phone number if available
+        if (phone2 && phone2.trim() !== '') {
+          let phoneNumber2 = phone2;
+          if (!phoneNumber2.startsWith('+')) {
+            if (phoneNumber2.startsWith('972')) {
+              phoneNumber2 = '+' + phoneNumber2;
+            } else if (phoneNumber2.startsWith('0')) {
+              phoneNumber2 = '+972' + phoneNumber2.substring(1);
+            } else {
+              phoneNumber2 = '+972' + phoneNumber2;
+            }
+          }
+
+          // Create JID for secondary phone
+          const jid2 = `${phoneNumber2.replace(/\D/g, '')}@s.whatsapp.net`;
+          
+          try {
+            await connection.sock.sendMessage(jid2, { text: message });
+            console.log(`✅ Background message ${msgIndex + 1}/${messages.length} sent to ${customer.name} (${language}) - secondary phone`);
+          } catch (secondaryError) {
+            console.error(`❌ Failed to send to secondary phone for ${customer.name}:`, secondaryError.message);
+          }
+        }
+        
+        // Add small delay between multiple messages to same customer
+        if (msgIndex < messages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second between messages
         }
       }
-
-      // Create JID
-      const jid = `${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`;
-      
-      // Send message
-      await connection.sock.sendMessage(jid, { text: personalizedMessage });
-      console.log(`✅ Background message sent to ${customer.name} (${i + 1}/${customers.length})`);
       
       // Update process status
       process.completed++;
       process.status = 'running';
       
-      // Log to message history
-      await supabase
-        .from('message_history')
-        .insert([{
-          user_id: userId,
-          customer_id: customer.id,
-          message_text: personalizedMessage,
-          status: 'sent',
-          process_id: processId
-        }]);
+      // Log to message history for each message sent
+      for (const message of messages) {
+        await supabase
+          .from('message_history')
+          .insert([{
+            user_id: userId,
+            customer_id: customer.id,
+            message_text: message,
+            status: 'sent',
+            process_id: processId
+          }]);
+      }
 
-      // Add delay between messages (except for the last message)
+      // Add delay between customers (except for the last customer)
       if (speedDelay > 0 && i < customers.length - 1) {
         console.log(`⏳ Background process waiting ${speedDelay} seconds...`);
         await new Promise(resolve => setTimeout(resolve, speedDelay * 1000));
@@ -253,7 +289,6 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
       .single();
     
     const userName = userProfile?.full_name || 'User';
-    // Note: Server doesn't know about admin impersonation, so we'll just show the user name
     const completionMessage = `✅ Background message sending completed!\n\n👤 Sent by: ${userName}\n📊 Results:\n- Total: ${customers.length}\n- Sent: ${process.completed}\n- Failed: ${process.failed}\n- Duration: ${Math.floor(duration / 60)}m ${duration % 60}s`;
     
     const updateJid = '972526686285@s.whatsapp.net';
@@ -321,9 +356,21 @@ async function processMessagesInBackground(processId, customers, messageTemplate
       // Create JID
       const jid = `${phoneNumber.replace(/\D/g, '')}@s.whatsapp.net`;
       
-      // Send message
-      await connection.sock.sendMessage(jid, { text: personalizedMessage });
-      console.log(`✅ Background message sent to ${customer.name} (${i + 1}/${customers.length})`);
+      // Check if we need to send multiple language messages
+      const messagesToSend = Array.isArray(personalizedMessage) ? personalizedMessage : [personalizedMessage];
+      
+      for (let msgIndex = 0; msgIndex < messagesToSend.length; msgIndex++) {
+        const message = messagesToSend[msgIndex];
+        
+        // Send message
+        await connection.sock.sendMessage(jid, { text: message });
+        console.log(`✅ Background message ${msgIndex + 1}/${messagesToSend.length} sent to ${customer.name} (${i + 1}/${customers.length})`);
+        
+        // Add small delay between multiple messages to same customer
+        if (msgIndex < messagesToSend.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second between messages
+        }
+      }
       
       // Update process status
       process.completed++;
@@ -382,7 +429,6 @@ async function processMessagesInBackground(processId, customers, messageTemplate
       .single();
     
     const userName = userProfile?.full_name || 'User';
-    // Note: Server doesn't know about admin impersonation, so we'll just show the user name
     const completionMessage = `✅ Background message sending completed!\n\n👤 Sent by: ${userName}\n📊 Results:\n- Total: ${customers.length}\n- Sent: ${process.completed}\n- Failed: ${process.failed}\n- Duration: ${Math.floor(duration / 60)}m ${duration % 60}s`;
     
     const updateJid = '972526686285@s.whatsapp.net';
@@ -510,9 +556,20 @@ async function connectWhatsApp(userId, sessionId = null) {
   try {
     console.log(`🚀 Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
     
-    console.log(`🔐 Loading auth state from cloud storage for user: ${userId}`);
-    const { state, saveCreds } = await sessionStorage.getAuthState(userId, sessionId || 'default');
-    console.log(`✅ Auth state loaded from cloud storage for user: ${userId}`);
+    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
+    console.log(`📁 Session directory: ${sessionDir}`);
+    
+    if (!fs.existsSync(sessionDir)) {
+      console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
+      fs.mkdirSync(sessionDir, { recursive: true });
+    }
+    
+    console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
+    console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
+
+    console.log(`🔐 Loading auth state for user: ${userId}`);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    console.log(`✅ Auth state loaded for user: ${userId}`);
 
     console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
     const sock = makeWASocket({
@@ -648,17 +705,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       }
     });
 
-    sock.ev.on('creds.update', async (creds) => {
-      console.log(`💾 Saving credentials for user: ${userId}, session: ${sessionId || 'default'}`);
-      // Save locally first (handled by useMultiFileAuthState)
-      // Then sync to cloud storage
-      try {
-        await sessionStorage.saveAuthState(userId, sessionId || 'default', creds);
-        console.log(`☁️ Synced credentials to cloud storage`);
-      } catch (error) {
-        console.error('Error syncing to cloud storage:', error);
-      }
-    });
+    sock.ev.on('creds.update', saveCreds);
     
     // Add error handling for the socket
     sock.ev.on('error', (error) => {
@@ -1256,12 +1303,11 @@ app.post('/api/whatsapp/delete-session/:userId', async (req, res) => {
       .delete()
       .eq('session_id', userId);
 
-    // Delete session files from cloud storage
-    try {
-      await sessionStorage.deleteSessionData(userId, 'default');
-      console.log(`🗂️ Deleted session data from cloud storage for user: ${userId}`);
-    } catch (deleteError) {
-      console.log(`⚠️ Error deleting from cloud storage (continuing):`, deleteError.message);
+    // Delete session files
+    const sessionDir = path.join(__dirname, 'sessions', userId);
+    if (fs.existsSync(sessionDir)) {
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+      console.log(`🗂️ Deleted session directory for user: ${userId}`);
     }
 
     console.log(`✅ Session completely deleted for user: ${userId}`);
@@ -1343,12 +1389,11 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
       .delete()
       .eq('session_id', userId);
 
-    // Delete session files from cloud storage
-    try {
-      await sessionStorage.deleteSessionData(userId, 'default');
-      console.log(`🗂️ Deleted session data from cloud storage for user: ${userId}`);
-    } catch (deleteError) {
-      console.log(`⚠️ Error deleting from cloud storage (continuing):`, deleteError.message);
+    // Delete session files completely
+    const sessionDir = path.join(__dirname, 'sessions', userId);
+    if (fs.existsSync(sessionDir)) {
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+      console.log(`🗂️ Deleted session directory for user: ${userId}`);
     }
 
     // Wait a moment before creating new connection
@@ -2201,6 +2246,76 @@ app.get('/api/whatsapp/debug/:userId', async (req, res) => {
   }
 });
 
+// Test locations table endpoint
+app.get('/api/locations/test/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log(`🧪 Testing locations table access for user: ${userId}`);
+    
+    // Test if locations table exists and is accessible
+    const { data: locations, error: locationsError } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(5);
+    
+    if (locationsError) {
+      console.error('❌ Locations table error:', locationsError);
+      return res.status(500).json({
+        success: false,
+        error: 'Locations table access failed',
+        details: locationsError
+      });
+    }
+    
+    // Test if we can insert a test record
+    const testData = {
+      user_id: userId,
+      name: 'Test Location',
+      phone: '0501234567',
+      shipment_id: 'test_' + Date.now(),
+      package_id: 'test_package',
+      area: 'Test Area'
+    };
+    
+    const { data: insertedTest, error: insertError } = await supabase
+      .from('locations')
+      .insert([testData])
+      .select();
+    
+    if (insertError) {
+      console.error('❌ Locations insert test failed:', insertError);
+      return res.status(500).json({
+        success: false,
+        error: 'Locations table insert test failed',
+        details: insertError,
+        existingLocations: locations
+      });
+    }
+    
+    // Clean up test record
+    await supabase
+      .from('locations')
+      .delete()
+      .eq('id', insertedTest[0].id);
+    
+    res.json({
+      success: true,
+      message: 'Locations table is working correctly',
+      existingLocations: locations,
+      insertTest: 'Passed'
+    });
+    
+  } catch (error) {
+    console.error('❌ Locations test error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Locations test failed',
+      details: error.message
+    });
+  }
+});
+
 // 7. Health Check
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -2398,6 +2513,58 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
             console.error(`❌ Customer data:`, JSON.stringify(customerData, null, 2));
           }
         }
+
+        // Also insert/update in locations table
+        try {
+          console.log(`📍 Processing location for shipment ${shipment.id}, customer: ${customerData.name}`);
+          
+          // Check if location already exists (by shipment_id)
+          const { data: existingLocation, error: checkLocationError } = await supabase
+            .from('locations')
+            .select('id')
+            .eq('shipment_id', shipment.id)
+            .eq('user_id', userId)
+            .single();
+          
+          if (checkLocationError && checkLocationError.code !== 'PGRST116') {
+            console.error(`❌ Error checking existing location:`, checkLocationError);
+          }
+          
+          if (existingLocation) {
+            // Update existing location
+            console.log(`📍 Updating existing location for ${customerData.name}`);
+            const { error: updateLocationError } = await supabase
+              .from('locations')
+              .update(customerData)
+              .eq('id', existingLocation.id);
+            
+            if (!updateLocationError) {
+              console.log(`✅ Updated location: ${customerData.name}`);
+            } else {
+              console.error(`❌ Error updating location ${customerData.name}:`, updateLocationError);
+              console.error(`❌ Location update data:`, JSON.stringify(customerData, null, 2));
+            }
+          } else {
+            // Create new location
+            console.log(`📍 Creating new location for ${customerData.name}`);
+            console.log(`📍 Location data:`, JSON.stringify(customerData, null, 2));
+            
+            const { data: insertedLocation, error: createLocationError } = await supabase
+              .from('locations')
+              .insert([customerData])
+              .select();
+            
+            if (!createLocationError) {
+              console.log(`✅ Created location: ${customerData.name}`, insertedLocation);
+            } else {
+              console.error(`❌ Error creating location ${customerData.name}:`, createLocationError);
+              console.error(`❌ Location creation data:`, JSON.stringify(customerData, null, 2));
+            }
+          }
+        } catch (locationError) {
+          console.error(`❌ Error processing location for shipment ${shipment.id}:`, locationError);
+          console.error(`❌ Location error details:`, locationError.message);
+        }
       } catch (shipmentError) {
         console.error(`❌ Error processing shipment ${shipment.id}:`, shipmentError);
       }
@@ -2407,11 +2574,12 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
     
     res.json({
       success: true,
-      message: `Successfully fetched ${shipments.length} shipments`,
+      message: `Successfully fetched ${shipments.length} shipments and synced to both customers and locations tables`,
       totalFetched: shipments.length,
       totalCreated,
       totalUpdated,
-      pagination
+      pagination,
+      note: "Data has been inserted into both 'customers' and 'locations' tables"
     });
     
   } catch (error) {
@@ -2429,4 +2597,94 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📱 API Base URL: http://localhost:${PORT}/api`);
   console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
   console.log(`📱 Mobile Access: http://192.168.0.113:${PORT}/api`);
+});
+
+// Test endpoint for areas and preferred languages
+app.get('/api/areas/test/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    console.log(`🧪 Testing areas and preferred languages for user ${userId}`);
+    
+    // Get customers for this user
+    const { data: customers, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name, areaId, area')
+      .eq('user_id', userId)
+      .not('areaId', 'is', null);
+    
+    if (customersError) {
+      console.error('❌ Failed to get customers:', customersError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to get customers',
+        details: customersError 
+      });
+    }
+    
+    console.log(`📊 Found ${customers.length} customers with areaIds`);
+    
+    // Get unique areaIds
+    const areaIds = [...new Set(customers.map(c => c.areaId).filter(id => id != null))];
+    console.log(`📍 Unique areaIds:`, areaIds);
+    
+    // Get area details
+    const { data: areas, error: areasError } = await supabase
+      .from('areas')
+      .select('areaId, name_arabic, name_english, name_hebrew, preferred_language_1, preferred_language_2')
+      .in('areaId', areaIds);
+    
+    if (areasError) {
+      console.error('❌ Failed to get areas:', areasError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to get areas',
+        details: areasError 
+      });
+    }
+    
+    console.log(`📍 Found ${areas.length} areas in database`);
+    
+    // Check for missing areas
+    const foundAreaIds = areas.map(a => a.areaId);
+    const missingAreaIds = areaIds.filter(id => !foundAreaIds.includes(id));
+    
+    console.log(`❌ Missing areas:`, missingAreaIds);
+    
+    // Check preferred languages
+    const areasWithLanguages = areas.filter(a => a.preferred_language_1 || a.preferred_language_2);
+    const areasWithoutLanguages = areas.filter(a => !a.preferred_language_1 && !a.preferred_language_2);
+    
+    console.log(`✅ Areas with preferred languages: ${areasWithLanguages.length}`);
+    console.log(`⚠️ Areas without preferred languages: ${areasWithoutLanguages.length}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Areas test completed',
+      results: {
+        totalCustomers: customers.length,
+        uniqueAreaIds: areaIds,
+        foundAreas: areas.length,
+        missingAreas: missingAreaIds,
+        areasWithLanguages: areasWithLanguages.length,
+        areasWithoutLanguages: areasWithoutLanguages.length,
+        areas: areas.map(area => ({
+          areaId: area.areaId,
+          name_english: area.name_english,
+          name_hebrew: area.name_hebrew,
+          name_arabic: area.name_arabic,
+          preferred_language_1: area.preferred_language_1,
+          preferred_language_2: area.preferred_language_2,
+          hasLanguages: !!(area.preferred_language_1 || area.preferred_language_2)
+        }))
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Areas test error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
 }); 
