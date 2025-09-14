@@ -399,6 +399,35 @@ app.get('/api/whatsapp/generate-qr/:userId/:sessionId', async (req, res) => {
   }
 });
 
+// 4c. Get WhatsApp Status (mobile app endpoint)
+app.get('/api/whatsapp/status/:userId/:sessionId', async (req, res) => {
+  const { userId, sessionId } = req.params;
+  
+  try {
+    console.log(`📊 Getting WhatsApp status for user: ${userId}, session: ${sessionId}`);
+    
+    // Get session status from session storage manager
+    const statusResult = sessionStorageManager.getSessionStatus(userId, sessionId);
+    
+    if (!statusResult.success) {
+      return res.status(500).json({ success: false, error: statusResult.error });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        status: statusResult.status,
+        connected: statusResult.connected,
+        sessionId: sessionId,
+        userId: userId
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Error getting WhatsApp status:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 5. Get User Sessions
 app.get('/api/sessions/:userId', async (req, res) => {
   const { userId } = req.params;

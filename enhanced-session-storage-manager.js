@@ -462,6 +462,36 @@ class EnhancedSessionStorageManager {
     }
   }
 
+  getSessionStatus(userId, sessionId) {
+    try {
+      if (this.sessionMetadata.has(sessionId)) {
+        const metadata = this.sessionMetadata.get(sessionId);
+        const isConnected = this.activeSessions.has(userId) && 
+                           this.activeSessions.get(userId).has(sessionId);
+        
+        return { 
+          success: true, 
+          status: metadata.status || 'unknown',
+          connected: isConnected,
+          sessionId: sessionId,
+          userId: userId
+        };
+      }
+      
+      // Check if session exists in database
+      return { 
+        success: true, 
+        status: 'not_found',
+        connected: false,
+        sessionId: sessionId,
+        userId: userId
+      };
+    } catch (error) {
+      console.error(`❌ Error getting session status:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
   /**
    * Generate a short alias for the session
    */
