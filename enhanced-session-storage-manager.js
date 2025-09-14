@@ -233,16 +233,26 @@ class EnhancedSessionStorageManager {
       
       if (qr) {
         console.log(`📱 QR Code generated for session: ${sessionId}`);
+        console.log(`📱 QR Code data: ${qr.substring(0, 50)}...`);
         await this.updateSessionStatus(userId, sessionId, 'qr_generated');
+        
         // Store QR code in memory for API access
         if (this.sessionMetadata.has(sessionId)) {
           const metadata = this.sessionMetadata.get(sessionId);
           metadata.qrCode = qr;
+          metadata.lastActivity = new Date();
           this.sessionMetadata.set(sessionId, metadata);
+          console.log(`✅ QR Code stored in session metadata for: ${sessionId}`);
+        } else {
+          console.log(`❌ Session metadata not found for: ${sessionId}`);
         }
       }
 
       if (connection === 'close') {
+        console.log(`🔌 Connection closed for session: ${sessionId}`);
+        console.log(`🔌 Last disconnect reason:`, lastDisconnect);
+        console.log(`🔌 Disconnect error:`, lastDisconnect?.error);
+        
         const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
         
         if (shouldReconnect) {
@@ -263,10 +273,14 @@ class EnhancedSessionStorageManager {
         }
       } else if (connection === 'open') {
         console.log(`✅ WhatsApp connected for session: ${sessionId}`);
+        console.log(`✅ Connection established at: ${new Date().toISOString()}`);
         await this.updateSessionStatus(userId, sessionId, 'connected');
         
         // Sync session to cloud after successful connection
         await this.syncSessionToCloud(userId, sessionId, localSessionPath);
+      } else if (connection === 'connecting') {
+        console.log(`🔄 WhatsApp connecting for session: ${sessionId}`);
+        await this.updateSessionStatus(userId, sessionId, 'connecting');
       }
     });
 
@@ -451,10 +465,29 @@ class EnhancedSessionStorageManager {
    */
   getQRCode(userId, sessionId) {
     try {
+      console.log(`🔍 Getting QR code for session: ${sessionId}`);
+      console.log(`🔍 Session metadata exists: ${this.sessionMetadata.has(sessionId)}`);
+      
       if (this.sessionMetadata.has(sessionId)) {
         const metadata = this.sessionMetadata.get(sessionId);
-        return { success: true, qrCode: metadata.qrCode || null };
+        console.log(`🔍 Session metadata:`, {
+          status: metadata.status,
+          hasQRCode: !!metadata.qrCode,
+          qrCodeLength: metadata.qrCode ? metadata.qrCode.length : 0,
+          lastActivity: metadata.lastActivity
+        });
+        
+        const qrCode = metadata.qrCode || null;
+        if (qrCode) {
+          console.log(`✅ QR Code found: ${qrCode.substring(0, 50)}...`);
+        } else {
+          console.log(`❌ No QR Code in metadata for session: ${sessionId}`);
+        }
+        
+        return { success: true, qrCode: qrCode };
       }
+      
+      console.log(`❌ Session metadata not found for: ${sessionId}`);
       return { success: true, qrCode: null };
     } catch (error) {
       console.error(`❌ Error getting QR code:`, error);
