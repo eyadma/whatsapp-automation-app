@@ -218,7 +218,13 @@ class EnhancedSessionStorageManager {
       
       if (qr) {
         console.log(`📱 QR Code generated for session: ${sessionId}`);
-        await this.updateSessionStatus(userId, sessionId, 'qr_generated', { qrCode: qr });
+        await this.updateSessionStatus(userId, sessionId, 'qr_generated');
+        // Store QR code in memory for API access
+        if (this.sessionMetadata.has(sessionId)) {
+          const metadata = this.sessionMetadata.get(sessionId);
+          metadata.qrCode = qr;
+          this.sessionMetadata.set(sessionId, metadata);
+        }
       }
 
       if (connection === 'close') {
@@ -421,6 +427,22 @@ class EnhancedSessionStorageManager {
       return { success: true, sessions: data || [] };
     } catch (error) {
       console.error(`❌ Error fetching user sessions:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get QR code for a session
+   */
+  getQRCode(userId, sessionId) {
+    try {
+      if (this.sessionMetadata.has(sessionId)) {
+        const metadata = this.sessionMetadata.get(sessionId);
+        return { success: true, qrCode: metadata.qrCode || null };
+      }
+      return { success: true, qrCode: null };
+    } catch (error) {
+      console.error(`❌ Error getting QR code:`, error);
       return { success: false, error: error.message };
     }
   }

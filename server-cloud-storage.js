@@ -342,18 +342,25 @@ app.get('/api/whatsapp/qr/:userId', async (req, res) => {
   const { sessionId } = req.query;
   
   try {
-    const connection = getConnection(userId, sessionId);
+    console.log(`📱 Getting QR code for user: ${userId}, session: ${sessionId}`);
     
-    if (!connection || !connection.qrCode) {
+    // Get QR code from session storage manager
+    const qrResult = sessionStorageManager.getQRCode(userId, sessionId);
+    
+    if (!qrResult.success) {
+      return res.status(500).json({ success: false, error: qrResult.error });
+    }
+    
+    if (!qrResult.qrCode) {
       return res.json({ success: false, message: 'No QR code available' });
     }
     
     // Generate QR code image
-    const qrCodeDataURL = await qrcode.toDataURL(connection.qrCode);
+    const qrCodeDataURL = await qrcode.toDataURL(qrResult.qrCode);
     
     res.json({
       success: true,
-      qrCode: connection.qrCode,
+      qrCode: qrResult.qrCode,
       qrCodeDataURL: qrCodeDataURL
     });
   } catch (error) {
