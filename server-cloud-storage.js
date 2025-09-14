@@ -458,6 +458,35 @@ app.get('/api/whatsapp/status/:userId/:sessionId', async (req, res) => {
   }
 });
 
+// 4d. Clean Session (mobile app endpoint)
+app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { sessionId } = req.body;
+  
+  try {
+    console.log(`🧹 Cleaning session for user: ${userId}, session: ${sessionId}`);
+    
+    // Clean session using session storage manager
+    const cleanResult = sessionStorageManager.cleanSession(userId, sessionId);
+    
+    if (!cleanResult.success) {
+      return res.status(500).json({ success: false, error: cleanResult.error });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Session cleaned successfully',
+      data: {
+        userId: userId,
+        sessionId: sessionId
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Error cleaning session:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 5. Get User Sessions
 app.get('/api/sessions/:userId', async (req, res) => {
   const { userId } = req.params;

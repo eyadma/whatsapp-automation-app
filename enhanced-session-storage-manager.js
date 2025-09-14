@@ -492,6 +492,45 @@ class EnhancedSessionStorageManager {
     }
   }
 
+  cleanSession(userId, sessionId) {
+    try {
+      console.log(`🧹 Cleaning session: ${sessionId} for user: ${userId}`);
+      
+      // Disconnect WhatsApp if connected
+      if (this.activeSessions.has(userId) && this.activeSessions.get(userId).has(sessionId)) {
+        const sock = this.activeSessions.get(userId).get(sessionId);
+        if (sock && typeof sock.logout === 'function') {
+          sock.logout();
+        }
+        this.activeSessions.get(userId).delete(sessionId);
+        console.log(`✅ Disconnected WhatsApp session: ${sessionId}`);
+      }
+      
+      // Remove from session metadata
+      if (this.sessionMetadata.has(sessionId)) {
+        this.sessionMetadata.delete(sessionId);
+        console.log(`✅ Removed session metadata: ${sessionId}`);
+      }
+      
+      // Update database status to 'cleaned'
+      if (sessionId) {
+        this.updateSessionStatus(userId, sessionId, 'cleaned').catch(error => {
+          console.error(`❌ Error updating session status to cleaned:`, error);
+        });
+      }
+      
+      return { 
+        success: true, 
+        message: 'Session cleaned successfully',
+        sessionId: sessionId,
+        userId: userId
+      };
+    } catch (error) {
+      console.error(`❌ Error cleaning session:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
   /**
    * Generate a short alias for the session
    */
