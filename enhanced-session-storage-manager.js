@@ -33,17 +33,16 @@ class EnhancedSessionStorageManager {
         .upsert({
           user_id: userId,
           session_id: sessionId,
-          session_data: {
-            name: sessionData.name || 'New Session',
-            alias: sessionData.alias || this.generateAlias(sessionData.name),
-            phoneNumber: sessionData.phoneNumber,
-            connectionType: sessionData.connectionType || 'mobile',
-            status: 'initializing',
-            isDefault: sessionData.isDefault || false,
-            createdAt: new Date().toISOString(),
-            lastActivity: new Date().toISOString()
-          },
-          is_active: true
+          session_name: sessionData.name || 'New Session',
+          session_alias: sessionData.alias || this.generateAlias(sessionData.name),
+          phone_number: sessionData.phoneNumber,
+          connection_type: sessionData.connectionType || 'mobile',
+          max_connections: sessionData.maxConnections || 5,
+          status: 'initializing',
+          is_default: sessionData.isDefault || false,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          last_activity: new Date().toISOString()
         })
         .select()
         .single();
@@ -241,15 +240,13 @@ class EnhancedSessionStorageManager {
     try {
       const updateData = {
         status,
-        lastActivity: new Date().toISOString(),
+        last_activity: new Date().toISOString(),
         ...additionalData
       };
 
       const { error } = await supabase
         .from('whatsapp_sessions')
-        .update({
-          session_data: updateData
-        })
+        .update(updateData)
         .eq('user_id', userId)
         .eq('session_id', sessionId);
 
