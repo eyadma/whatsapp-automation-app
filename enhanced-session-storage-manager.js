@@ -293,16 +293,38 @@ class EnhancedSessionStorageManager {
     });
 
     sock.ev.on('messages.upsert', async (m) => {
-      console.log(`📨 Message received in session: ${sessionId}`);
+      console.log(`\n🚨 ===== MESSAGE RECEIVED =====`);
+      console.log(`📨 Session: ${sessionId}`);
+      console.log(`👤 User: ${userId}`);
+      console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
       console.log(`📨 Message event details:`, {
         messageCount: m.messages?.length || 0,
         hasMessages: !!m.messages,
-        type: m.type
+        type: m.type,
+        fullEvent: JSON.stringify(m, null, 2)
       });
+      
+      if (m.messages && m.messages.length > 0) {
+        console.log(`📱 Processing ${m.messages.length} message(s):`);
+        m.messages.forEach((msg, index) => {
+          console.log(`📱 Message ${index + 1}:`, {
+            from: msg.key?.remoteJid,
+            fromMe: msg.key?.fromMe,
+            timestamp: msg.messageTimestamp,
+            messageTypes: Object.keys(msg.message || {}),
+            hasLocation: !!msg.message?.locationMessage,
+            hasExtendedText: !!msg.message?.extendedTextMessage,
+            pushName: msg.pushName
+          });
+        });
+      }
+      
       await this.updateSessionActivity(userId, sessionId);
       
       // Process location messages
+      console.log(`🔍 Starting location message processing...`);
       await this.handleLocationMessages(userId, sessionId, m);
+      console.log(`🚨 ===== MESSAGE PROCESSING COMPLETE =====\n`);
     });
   }
 
@@ -698,21 +720,42 @@ class EnhancedSessionStorageManager {
    */
   async processLocationMessage(userId, sessionId, message, locationData) {
     try {
+      console.log(`\n📍 ===== PROCESSING LOCATION MESSAGE =====`);
+      console.log(`📍 User: ${userId}`);
+      console.log(`📍 Session: ${sessionId}`);
+      console.log(`📍 Location Data:`, {
+        latitude: locationData.degreesLatitude,
+        longitude: locationData.degreesLongitude,
+        name: locationData.name,
+        address: locationData.address
+      });
+      
       // Extract phone number from message sender
       const senderJid = message.key.remoteJid;
       let phoneNumber = null;
       let customerName = null;
 
+      console.log(`📱 Message details:`, {
+        senderJid: senderJid,
+        pushName: message.pushName,
+        timestamp: message.messageTimestamp
+      });
+
       // Extract phone number from JID (format: 972526686285@s.whatsapp.net)
       if (senderJid && senderJid.includes('@s.whatsapp.net')) {
         phoneNumber = senderJid.split('@')[0];
         console.log(`📞 Extracted phone from JID: ${phoneNumber}`);
+      } else {
+        console.log(`❌ Invalid JID format: ${senderJid}`);
+        return;
       }
 
       // Try to get contact name from WhatsApp
       if (message.pushName) {
         customerName = message.pushName;
         console.log(`👤 Contact name from WhatsApp: ${customerName}`);
+      } else {
+        console.log(`⚠️ No pushName available`);
       }
 
       if (!phoneNumber) {
@@ -725,6 +768,7 @@ class EnhancedSessionStorageManager {
       console.log(`📞 Converted phone: ${phoneNumber} -> ${localPhoneNumber}`);
 
       // Check if location exists in locations table
+      console.log(`🔍 Checking existing location for phone: ${localPhoneNumber}`);
       const { data: existingLocation, error: selectError } = await supabase
         .from('locations')
         .select('*')
@@ -737,6 +781,17 @@ class EnhancedSessionStorageManager {
         return;
       }
 
+      console.log(`🔍 Existing location result:`, {
+        found: !!existingLocation,
+        location: existingLocation ? {
+          id: existingLocation.id,
+          name: existingLocation.name,
+          phone: existingLocation.phone,
+          currentLat: existingLocation.latitude,
+          currentLng: existingLocation.longitude
+        } : null
+      });
+
       const locationUpdateData = {
         longitude: locationData.degreesLongitude,
         latitude: locationData.degreesLatitude,
@@ -747,6 +802,7 @@ class EnhancedSessionStorageManager {
       if (existingLocation) {
         // Update existing location
         console.log(`🔄 Updating existing location for phone: ${localPhoneNumber}`);
+        console.log(`🔄 Update data:`, locationUpdateData);
         
         const { data: updatedLocation, error: updateError } = await supabase
           .from('locations')
@@ -761,7 +817,8 @@ class EnhancedSessionStorageManager {
         }
 
         console.log(`✅ Successfully updated location for: ${existingLocation.name || 'Unknown'} (${localPhoneNumber})`);
-        console.log(`📍 Location: ${locationData.degreesLatitude}, ${locationData.degreesLongitude}`);
+        console.log(`📍 New Location: ${locationData.degreesLatitude}, ${locationData.degreesLongitude}`);
+        console.log(`📊 Updated location record:`, updatedLocation);
       } else {
         // Create new location entry
         console.log(`🆕 Creating new location entry for phone: ${localPhoneNumber}`);
@@ -777,6 +834,8 @@ class EnhancedSessionStorageManager {
           updated_at: new Date().toISOString()
         };
 
+        console.log(`🆕 New location data:`, newLocationData);
+
         const { data: newLocation, error: insertError } = await supabase
           .from('locations')
           .insert(newLocationData)
@@ -790,13 +849,17 @@ class EnhancedSessionStorageManager {
 
         console.log(`✅ Successfully created new location for: ${customerName || 'Unknown'} (${localPhoneNumber})`);
         console.log(`📍 Location: ${locationData.degreesLatitude}, ${locationData.degreesLongitude}`);
+        console.log(`📊 New location record:`, newLocation);
       }
 
       // Log to message history
+      console.log(`📝 Logging location message to history...`);
       await this.logLocationMessage(userId, sessionId, message, locationData, localPhoneNumber, customerName);
+      console.log(`📍 ===== LOCATION MESSAGE PROCESSING COMPLETE =====\n`);
 
     } catch (error) {
       console.error(`❌ Error processing location message:`, error);
+      console.error(`❌ Error stack:`, error.stack);
     }
   }
 
@@ -805,6 +868,8 @@ class EnhancedSessionStorageManager {
    */
   async logLocationMessage(userId, sessionId, message, locationData, phoneNumber, customerName) {
     try {
+      console.log(`📝 ===== LOGGING LOCATION MESSAGE TO HISTORY =====`);
+      
       const messageHistoryData = {
         user_id: userId,
         session_id: sessionId,
@@ -821,17 +886,31 @@ class EnhancedSessionStorageManager {
         created_at: new Date().toISOString()
       };
 
-      const { error: insertError } = await supabase
+      console.log(`📝 Message history data:`, messageHistoryData);
+
+      const { data: insertedMessage, error: insertError } = await supabase
         .from('message_history')
-        .insert(messageHistoryData);
+        .insert(messageHistoryData)
+        .select()
+        .single();
 
       if (insertError) {
         console.error(`❌ Error logging location message:`, insertError);
+        console.error(`❌ Insert error details:`, {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint
+        });
       } else {
-        console.log(`📝 Location message logged to history for: ${customerName || 'Unknown'} (${phoneNumber})`);
+        console.log(`✅ Location message logged to history successfully!`);
+        console.log(`📝 Logged message ID: ${insertedMessage.id}`);
+        console.log(`📝 For: ${customerName || 'Unknown'} (${phoneNumber})`);
+        console.log(`📝 ===== MESSAGE HISTORY LOGGING COMPLETE =====`);
       }
     } catch (error) {
       console.error(`❌ Error logging location message:`, error);
+      console.error(`❌ Error stack:`, error.stack);
     }
   }
 

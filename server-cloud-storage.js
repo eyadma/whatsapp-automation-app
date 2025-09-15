@@ -414,6 +414,62 @@ app.get('/api/whatsapp/monitoring-status', async (req, res) => {
   }
 });
 
+// Test endpoint to simulate a location message for debugging
+app.post('/api/test/location-message/:userId/:sessionId', async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    const { phoneNumber, latitude, longitude, name } = req.body;
+    
+    console.log(`🧪 ===== TESTING LOCATION MESSAGE PROCESSING =====`);
+    console.log(`🧪 User: ${userId}`);
+    console.log(`🧪 Session: ${sessionId}`);
+    console.log(`🧪 Test data:`, { phoneNumber, latitude, longitude, name });
+    
+    // Create a mock message object
+    const mockMessage = {
+      key: {
+        remoteJid: `${phoneNumber}@s.whatsapp.net`,
+        fromMe: false
+      },
+      pushName: name || 'Test User',
+      messageTimestamp: Date.now()
+    };
+    
+    // Create mock location data
+    const mockLocationData = {
+      degreesLatitude: latitude || 32.0853,
+      degreesLongitude: longitude || 34.7818,
+      name: name || 'Test Location',
+      address: 'Test Address'
+    };
+    
+    console.log(`🧪 Mock message:`, mockMessage);
+    console.log(`🧪 Mock location data:`, mockLocationData);
+    
+    // Process the location message
+    await sessionStorageManager.processLocationMessage(userId, sessionId, mockMessage, mockLocationData);
+    
+    res.json({
+      success: true,
+      message: 'Location message test completed',
+      data: {
+        userId,
+        sessionId,
+        phoneNumber,
+        latitude,
+        longitude,
+        name
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in location message test:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // API Routes
 
 // 1. WhatsApp Connection Management
