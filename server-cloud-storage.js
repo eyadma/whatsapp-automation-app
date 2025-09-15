@@ -592,11 +592,14 @@ app.post('/api/messages/send-background', async (req, res) => {
           continue;
         }
         
-        console.log(`👤 Customer found: ${customer.name} (${customer.phone_number})`);
+        // Get phone number from either 'phone' or 'phone_number' field
+        const phoneNumber = customer.phone || customer.phone_number;
+        console.log(`👤 Customer found: ${customer.name} (${phoneNumber})`);
         
         // Validate phone number
-        if (!customer.phone_number) {
+        if (!phoneNumber) {
           console.error(`❌ Customer has no phone number: ${customerId} (${customer.name})`);
+          console.error(`❌ Available fields:`, Object.keys(customer));
           results.push({
             customerId,
             success: false,
@@ -623,7 +626,7 @@ app.post('/api/messages/send-background', async (req, res) => {
             }
             
             // Format phone number for WhatsApp
-            const whatsappNumber = customer.phone_number.replace(/[^0-9]/g, '');
+            const whatsappNumber = phoneNumber.replace(/[^0-9]/g, '');
             const whatsappJid = whatsappNumber + '@s.whatsapp.net';
             
             console.log(`📱 Sending message to ${whatsappJid}: ${messageText.substring(0, 50)}...`);
@@ -636,14 +639,14 @@ app.post('/api/messages/send-background', async (req, res) => {
               )
             ]);
             
-            console.log(`✅ Message sent to ${customer.phone_number}: ${messageText.substring(0, 50)}...`);
+            console.log(`✅ Message sent to ${phoneNumber}: ${messageText.substring(0, 50)}...`);
             
             results.push({
               customerId,
               messageId: message.id || 'unknown',
               success: true,
               whatsappMessageId: sent.key.id,
-              phoneNumber: customer.phone_number,
+              phoneNumber: phoneNumber,
               processId: processId
             });
             
@@ -651,13 +654,13 @@ app.post('/api/messages/send-background', async (req, res) => {
             await new Promise(resolve => setTimeout(resolve, 1000));
             
           } catch (messageError) {
-            console.error(`❌ Error sending message to ${customer.phone_number}:`, messageError);
+            console.error(`❌ Error sending message to ${phoneNumber}:`, messageError);
             results.push({
               customerId,
               messageId: message.id || 'unknown',
               success: false,
               error: messageError.message,
-              phoneNumber: customer.phone_number,
+              phoneNumber: phoneNumber,
               processId: processId
             });
           }
