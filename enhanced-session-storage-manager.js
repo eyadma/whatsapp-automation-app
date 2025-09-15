@@ -354,10 +354,12 @@ class EnhancedSessionStorageManager {
         if (sock && !sock.destroyed && sock.user?.id) {
           console.log(`🔍 Polling for new messages in session ${sessionId}...`);
           
-          // Try to get recent messages from the user's own chat
+          // Try to get recent messages using the correct Baileys API
           try {
-            const messages = await sock.fetchMessages(sock.user.id, {
-              limit: 10
+            // Use the correct method - getMessages with proper parameters
+            const messages = await sock.getMessages(sock.user.id, {
+              limit: 10,
+              before: lastPollTime
             });
             
             if (messages && messages.length > 0) {
@@ -394,6 +396,17 @@ class EnhancedSessionStorageManager {
             }
           } catch (fetchError) {
             console.error(`❌ Error fetching messages:`, fetchError);
+            console.error(`❌ Error details:`, {
+              message: fetchError.message,
+              name: fetchError.name,
+              stack: fetchError.stack
+            });
+            
+            // Log available methods for debugging
+            const availableMethods = Object.getOwnPropertyNames(sock).filter(name => 
+              name.includes('Message') || name.includes('Chat') || name.includes('get')
+            );
+            console.error(`❌ Available methods:`, availableMethods);
           }
           
           // Update last poll time
