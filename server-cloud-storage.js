@@ -550,7 +550,7 @@ app.post('/api/messages/send-background', async (req, res) => {
       });
     }
     
-    console.log(`📤 Using messages:`, defaultMessages);
+    console.log(`📤 Using messages:`, messagesToSend);
     
     // Check if session is connected
     const statusResult = sessionStorageManager.getSessionStatus(userId, sessionId);
