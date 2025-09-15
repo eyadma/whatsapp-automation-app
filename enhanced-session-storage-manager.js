@@ -533,6 +533,30 @@ class EnhancedSessionStorageManager {
     }
   }
 
+  /**
+   * Check if session is connected in memory
+   */
+  isSessionConnected(userId, sessionId) {
+    try {
+      if (!this.activeSessions.has(userId)) {
+        return false;
+      }
+      
+      const userSessions = this.activeSessions.get(userId);
+      const session = userSessions.get(sessionId);
+      
+      if (!session) {
+        return false;
+      }
+      
+      // Check if the socket is still valid and connected
+      return session && !session.destroyed;
+    } catch (error) {
+      console.error(`❌ Error checking session connection:`, error);
+      return false;
+    }
+  }
+
   cleanSession(userId, sessionId) {
     try {
       console.log(`🧹 Cleaning session: ${sessionId} for user: ${userId}`);

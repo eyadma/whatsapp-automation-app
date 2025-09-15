@@ -25,6 +25,134 @@ const sessionStorageManager = new EnhancedSessionStorageManager();
 // Start periodic sync to cloud storage (every 5 minutes)
 sessionStorageManager.startPeriodicSync(300000);
 
+// Auto-connect all existing sessions on startup for persistent message listening
+async function initializePersistentConnections() {
+  try {
+    console.log('🚀 Initializing persistent WhatsApp connections for location monitoring...');
+    
+    // Get all active sessions from database
+    const { data: sessions, error } = await supabase
+      .from('whatsapp_sessions')
+      .select('*')
+      .eq('is_active', true)
+      .eq('status', 'connected');
+    
+    if (error) {
+      console.error('❌ Error fetching active sessions:', error);
+      return;
+    }
+    
+    if (!sessions || sessions.length === 0) {
+      console.log('📋 No active sessions found. Location monitoring will start when sessions are created.');
+      return;
+    }
+    
+    console.log(`📱 Found ${sessions.length} active sessions to reconnect:`);
+    
+    // Group sessions by user
+    const userSessions = {};
+    sessions.forEach(session => {
+      if (!userSessions[session.user_id]) {
+        userSessions[session.user_id] = [];
+      }
+      userSessions[session.user_id].push(session);
+    });
+    
+    // Reconnect each user's sessions
+    for (const [userId, userSessionList] of Object.entries(userSessions)) {
+      console.log(`👤 Reconnecting sessions for user: ${userId}`);
+      
+      for (const session of userSessionList) {
+        try {
+          console.log(`🔄 Reconnecting session: ${session.session_id}`);
+          
+          // Reconnect the session
+          const result = await sessionStorageManager.connectWhatsApp(userId, session.session_id);
+          
+          if (result.success) {
+            console.log(`✅ Session reconnected: ${session.session_id}`);
+          } else {
+            console.log(`❌ Failed to reconnect session ${session.session_id}: ${result.error}`);
+          }
+          
+          // Add small delay between reconnections
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (error) {
+          console.error(`❌ Error reconnecting session ${session.session_id}:`, error);
+        }
+      }
+    }
+    
+    console.log('🎉 Persistent connection initialization completed!');
+    console.log('📡 Location message listener is now active for all reconnected sessions.');
+    
+  } catch (error) {
+    console.error('❌ Error initializing persistent connections:', error);
+  }
+}
+
+// Start persistent connections after a short delay to ensure server is ready
+setTimeout(initializePersistentConnections, 5000);
+
+// Background monitoring service to ensure all sessions stay connected
+async function backgroundSessionMonitoring() {
+  try {
+    console.log('🔍 Background session monitoring: Checking for disconnected sessions...');
+    
+    // Get all active sessions that should be connected
+    const { data: sessions, error } = await supabase
+      .from('whatsapp_sessions')
+      .select('*')
+      .eq('is_active', true)
+      .in('status', ['connected', 'connecting', 'qr_generated']);
+    
+    if (error) {
+      console.error('❌ Error in background monitoring:', error);
+      return;
+    }
+    
+    if (!sessions || sessions.length === 0) {
+      console.log('📋 No sessions to monitor in background.');
+      return;
+    }
+    
+    let reconnectedCount = 0;
+    
+    for (const session of sessions) {
+      try {
+        // Check if session is actually connected in memory
+        const isConnected = sessionStorageManager.isSessionConnected(session.user_id, session.session_id);
+        
+        if (!isConnected && session.status === 'connected') {
+          console.log(`🔄 Background reconnection: ${session.session_id} (status: ${session.status})`);
+          
+          const result = await sessionStorageManager.connectWhatsApp(session.user_id, session.session_id);
+          
+          if (result.success) {
+            reconnectedCount++;
+            console.log(`✅ Background reconnection successful: ${session.session_id}`);
+          } else {
+            console.log(`❌ Background reconnection failed: ${session.session_id} - ${result.error}`);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error in background monitoring for session ${session.session_id}:`, error);
+      }
+    }
+    
+    if (reconnectedCount > 0) {
+      console.log(`🔄 Background monitoring: Reconnected ${reconnectedCount} sessions`);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error in background session monitoring:', error);
+  }
+}
+
+// Start background monitoring every 2 minutes
+setInterval(backgroundSessionMonitoring, 120000); // 2 minutes
+
 // WhatsApp connection management - Updated for multi-session support
 const connections = new Map(); // userId -> Map of sessionId -> connection
 const userSessions = new Map(); // userId -> Set of active sessionIds
@@ -201,6 +329,84 @@ app.get('/api/test/locations-table/:userId', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error in locations table test:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Endpoint to manually trigger persistent connection initialization
+app.post('/api/whatsapp/initialize-persistent', async (req, res) => {
+  try {
+    console.log('🔄 Manual trigger: Initializing persistent connections...');
+    
+    // Trigger the initialization function
+    await initializePersistentConnections();
+    
+    res.json({
+      success: true,
+      message: 'Persistent connection initialization triggered',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Error in manual persistent initialization:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Endpoint to check background monitoring status
+app.get('/api/whatsapp/monitoring-status', async (req, res) => {
+  try {
+    // Get all active sessions
+    const { data: sessions, error } = await supabase
+      .from('whatsapp_sessions')
+      .select('*')
+      .eq('is_active', true);
+    
+    if (error) {
+      throw error;
+    }
+    
+    // Check which sessions are connected in memory
+    const connectedSessions = [];
+    const disconnectedSessions = [];
+    
+    sessions.forEach(session => {
+      const isConnected = sessionStorageManager.isSessionConnected(session.user_id, session.session_id);
+      
+      if (isConnected) {
+        connectedSessions.push({
+          userId: session.user_id,
+          sessionId: session.session_id,
+          status: session.status
+        });
+      } else {
+        disconnectedSessions.push({
+          userId: session.user_id,
+          sessionId: session.session_id,
+          status: session.status
+        });
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: 'Background monitoring status',
+      data: {
+        totalSessions: sessions.length,
+        connectedSessions: connectedSessions.length,
+        disconnectedSessions: disconnectedSessions.length,
+        connected: connectedSessions,
+        disconnected: disconnectedSessions,
+        monitoringActive: true
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error checking monitoring status:', error);
     res.status(500).json({
       success: false,
       error: error.message
