@@ -596,11 +596,12 @@ app.post('/api/messages/send-background', async (req, res) => {
         
         // Validate phone number
         if (!customer.phone_number) {
-          console.error(`❌ Customer has no phone number: ${customerId}`);
+          console.error(`❌ Customer has no phone number: ${customerId} (${customer.name})`);
           results.push({
             customerId,
             success: false,
             error: 'Customer has no phone number',
+            customerName: customer.name,
             processId: processId
           });
           continue;
@@ -679,10 +680,12 @@ app.post('/api/messages/send-background', async (req, res) => {
     const failureCount = results.filter(r => !r.success).length;
     
     console.log(`📊 Background message sending completed: ${successCount} success, ${failureCount} failures`);
+    console.log(`📊 Process ID: ${processId}`);
     
+    // Always return success with processID, even if all messages failed
     res.json({
       success: true,
-      message: `Background messages sent: ${successCount} success, ${failureCount} failures`,
+      message: `Background messages processed: ${successCount} success, ${failureCount} failures`,
       processId: processId,
       data: {
         totalMessages: results.length,
@@ -750,7 +753,40 @@ app.post('/api/sessions/:userId/:sessionId/sync', async (req, res) => {
   }
 });
 
-// 8. Fetch Customers (mobile app endpoint)
+// 8. Test Customer Data (debug endpoint)
+app.get('/api/customers/test/:userId/:customerId', async (req, res) => {
+  const { userId, customerId } = req.params;
+  
+  try {
+    console.log(`🔍 Testing customer data for user: ${userId}, customer: ${customerId}`);
+    
+    const { data: customer, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', customerId)
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      console.error(`❌ Error fetching customer:`, error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+    
+    console.log(`👤 Customer data:`, customer);
+    
+    res.json({
+      success: true,
+      customer: customer,
+      hasPhoneNumber: !!customer?.phone_number,
+      phoneNumber: customer?.phone_number || 'No phone number'
+    });
+  } catch (error) {
+    console.error(`❌ Error testing customer:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 9. Fetch Customers (mobile app endpoint)
 app.post('/api/customers/fetch/:userId', async (req, res) => {
   const { userId } = req.params;
   const { filters = {}, limit = 100, offset = 0 } = req.body;
