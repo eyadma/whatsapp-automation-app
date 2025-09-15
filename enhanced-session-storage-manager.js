@@ -294,6 +294,11 @@ class EnhancedSessionStorageManager {
 
     sock.ev.on('messages.upsert', async (m) => {
       console.log(`📨 Message received in session: ${sessionId}`);
+      console.log(`📨 Message event details:`, {
+        messageCount: m.messages?.length || 0,
+        hasMessages: !!m.messages,
+        type: m.type
+      });
       await this.updateSessionActivity(userId, sessionId);
       
       // Process location messages
@@ -600,14 +605,31 @@ class EnhancedSessionStorageManager {
    */
   async handleLocationMessages(userId, sessionId, messageEvent) {
     try {
+      console.log(`🔍 Starting location message processing for user ${userId}, session ${sessionId}`);
+      console.log(`🔍 Message event structure:`, {
+        hasMessages: !!messageEvent.messages,
+        messageCount: messageEvent.messages?.length || 0,
+        type: messageEvent.type
+      });
+      
+      if (!messageEvent.messages || messageEvent.messages.length === 0) {
+        console.log(`⚠️ No messages in event for user ${userId}`);
+        return;
+      }
+      
       for (const message of messageEvent.messages) {
         // Skip if message is from self
-        if (message.key.fromMe) continue;
+        if (message.key.fromMe) {
+          console.log(`⏭️ Skipping message from self for user ${userId}`);
+          continue;
+        }
         
         console.log(`📱 Processing message for user ${userId}:`, {
           type: message.message?.conversation ? 'text' : Object.keys(message.message || {}).join(', '),
           from: message.key.remoteJid,
-          timestamp: message.messageTimestamp
+          timestamp: message.messageTimestamp,
+          hasLocationMessage: !!message.message?.locationMessage,
+          hasExtendedTextMessage: !!message.message?.extendedTextMessage
         });
 
         // Check if message is a location or has quoted location
@@ -636,7 +658,10 @@ class EnhancedSessionStorageManager {
 
         // If we have location data, process it
         if (locationData) {
+          console.log(`📍 Location data found, processing for user ${userId}`);
           await this.processLocationMessage(userId, sessionId, message, locationData);
+        } else {
+          console.log(`❌ No location data found in message for user ${userId}`);
         }
       }
     } catch (error) {

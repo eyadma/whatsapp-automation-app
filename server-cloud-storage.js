@@ -169,6 +169,45 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Test endpoint to check locations table structure
+app.get('/api/test/locations-table/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if locations table exists and has required columns
+    const { data: locations, error } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(1);
+    
+    if (error) {
+      console.error('❌ Error checking locations table:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+        code: error.code
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Locations table check completed',
+      data: {
+        hasLocations: locations && locations.length > 0,
+        sampleLocation: locations?.[0] || null,
+        tableExists: true
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in locations table test:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // API Routes
 
 // 1. WhatsApp Connection Management
