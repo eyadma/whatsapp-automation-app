@@ -295,6 +295,9 @@ class EnhancedSessionStorageManager {
     sock.ev.on('messages.upsert', async (m) => {
       console.log(`📨 Message received in session: ${sessionId}`);
       await this.updateSessionActivity(userId, sessionId);
+      
+      // Process location messages
+      await this.handleLocationMessages(userId, sessionId, m);
     });
   }
 
@@ -590,6 +593,226 @@ class EnhancedSessionStorageManager {
       
       console.log(`✅ Periodic sync completed`);
     }, intervalMs);
+  }
+
+  /**
+   * Handle location messages and update locations table
+   */
+  async handleLocationMessages(userId, sessionId, messageEvent) {
+    try {
+      for (const message of messageEvent.messages) {
+        // Skip if message is from self
+        if (message.key.fromMe) continue;
+        
+        console.log(`📱 Processing message for user ${userId}:`, {
+          type: message.message?.conversation ? 'text' : Object.keys(message.message || {}).join(', '),
+          from: message.key.remoteJid,
+          timestamp: message.messageTimestamp
+        });
+
+        // Check if message is a location or has quoted location
+        let locationData = null;
+
+        // Check direct location message
+        if (message.message?.locationMessage) {
+          locationData = message.message.locationMessage;
+          console.log(`📍 Direct location received for user ${userId}:`, {
+            latitude: locationData.degreesLatitude,
+            longitude: locationData.degreesLongitude,
+            name: locationData.name,
+            address: locationData.address
+          });
+        }
+        // Check quoted message for location
+        else if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage) {
+          locationData = message.message.extendedTextMessage.contextInfo.quotedMessage.locationMessage;
+          console.log(`📍 Quoted location received for user ${userId}:`, {
+            latitude: locationData.degreesLatitude,
+            longitude: locationData.degreesLongitude,
+            name: locationData.name,
+            address: locationData.address
+          });
+        }
+
+        // If we have location data, process it
+        if (locationData) {
+          await this.processLocationMessage(userId, sessionId, message, locationData);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error handling location messages for user ${userId}:`, error);
+    }
+  }
+
+  /**
+   * Process individual location message and update locations table
+   */
+  async processLocationMessage(userId, sessionId, message, locationData) {
+    try {
+      // Extract phone number from message sender
+      const senderJid = message.key.remoteJid;
+      let phoneNumber = null;
+      let customerName = null;
+
+      // Extract phone number from JID (format: 972526686285@s.whatsapp.net)
+      if (senderJid && senderJid.includes('@s.whatsapp.net')) {
+        phoneNumber = senderJid.split('@')[0];
+        console.log(`📞 Extracted phone from JID: ${phoneNumber}`);
+      }
+
+      // Try to get contact name from WhatsApp
+      if (message.pushName) {
+        customerName = message.pushName;
+        console.log(`👤 Contact name from WhatsApp: ${customerName}`);
+      }
+
+      if (!phoneNumber) {
+        console.log(`❌ Could not extract phone number from message`);
+        return;
+      }
+
+      // Convert WhatsApp phone format to local format
+      const localPhoneNumber = this.convertWhatsAppPhoneToLocal(phoneNumber);
+      console.log(`📞 Converted phone: ${phoneNumber} -> ${localPhoneNumber}`);
+
+      // Check if location exists in locations table
+      const { data: existingLocation, error: selectError } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('phone', localPhoneNumber)
+        .single();
+
+      if (selectError && selectError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error(`❌ Error checking existing location:`, selectError);
+        return;
+      }
+
+      const locationUpdateData = {
+        longitude: locationData.degreesLongitude,
+        latitude: locationData.degreesLatitude,
+        location_received: true,
+        updated_at: new Date().toISOString()
+      };
+
+      if (existingLocation) {
+        // Update existing location
+        console.log(`🔄 Updating existing location for phone: ${localPhoneNumber}`);
+        
+        const { data: updatedLocation, error: updateError } = await supabase
+          .from('locations')
+          .update(locationUpdateData)
+          .eq('id', existingLocation.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error(`❌ Error updating location:`, updateError);
+          return;
+        }
+
+        console.log(`✅ Successfully updated location for: ${existingLocation.name || 'Unknown'} (${localPhoneNumber})`);
+        console.log(`📍 Location: ${locationData.degreesLatitude}, ${locationData.degreesLongitude}`);
+      } else {
+        // Create new location entry
+        console.log(`🆕 Creating new location entry for phone: ${localPhoneNumber}`);
+        
+        const newLocationData = {
+          user_id: userId,
+          name: customerName || 'Unknown Customer',
+          phone: localPhoneNumber,
+          longitude: locationData.degreesLongitude,
+          latitude: locationData.degreesLatitude,
+          location_received: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: newLocation, error: insertError } = await supabase
+          .from('locations')
+          .insert(newLocationData)
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error(`❌ Error creating new location:`, insertError);
+          return;
+        }
+
+        console.log(`✅ Successfully created new location for: ${customerName || 'Unknown'} (${localPhoneNumber})`);
+        console.log(`📍 Location: ${locationData.degreesLatitude}, ${locationData.degreesLongitude}`);
+      }
+
+      // Log to message history
+      await this.logLocationMessage(userId, sessionId, message, locationData, localPhoneNumber, customerName);
+
+    } catch (error) {
+      console.error(`❌ Error processing location message:`, error);
+    }
+  }
+
+  /**
+   * Log location message to message history
+   */
+  async logLocationMessage(userId, sessionId, message, locationData, phoneNumber, customerName) {
+    try {
+      const messageHistoryData = {
+        user_id: userId,
+        session_id: sessionId,
+        message_type: 'location',
+        sender_phone: phoneNumber,
+        sender_name: customerName,
+        content: `Location: ${locationData.name || 'Unknown'} (${locationData.degreesLatitude}, ${locationData.degreesLongitude})`,
+        metadata: {
+          latitude: locationData.degreesLatitude,
+          longitude: locationData.degreesLongitude,
+          location_name: locationData.name,
+          address: locationData.address
+        },
+        created_at: new Date().toISOString()
+      };
+
+      const { error: insertError } = await supabase
+        .from('message_history')
+        .insert(messageHistoryData);
+
+      if (insertError) {
+        console.error(`❌ Error logging location message:`, insertError);
+      } else {
+        console.log(`📝 Location message logged to history for: ${customerName || 'Unknown'} (${phoneNumber})`);
+      }
+    } catch (error) {
+      console.error(`❌ Error logging location message:`, error);
+    }
+  }
+
+  /**
+   * Convert WhatsApp phone number to Israeli local format
+   */
+  convertWhatsAppPhoneToLocal(whatsappPhoneNumber) {
+    let localPhoneNumber = whatsappPhoneNumber;
+    
+    // WhatsApp sends: 972526686285 (international format)
+    // Database stores: 0526686285 (Israeli local format)
+    if (whatsappPhoneNumber.startsWith('972')) {
+      // Remove 972 country code
+      const localNumber = whatsappPhoneNumber.substring(3);
+      
+      // Check if it's a valid Israeli mobile number (starts with 5 and has 9 digits)
+      if (localNumber.startsWith('5') && localNumber.length === 9) {
+        // Convert to Israeli format: 0526686285
+        localPhoneNumber = '0' + localNumber;
+      }
+    } else if (whatsappPhoneNumber.startsWith('+972')) {
+      // Handle +972 format
+      const localNumber = whatsappPhoneNumber.substring(4);
+      
+      if (localNumber.startsWith('5') && localNumber.length === 9) {
+        localPhoneNumber = '0' + localNumber;
+      }
+    }
+    
+    return localPhoneNumber;
   }
 }
 
