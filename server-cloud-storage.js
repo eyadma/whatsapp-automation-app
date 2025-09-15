@@ -701,10 +701,13 @@ app.post('/api/messages/send-background', async (req, res) => {
       message: `Background messages processed: ${successCount} success, ${failureCount} failures`,
       processId: processId,
       data: {
+        processId: processId,
         totalMessages: results.length,
         successCount,
         failureCount,
-        results
+        results,
+        totalCustomers: customerIds.length,
+        estimatedTime: `${Math.ceil(customerIds.length * 2 / 60)} minutes`
       }
     };
     
@@ -724,10 +727,13 @@ app.post('/api/messages/send-background', async (req, res) => {
       error: error.message,
       processId: errorProcessId,
       data: {
+        processId: errorProcessId,
         totalMessages: 0,
         successCount: 0,
         failureCount: 0,
-        results: []
+        results: [],
+        totalCustomers: 0,
+        estimatedTime: '0 minutes'
       }
     };
     
