@@ -555,6 +555,60 @@ app.post('/api/test/whatsapp-connection/:userId/:sessionId', async (req, res) =>
   }
 });
 
+// Test endpoint to manually trigger message listener with mock data
+app.post('/api/test/trigger-message-listener/:userId/:sessionId', async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    
+    console.log(`🧪 ===== TRIGGERING MESSAGE LISTENER MANUALLY =====`);
+    console.log(`🧪 User: ${userId}`);
+    console.log(`🧪 Session: ${sessionId}`);
+    
+    // Create a mock message event that simulates receiving a location message
+    const mockMessageEvent = {
+      messages: [{
+        key: {
+          remoteJid: '972526686285@s.whatsapp.net',
+          fromMe: false
+        },
+        pushName: 'Test Location Sender',
+        messageTimestamp: Date.now(),
+        message: {
+          locationMessage: {
+            degreesLatitude: 32.0853,
+            degreesLongitude: 34.7818,
+            name: 'Test Location',
+            address: 'Test Address'
+          }
+        }
+      }],
+      type: 'append'
+    };
+    
+    console.log(`🧪 Mock message event:`, JSON.stringify(mockMessageEvent, null, 2));
+    
+    // Manually trigger the message handler
+    await sessionStorageManager.handleLocationMessages(userId, sessionId, mockMessageEvent);
+    
+    res.json({
+      success: true,
+      message: 'Message listener triggered manually',
+      data: {
+        userId,
+        sessionId,
+        mockEvent: mockMessageEvent
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in manual message listener trigger:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // API Routes
 
 // 1. WhatsApp Connection Management
