@@ -642,53 +642,46 @@ app.post('/api/test/trigger-message-polling/:userId/:sessionId', async (req, res
     
     console.log(`🧪 Socket is available, starting manual polling...`);
     
-    // Get recent chats
-    const chats = await sock.getChats();
-    console.log(`🧪 Found ${chats?.length || 0} chats`);
-    
     let processedMessages = 0;
     
-    if (chats && chats.length > 0) {
-      // Check each chat for new messages
-      for (const chat of chats.slice(0, 5)) { // Check only recent 5 chats
-        try {
-          console.log(`🧪 Checking chat: ${chat.id}`);
+    // Try to get recent messages from the user's own chat
+    try {
+      console.log(`🧪 Fetching messages from user chat...`);
+      
+      const messages = await sock.fetchMessages(sock.user.id, {
+        limit: 10
+      });
+      
+      if (messages && messages.length > 0) {
+        console.log(`🧪 Found ${messages.length} messages`);
+        
+        // Process each message
+        for (const message of messages) {
+          // Skip messages from self
+          if (message.key.fromMe) continue;
           
-          // Get messages from this chat
-          const messages = await sock.fetchMessages(chat.id, {
-            limit: 3
+          console.log(`🧪 Processing message:`, {
+            from: message.key.remoteJid,
+            timestamp: message.messageTimestamp,
+            messageTypes: Object.keys(message.message || {}),
+            hasLocation: !!message.message?.locationMessage
           });
           
-          if (messages && messages.length > 0) {
-            console.log(`🧪 Found ${messages.length} messages in chat ${chat.id}`);
-            
-            // Process each message
-            for (const message of messages) {
-              // Skip messages from self
-              if (message.key.fromMe) continue;
-              
-              console.log(`🧪 Processing message:`, {
-                from: message.key.remoteJid,
-                timestamp: message.messageTimestamp,
-                messageTypes: Object.keys(message.message || {}),
-                hasLocation: !!message.message?.locationMessage
-              });
-              
-              // Create a mock message event
-              const mockEvent = {
-                messages: [message],
-                type: 'manual_polling'
-              };
-              
-              // Process the message
-              await sessionStorageManager.handleLocationMessages(userId, sessionId, mockEvent);
-              processedMessages++;
-            }
-          }
-        } catch (chatError) {
-          console.error(`❌ Error checking chat ${chat.id}:`, chatError);
+          // Create a mock message event
+          const mockEvent = {
+            messages: [message],
+            type: 'manual_polling'
+          };
+          
+          // Process the message
+          await sessionStorageManager.handleLocationMessages(userId, sessionId, mockEvent);
+          processedMessages++;
         }
+      } else {
+        console.log(`🧪 No messages found`);
       }
+    } catch (fetchError) {
+      console.error(`❌ Error fetching messages:`, fetchError);
     }
     
     res.json({
@@ -697,7 +690,6 @@ app.post('/api/test/trigger-message-polling/:userId/:sessionId', async (req, res
       data: {
         userId,
         sessionId,
-        totalChats: chats?.length || 0,
         processedMessages,
         connected: true
       }
