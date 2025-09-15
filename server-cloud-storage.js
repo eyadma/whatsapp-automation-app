@@ -444,8 +444,26 @@ app.get('/api/whatsapp/status/:userId/:sessionId', async (req, res) => {
       return res.status(500).json({ success: false, error: statusResult.error });
     }
     
+    // Get QR code if status is qr_generated
+    let qrCode = null;
+    if (statusResult.status === 'qr_generated') {
+      const qrResult = sessionStorageManager.getQRCode(userId, sessionId);
+      if (qrResult.success && qrResult.qrCode) {
+        qrCode = qrResult.qrCode;
+        console.log(`📱 Including QR code in status response for session: ${sessionId}`);
+      }
+    }
+    
     res.json({
       success: true,
+      connected: statusResult.connected,
+      connecting: statusResult.status === 'connecting' || statusResult.status === 'qr_generated',
+      qrCode: qrCode,
+      session: {
+        sessionId: sessionId,
+        userId: userId,
+        status: statusResult.status
+      },
       data: {
         status: statusResult.status,
         connected: statusResult.connected,
