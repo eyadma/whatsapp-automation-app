@@ -326,6 +326,26 @@ class EnhancedSessionStorageManager {
       await this.handleLocationMessages(userId, sessionId, m);
       console.log(`🚨 ===== MESSAGE PROCESSING COMPLETE =====\n`);
     });
+
+    // Add connection status monitoring
+    sock.ev.on('connection.update', async (update) => {
+      console.log(`\n🔌 ===== CONNECTION UPDATE =====`);
+      console.log(`🔌 Session: ${sessionId}`);
+      console.log(`🔌 User: ${userId}`);
+      console.log(`🔌 Connection: ${update.connection}`);
+      console.log(`🔌 Last Disconnect:`, update.lastDisconnect);
+      console.log(`🔌 QR Code: ${update.qr ? 'Generated' : 'None'}`);
+      console.log(`🔌 ===== CONNECTION UPDATE COMPLETE =====\n`);
+    });
+
+    // Add periodic heartbeat to verify connection is alive
+    setInterval(() => {
+      if (sock && !sock.destroyed) {
+        console.log(`💓 Heartbeat: Session ${sessionId} is alive`);
+      } else {
+        console.log(`💀 Heartbeat: Session ${sessionId} is dead or destroyed`);
+      }
+    }, 30000); // Every 30 seconds
   }
 
   /**

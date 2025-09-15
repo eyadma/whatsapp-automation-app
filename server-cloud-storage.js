@@ -470,6 +470,91 @@ app.post('/api/test/location-message/:userId/:sessionId', async (req, res) => {
   }
 });
 
+// Test endpoint to verify WhatsApp connection is actually working
+app.post('/api/test/whatsapp-connection/:userId/:sessionId', async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    const { testPhoneNumber } = req.body;
+    
+    console.log(`🧪 ===== TESTING WHATSAPP CONNECTION =====`);
+    console.log(`🧪 User: ${userId}`);
+    console.log(`🧪 Session: ${sessionId}`);
+    console.log(`🧪 Test phone: ${testPhoneNumber}`);
+    
+    // Check if session is actually connected
+    const isConnected = sessionStorageManager.isSessionConnected(userId, sessionId);
+    console.log(`🧪 Session connected in memory: ${isConnected}`);
+    
+    if (!isConnected) {
+      return res.status(400).json({
+        success: false,
+        error: 'Session is not connected in memory',
+        data: {
+          userId,
+          sessionId,
+          connected: false
+        }
+      });
+    }
+    
+    // Get the actual socket
+    const userSessions = sessionStorageManager.activeSessions.get(userId);
+    const sock = userSessions?.get(sessionId);
+    
+    if (!sock || sock.destroyed) {
+      return res.status(400).json({
+        success: false,
+        error: 'Socket is not available or destroyed',
+        data: {
+          userId,
+          sessionId,
+          socketAvailable: false,
+          socketDestroyed: sock?.destroyed || true
+        }
+      });
+    }
+    
+    console.log(`🧪 Socket is available and not destroyed`);
+    
+    // Try to send a test message
+    const testMessage = {
+      text: `🧪 Test message from server at ${new Date().toISOString()}`
+    };
+    
+    const phoneJid = `${testPhoneNumber}@s.whatsapp.net`;
+    console.log(`🧪 Sending test message to: ${phoneJid}`);
+    
+    const result = await sock.sendMessage(phoneJid, testMessage);
+    console.log(`🧪 Message sent result:`, result);
+    
+    res.json({
+      success: true,
+      message: 'WhatsApp connection test completed',
+      data: {
+        userId,
+        sessionId,
+        connected: true,
+        socketAvailable: true,
+        messageSent: true,
+        messageId: result?.key?.id,
+        testPhoneNumber
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in WhatsApp connection test:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: {
+        userId: req.params.userId,
+        sessionId: req.params.sessionId,
+        connected: false
+      }
+    });
+  }
+});
+
 // API Routes
 
 // 1. WhatsApp Connection Management
