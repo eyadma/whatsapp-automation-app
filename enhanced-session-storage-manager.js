@@ -346,6 +346,72 @@ class EnhancedSessionStorageManager {
         console.log(`💀 Heartbeat: Session ${sessionId} is dead or destroyed`);
       }
     }, 30000); // Every 30 seconds
+
+    // Add message polling mechanism as backup for event system
+    let lastPollTime = Date.now();
+    setInterval(async () => {
+      try {
+        if (sock && !sock.destroyed) {
+          console.log(`🔍 Polling for new messages in session ${sessionId}...`);
+          
+          // Get recent chats
+          const chats = await sock.getChats();
+          
+          if (chats && chats.length > 0) {
+            console.log(`📱 Found ${chats.length} chats, checking for new messages...`);
+            
+            // Check each chat for new messages
+            for (const chat of chats.slice(0, 10)) { // Check only recent 10 chats
+              try {
+                // Get messages from this chat
+                const messages = await sock.fetchMessages(chat.id, {
+                  limit: 5
+                });
+                
+                if (messages && messages.length > 0) {
+                  // Process each message
+                  for (const message of messages) {
+                    // Skip messages from self
+                    if (message.key.fromMe) continue;
+                    
+                    // Skip old messages (older than 5 minutes)
+                    const messageTime = message.messageTimestamp * 1000;
+                    if (messageTime < lastPollTime - 300000) continue;
+                    
+                    console.log(`📱 Processing polled message:`, {
+                      from: message.key.remoteJid,
+                      timestamp: message.messageTimestamp,
+                      messageTypes: Object.keys(message.message || {}),
+                      hasLocation: !!message.message?.locationMessage,
+                      hasExtendedText: !!message.message?.extendedTextMessage,
+                      chatId: chat.id
+                    });
+                    
+                    // Create a mock message event
+                    const mockEvent = {
+                      messages: [message],
+                      type: 'polling'
+                    };
+                    
+                    // Process the message
+                    await this.handleLocationMessages(userId, sessionId, mockEvent);
+                  }
+                }
+              } catch (chatError) {
+                console.error(`❌ Error fetching messages from chat ${chat.id}:`, chatError);
+              }
+            }
+          } else {
+            console.log(`📭 No chats found via polling`);
+          }
+          
+          // Update last poll time
+          lastPollTime = Date.now();
+        }
+      } catch (error) {
+        console.error(`❌ Error in message polling for session ${sessionId}:`, error);
+      }
+    }, 20000); // Poll every 20 seconds
   }
 
   /**

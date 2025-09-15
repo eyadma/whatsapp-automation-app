@@ -609,6 +609,109 @@ app.post('/api/test/trigger-message-listener/:userId/:sessionId', async (req, re
   }
 });
 
+// Test endpoint to manually trigger message polling
+app.post('/api/test/trigger-message-polling/:userId/:sessionId', async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    
+    console.log(`🧪 ===== TRIGGERING MESSAGE POLLING MANUALLY =====`);
+    console.log(`🧪 User: ${userId}`);
+    console.log(`🧪 Session: ${sessionId}`);
+    
+    // Check if session is connected
+    const isConnected = sessionStorageManager.isSessionConnected(userId, sessionId);
+    if (!isConnected) {
+      return res.status(400).json({
+        success: false,
+        error: 'Session is not connected',
+        data: { userId, sessionId, connected: false }
+      });
+    }
+    
+    // Get the socket
+    const userSessions = sessionStorageManager.activeSessions.get(userId);
+    const sock = userSessions?.get(sessionId);
+    
+    if (!sock || sock.destroyed) {
+      return res.status(400).json({
+        success: false,
+        error: 'Socket is not available',
+        data: { userId, sessionId, socketAvailable: false }
+      });
+    }
+    
+    console.log(`🧪 Socket is available, starting manual polling...`);
+    
+    // Get recent chats
+    const chats = await sock.getChats();
+    console.log(`🧪 Found ${chats?.length || 0} chats`);
+    
+    let processedMessages = 0;
+    
+    if (chats && chats.length > 0) {
+      // Check each chat for new messages
+      for (const chat of chats.slice(0, 5)) { // Check only recent 5 chats
+        try {
+          console.log(`🧪 Checking chat: ${chat.id}`);
+          
+          // Get messages from this chat
+          const messages = await sock.fetchMessages(chat.id, {
+            limit: 3
+          });
+          
+          if (messages && messages.length > 0) {
+            console.log(`🧪 Found ${messages.length} messages in chat ${chat.id}`);
+            
+            // Process each message
+            for (const message of messages) {
+              // Skip messages from self
+              if (message.key.fromMe) continue;
+              
+              console.log(`🧪 Processing message:`, {
+                from: message.key.remoteJid,
+                timestamp: message.messageTimestamp,
+                messageTypes: Object.keys(message.message || {}),
+                hasLocation: !!message.message?.locationMessage
+              });
+              
+              // Create a mock message event
+              const mockEvent = {
+                messages: [message],
+                type: 'manual_polling'
+              };
+              
+              // Process the message
+              await sessionStorageManager.handleLocationMessages(userId, sessionId, mockEvent);
+              processedMessages++;
+            }
+          }
+        } catch (chatError) {
+          console.error(`❌ Error checking chat ${chat.id}:`, chatError);
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'Manual message polling completed',
+      data: {
+        userId,
+        sessionId,
+        totalChats: chats?.length || 0,
+        processedMessages,
+        connected: true
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in manual message polling:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // API Routes
 
 // 1. WhatsApp Connection Management
