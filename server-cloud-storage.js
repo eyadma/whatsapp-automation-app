@@ -520,8 +520,13 @@ app.post('/api/messages/send-background', async (req, res) => {
     const missingFields = [];
     if (!userId) missingFields.push('userId');
     if (!sessionId) missingFields.push('sessionId');
-    if (!messages) missingFields.push('messages');
     if (!customerIds) missingFields.push('customerIds');
+    
+    // Make messages optional - if not provided, use a default message
+    const defaultMessages = messages || [{ 
+      id: 'default', 
+      content: 'Hello! This is a message from WhatsApp Automation.' 
+    }];
     
     if (missingFields.length > 0) {
       console.log(`❌ Missing required fields: ${missingFields.join(', ')}`);
@@ -536,6 +541,8 @@ app.post('/api/messages/send-background', async (req, res) => {
         }
       });
     }
+    
+    console.log(`📤 Using messages:`, defaultMessages);
     
     // Check if session is connected
     const statusResult = sessionStorageManager.getSessionStatus(userId, sessionId);
@@ -579,7 +586,7 @@ app.post('/api/messages/send-background', async (req, res) => {
         }
         
         // Send each message to this customer
-        for (const message of messages) {
+        for (const message of defaultMessages) {
           try {
             const messageText = message.content || message.text || message.message;
             if (!messageText) {
@@ -706,6 +713,64 @@ app.post('/api/sessions/:userId/:sessionId/sync', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error(`❌ Error syncing session:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 8. Fetch Customers (mobile app endpoint)
+app.post('/api/customers/fetch/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { filters = {}, limit = 100, offset = 0 } = req.body;
+  
+  try {
+    console.log(`👥 Fetching customers for user: ${userId}`);
+    console.log(`👥 Filters:`, filters);
+    console.log(`👥 Limit: ${limit}, Offset: ${offset}`);
+    
+    let query = supabase
+      .from('customers')
+      .select('*')
+      .eq('user_id', userId);
+    
+    // Apply filters
+    if (filters.area) {
+      query = query.eq('area', filters.area);
+    }
+    if (filters.preferred_language) {
+      query = query.eq('preferred_language', filters.preferred_language);
+    }
+    if (filters.phone_number) {
+      query = query.ilike('phone_number', `%${filters.phone_number}%`);
+    }
+    if (filters.name) {
+      query = query.ilike('name', `%${filters.name}%`);
+    }
+    
+    // Apply pagination
+    query = query
+      .range(offset, offset + limit - 1)
+      .order('created_at', { ascending: false });
+    
+    const { data: customers, error } = await query;
+    
+    if (error) {
+      console.error(`❌ Error fetching customers:`, error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+    
+    console.log(`✅ Found ${customers?.length || 0} customers for user: ${userId}`);
+    
+    res.json({
+      success: true,
+      data: customers || [],
+      pagination: {
+        limit,
+        offset,
+        count: customers?.length || 0
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Error fetching customers:`, error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
