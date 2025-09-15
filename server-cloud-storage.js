@@ -1013,7 +1013,7 @@ app.get('/api/whatsapp/status/:userId/:sessionId', async (req, res) => {
   }
 });
 
-// 4d. Clean Session (mobile app endpoint)
+// 4d. Clean Session (mobile app endpoint) - DEPRECATED, use delete-session instead
 app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
   const { userId } = req.params;
   const { sessionId } = req.body;
@@ -1038,6 +1038,38 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
     });
   } catch (error) {
     console.error(`❌ Error cleaning session:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4e. Delete Session (mobile app endpoint) - PROPER DELETION
+app.post('/api/whatsapp/delete-session/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { sessionId } = req.body;
+  
+  try {
+    console.log(`🗑️ Deleting session for user: ${userId}, session: ${sessionId}`);
+    
+    // Delete session completely using session storage manager
+    const deleteResult = await sessionStorageManager.deleteSession(userId, sessionId);
+    
+    if (!deleteResult.success) {
+      return res.status(500).json({ success: false, error: deleteResult.error });
+    }
+    
+    // Also remove from connections tracking
+    removeConnection(userId, sessionId);
+    
+    res.json({
+      success: true,
+      message: 'Session deleted successfully',
+      data: {
+        userId: userId,
+        sessionId: sessionId
+      }
+    });
+  } catch (error) {
+    console.error(`❌ Error deleting session:`, error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
