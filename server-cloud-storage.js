@@ -506,6 +506,142 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
   }
 });
 
+// 5. Send Background Messages (mobile app endpoint)
+app.post('/api/messages/send-background', async (req, res) => {
+  try {
+    const { userId, sessionId, messages, customerIds } = req.body;
+    
+    console.log(`📤 Sending background messages for user: ${userId}, session: ${sessionId}`);
+    console.log(`📤 Messages count: ${messages?.length || 0}, Customer IDs: ${customerIds?.length || 0}`);
+    
+    if (!userId || !sessionId || !messages || !customerIds) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: userId, sessionId, messages, customerIds' 
+      });
+    }
+    
+    // Check if session is connected
+    const statusResult = sessionStorageManager.getSessionStatus(userId, sessionId);
+    if (!statusResult.success || !statusResult.connected) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'WhatsApp session is not connected' 
+      });
+    }
+    
+    // Get the WhatsApp socket
+    const sock = sessionStorageManager.activeSessions.get(userId)?.get(sessionId);
+    if (!sock) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'WhatsApp session not found' 
+      });
+    }
+    
+    const results = [];
+    
+    // Send messages to each customer
+    for (const customerId of customerIds) {
+      try {
+        // Get customer details from database
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .select('*')
+          .eq('id', customerId)
+          .eq('user_id', userId)
+          .single();
+        
+        if (customerError || !customer) {
+          console.error(`❌ Customer not found: ${customerId}`, customerError);
+          results.push({
+            customerId,
+            success: false,
+            error: 'Customer not found'
+          });
+          continue;
+        }
+        
+        // Send each message to this customer
+        for (const message of messages) {
+          try {
+            const messageText = message.content || message.text || message.message;
+            if (!messageText) {
+              console.error(`❌ No message content for customer: ${customerId}`);
+              results.push({
+                customerId,
+                messageId: message.id || 'unknown',
+                success: false,
+                error: 'No message content'
+              });
+              continue;
+            }
+            
+            // Send WhatsApp message
+            const sent = await sock.sendMessage(customer.phone_number + '@s.whatsapp.net', {
+              text: messageText
+            });
+            
+            console.log(`✅ Message sent to ${customer.phone_number}: ${messageText.substring(0, 50)}...`);
+            
+            results.push({
+              customerId,
+              messageId: message.id || 'unknown',
+              success: true,
+              messageId: sent.key.id,
+              phoneNumber: customer.phone_number
+            });
+            
+            // Add delay between messages to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+          } catch (messageError) {
+            console.error(`❌ Error sending message to ${customer.phone_number}:`, messageError);
+            results.push({
+              customerId,
+              messageId: message.id || 'unknown',
+              success: false,
+              error: messageError.message,
+              phoneNumber: customer.phone_number
+            });
+          }
+        }
+        
+        // Add delay between customers
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+      } catch (customerError) {
+        console.error(`❌ Error processing customer ${customerId}:`, customerError);
+        results.push({
+          customerId,
+          success: false,
+          error: customerError.message
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    console.log(`📊 Background message sending completed: ${successCount} success, ${failureCount} failures`);
+    
+    res.json({
+      success: true,
+      message: `Background messages sent: ${successCount} success, ${failureCount} failures`,
+      data: {
+        totalMessages: results.length,
+        successCount,
+        failureCount,
+        results
+      }
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error sending background messages:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 5. Get User Sessions
 app.get('/api/sessions/:userId', async (req, res) => {
   const { userId } = req.params;
