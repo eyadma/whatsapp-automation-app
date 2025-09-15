@@ -1,4 +1,4 @@
-const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, getContentType } = require('@whiskeysockets/baileys');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -292,38 +292,58 @@ class EnhancedSessionStorageManager {
       await this.syncSessionToCloud(userId, sessionId, localSessionPath);
     });
 
-    sock.ev.on('messages.upsert', async (m) => {
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
       console.log(`\n🚨 ===== MESSAGE RECEIVED =====`);
       console.log(`📨 Session: ${sessionId}`);
       console.log(`👤 User: ${userId}`);
       console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
       console.log(`📨 Message event details:`, {
-        messageCount: m.messages?.length || 0,
-        hasMessages: !!m.messages,
-        type: m.type,
-        fullEvent: JSON.stringify(m, null, 2)
+        messageCount: messages?.length || 0,
+        hasMessages: !!messages,
+        type: type
       });
       
-      if (m.messages && m.messages.length > 0) {
-        console.log(`📱 Processing ${m.messages.length} message(s):`);
-        m.messages.forEach((msg, index) => {
-          console.log(`📱 Message ${index + 1}:`, {
-            from: msg.key?.remoteJid,
-            fromMe: msg.key?.fromMe,
-            timestamp: msg.messageTimestamp,
-            messageTypes: Object.keys(msg.message || {}),
-            hasLocation: !!msg.message?.locationMessage,
-            hasExtendedText: !!msg.message?.extendedTextMessage,
-            pushName: msg.pushName
+      if (messages && messages.length > 0) {
+        console.log(`📱 Processing ${messages.length} message(s):`);
+        
+        for (const message of messages) {
+          // Skip messages from self
+          if (message.key.fromMe) {
+            console.log(`⏭️ Skipping message from self`);
+            continue;
+          }
+          
+          // Get message content type
+          const contentType = getContentType(message.message);
+          console.log(`📱 Message details:`, {
+            from: message.key?.remoteJid,
+            fromMe: message.key?.fromMe,
+            timestamp: message.messageTimestamp,
+            contentType: contentType,
+            pushName: message.pushName
           });
-        });
+          
+          // Check if it's a location message
+          if (contentType === 'locationMessage') {
+            console.log(`📍 Location message detected!`);
+            const locationData = message.message.locationMessage;
+            
+            console.log(`📍 Location data:`, {
+              latitude: locationData.degreesLatitude,
+              longitude: locationData.degreesLongitude,
+              name: locationData.name,
+              address: locationData.address
+            });
+            
+            // Process the location message
+            await this.processLocationMessage(userId, sessionId, message, locationData);
+          } else {
+            console.log(`📝 Non-location message (${contentType}), skipping location processing`);
+          }
+        }
       }
       
       await this.updateSessionActivity(userId, sessionId);
-      
-      // Process location messages
-      console.log(`🔍 Starting location message processing...`);
-      await this.handleLocationMessages(userId, sessionId, m);
       console.log(`🚨 ===== MESSAGE PROCESSING COMPLETE =====\n`);
     });
 
@@ -347,75 +367,7 @@ class EnhancedSessionStorageManager {
       }
     }, 30000); // Every 30 seconds
 
-    // Add message polling mechanism as backup for event system
-    let lastPollTime = Date.now();
-    setInterval(async () => {
-      try {
-        if (sock && !sock.destroyed && sock.user?.id) {
-          console.log(`🔍 Polling for new messages in session ${sessionId}...`);
-          
-          // Try to get recent messages using the correct Baileys API
-          try {
-            // Use the correct method - fetchMessageHistory
-            const messages = await sock.fetchMessageHistory(sock.user.id, {
-              limit: 10,
-              before: lastPollTime
-            });
-            
-            if (messages && messages.length > 0) {
-              console.log(`📱 Found ${messages.length} messages via polling`);
-              
-              // Process each message
-              for (const message of messages) {
-                // Skip messages from self
-                if (message.key.fromMe) continue;
-                
-                // Skip old messages (older than 10 minutes)
-                const messageTime = message.messageTimestamp * 1000;
-                if (messageTime < lastPollTime - 600000) continue;
-                
-                console.log(`📱 Processing polled message:`, {
-                  from: message.key.remoteJid,
-                  timestamp: message.messageTimestamp,
-                  messageTypes: Object.keys(message.message || {}),
-                  hasLocation: !!message.message?.locationMessage,
-                  hasExtendedText: !!message.message?.extendedTextMessage
-                });
-                
-                // Create a mock message event
-                const mockEvent = {
-                  messages: [message],
-                  type: 'polling'
-                };
-                
-                // Process the message
-                await this.handleLocationMessages(userId, sessionId, mockEvent);
-              }
-            } else {
-              console.log(`📭 No new messages found via polling`);
-            }
-          } catch (fetchError) {
-            console.error(`❌ Error fetching messages:`, fetchError);
-            console.error(`❌ Error details:`, {
-              message: fetchError.message,
-              name: fetchError.name,
-              stack: fetchError.stack
-            });
-            
-            // Log available methods for debugging
-            const availableMethods = Object.getOwnPropertyNames(sock).filter(name => 
-              name.includes('Message') || name.includes('Chat') || name.includes('get')
-            );
-            console.error(`❌ Available methods:`, availableMethods);
-          }
-          
-          // Update last poll time
-          lastPollTime = Date.now();
-        }
-      } catch (error) {
-        console.error(`❌ Error in message polling for session ${sessionId}:`, error);
-      }
-    }, 30000); // Poll every 30 seconds
+    // Message polling removed - using event system instead
   }
 
   /**
