@@ -648,7 +648,7 @@ app.post('/api/test/trigger-message-polling/:userId/:sessionId', async (req, res
     try {
       console.log(`🧪 Fetching messages from user chat...`);
       
-      const messages = await sock.getMessages(sock.user.id, {
+      const messages = await sock.fetchMessageHistory(sock.user.id, {
         limit: 10,
         before: Date.now()
       });

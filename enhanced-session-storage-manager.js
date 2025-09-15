@@ -356,8 +356,8 @@ class EnhancedSessionStorageManager {
           
           // Try to get recent messages using the correct Baileys API
           try {
-            // Use the correct method - getMessages with proper parameters
-            const messages = await sock.getMessages(sock.user.id, {
+            // Use the correct method - fetchMessageHistory
+            const messages = await sock.fetchMessageHistory(sock.user.id, {
               limit: 10,
               before: lastPollTime
             });
