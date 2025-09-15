@@ -511,13 +511,29 @@ app.post('/api/messages/send-background', async (req, res) => {
   try {
     const { userId, sessionId, messages, customerIds } = req.body;
     
-    console.log(`📤 Sending background messages for user: ${userId}, session: ${sessionId}`);
-    console.log(`📤 Messages count: ${messages?.length || 0}, Customer IDs: ${customerIds?.length || 0}`);
+    console.log(`📤 Sending background messages - Request body:`, req.body);
+    console.log(`📤 User ID: ${userId}, Session ID: ${sessionId}`);
+    console.log(`📤 Messages:`, messages);
+    console.log(`📤 Customer IDs:`, customerIds);
     
-    if (!userId || !sessionId || !messages || !customerIds) {
+    // Check for missing fields with detailed logging
+    const missingFields = [];
+    if (!userId) missingFields.push('userId');
+    if (!sessionId) missingFields.push('sessionId');
+    if (!messages) missingFields.push('messages');
+    if (!customerIds) missingFields.push('customerIds');
+    
+    if (missingFields.length > 0) {
+      console.log(`❌ Missing required fields: ${missingFields.join(', ')}`);
       return res.status(400).json({ 
         success: false, 
-        error: 'Missing required fields: userId, sessionId, messages, customerIds' 
+        error: `Missing required fields: ${missingFields.join(', ')}`,
+        received: {
+          userId: !!userId,
+          sessionId: !!sessionId,
+          messages: !!messages,
+          customerIds: !!customerIds
+        }
       });
     }
     
