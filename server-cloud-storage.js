@@ -696,8 +696,7 @@ app.post('/api/messages/send-background', async (req, res) => {
     console.log(`📊 Background message sending completed: ${successCount} success, ${failureCount} failures`);
     console.log(`📊 Process ID: ${processId}`);
     
-    // Always return success with processID, even if all messages failed
-    res.json({
+    const response = {
       success: true,
       message: `Background messages processed: ${successCount} success, ${failureCount} failures`,
       processId: processId,
@@ -707,7 +706,12 @@ app.post('/api/messages/send-background', async (req, res) => {
         failureCount,
         results
       }
-    });
+    };
+    
+    console.log(`📤 Sending response to mobile app:`, JSON.stringify(response, null, 2));
+    
+    // Always return success with processID, even if all messages failed
+    res.json(response);
     
   } catch (error) {
     console.error(`❌ Error sending background messages:`, error);
@@ -715,7 +719,7 @@ app.post('/api/messages/send-background', async (req, res) => {
     // Generate a process ID even for errors
     const errorProcessId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    res.status(500).json({ 
+    const errorResponse = { 
       success: false, 
       error: error.message,
       processId: errorProcessId,
@@ -725,7 +729,11 @@ app.post('/api/messages/send-background', async (req, res) => {
         failureCount: 0,
         results: []
       }
-    });
+    };
+    
+    console.log(`📤 Sending error response to mobile app:`, JSON.stringify(errorResponse, null, 2));
+    
+    res.status(500).json(errorResponse);
   }
 });
 
