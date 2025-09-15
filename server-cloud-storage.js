@@ -625,11 +625,22 @@ app.post('/api/messages/send-background', async (req, res) => {
               continue;
             }
             
-            // Format phone number for WhatsApp
-            const whatsappNumber = phoneNumber.replace(/[^0-9]/g, '');
-            const whatsappJid = whatsappNumber + '@s.whatsapp.net';
+            // Format phone number for WhatsApp with country code
+            let cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+            console.log(`📱 Original phone: ${phoneNumber} -> Clean: ${cleanNumber}`);
             
-            console.log(`📱 Sending message to ${whatsappJid}: ${messageText.substring(0, 50)}...`);
+            // Add country code if missing (Israel +972)
+            if (cleanNumber.startsWith('0')) {
+              cleanNumber = '972' + cleanNumber.substring(1);
+              console.log(`📱 Added country code: ${cleanNumber}`);
+            } else if (!cleanNumber.startsWith('972')) {
+              cleanNumber = '972' + cleanNumber;
+              console.log(`📱 Added country code: ${cleanNumber}`);
+            }
+            
+            const whatsappJid = cleanNumber + '@s.whatsapp.net';
+            console.log(`📱 Final WhatsApp JID: ${whatsappJid}`);
+            console.log(`📱 Sending message: ${messageText.substring(0, 50)}...`);
             
             // Send WhatsApp message with timeout
             const sent = await Promise.race([
@@ -700,7 +711,21 @@ app.post('/api/messages/send-background', async (req, res) => {
     
   } catch (error) {
     console.error(`❌ Error sending background messages:`, error);
-    res.status(500).json({ success: false, error: error.message });
+    
+    // Generate a process ID even for errors
+    const errorProcessId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      processId: errorProcessId,
+      data: {
+        totalMessages: 0,
+        successCount: 0,
+        failureCount: 0,
+        results: []
+      }
+    });
   }
 });
 
