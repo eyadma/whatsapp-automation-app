@@ -564,9 +564,15 @@ app.post('/api/messages/send-background', async (req, res) => {
     
     const results = [];
     
+    // Generate a unique process ID for this batch
+    const processId = `process_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`📤 Process ID generated: ${processId}`);
+    
     // Send messages to each customer
     for (const customerId of customerIds) {
       try {
+        console.log(`👤 Processing customer ID: ${customerId}`);
+        
         // Get customer details from database
         const { data: customer, error: customerError } = await supabase
           .from('customers')
@@ -580,7 +586,22 @@ app.post('/api/messages/send-background', async (req, res) => {
           results.push({
             customerId,
             success: false,
-            error: 'Customer not found'
+            error: 'Customer not found',
+            processId: processId
+          });
+          continue;
+        }
+        
+        console.log(`👤 Customer found: ${customer.name} (${customer.phone_number})`);
+        
+        // Validate phone number
+        if (!customer.phone_number) {
+          console.error(`❌ Customer has no phone number: ${customerId}`);
+          results.push({
+            customerId,
+            success: false,
+            error: 'Customer has no phone number',
+            processId: processId
           });
           continue;
         }
@@ -600,10 +621,19 @@ app.post('/api/messages/send-background', async (req, res) => {
               continue;
             }
             
-            // Send WhatsApp message
-            const sent = await sock.sendMessage(customer.phone_number + '@s.whatsapp.net', {
-              text: messageText
-            });
+            // Format phone number for WhatsApp
+            const whatsappNumber = customer.phone_number.replace(/[^0-9]/g, '');
+            const whatsappJid = whatsappNumber + '@s.whatsapp.net';
+            
+            console.log(`📱 Sending message to ${whatsappJid}: ${messageText.substring(0, 50)}...`);
+            
+            // Send WhatsApp message with timeout
+            const sent = await Promise.race([
+              sock.sendMessage(whatsappJid, { text: messageText }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Message send timeout')), 30000)
+              )
+            ]);
             
             console.log(`✅ Message sent to ${customer.phone_number}: ${messageText.substring(0, 50)}...`);
             
@@ -611,8 +641,9 @@ app.post('/api/messages/send-background', async (req, res) => {
               customerId,
               messageId: message.id || 'unknown',
               success: true,
-              messageId: sent.key.id,
-              phoneNumber: customer.phone_number
+              whatsappMessageId: sent.key.id,
+              phoneNumber: customer.phone_number,
+              processId: processId
             });
             
             // Add delay between messages to avoid rate limiting
@@ -625,7 +656,8 @@ app.post('/api/messages/send-background', async (req, res) => {
               messageId: message.id || 'unknown',
               success: false,
               error: messageError.message,
-              phoneNumber: customer.phone_number
+              phoneNumber: customer.phone_number,
+              processId: processId
             });
           }
         }
@@ -651,6 +683,7 @@ app.post('/api/messages/send-background', async (req, res) => {
     res.json({
       success: true,
       message: `Background messages sent: ${successCount} success, ${failureCount} failures`,
+      processId: processId,
       data: {
         totalMessages: results.length,
         successCount,
