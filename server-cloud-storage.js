@@ -621,9 +621,21 @@ app.post('/api/messages/send-background', async (req, res) => {
         // Send each message to this customer
         for (const message of messagesToSend) {
           try {
-            const messageText = message.content || message.text || message.message;
+            console.log(`📤 Processing message for customer ${customerId}:`, JSON.stringify(message, null, 2));
+            
+            // Handle the mobile app's message structure: { customerId, name, phone, messages: [string] }
+            let messageText;
+            if (message.messages && Array.isArray(message.messages) && message.messages.length > 0) {
+              messageText = message.messages[0]; // Use the first message
+            } else {
+              messageText = message.content || message.text || message.message || message.body;
+            }
+            console.log(`📤 Extracted message text:`, messageText);
+            
             if (!messageText) {
               console.error(`❌ No message content for customer: ${customerId}`);
+              console.error(`❌ Message object keys:`, Object.keys(message));
+              console.error(`❌ Message object:`, message);
               results.push({
                 customerId,
                 messageId: message.id || 'unknown',
