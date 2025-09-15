@@ -509,11 +509,12 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
 // 5. Send Background Messages (mobile app endpoint)
 app.post('/api/messages/send-background', async (req, res) => {
   try {
-    const { userId, sessionId, messages, customerIds } = req.body;
+    const { userId, sessionId, messages, processedMessages, customerIds } = req.body;
     
     console.log(`📤 Sending background messages - Request body:`, req.body);
     console.log(`📤 User ID: ${userId}, Session ID: ${sessionId}`);
     console.log(`📤 Messages:`, messages);
+    console.log(`📤 Processed Messages:`, processedMessages);
     console.log(`📤 Customer IDs:`, customerIds);
     
     // Check for missing fields with detailed logging
@@ -522,11 +523,18 @@ app.post('/api/messages/send-background', async (req, res) => {
     if (!sessionId) missingFields.push('sessionId');
     if (!customerIds) missingFields.push('customerIds');
     
-    // Make messages optional - if not provided, use a default message
-    const defaultMessages = messages || [{ 
-      id: 'default', 
-      content: 'Hello! This is a message from WhatsApp Automation.' 
-    }];
+    // Use processedMessages from mobile app, fallback to messages, then default
+    let messagesToSend = processedMessages || messages;
+    
+    // If no messages provided, use default
+    if (!messagesToSend || messagesToSend.length === 0) {
+      messagesToSend = [{ 
+        id: 'default', 
+        content: 'Hello! This is a message from WhatsApp Automation.' 
+      }];
+    }
+    
+    console.log(`📤 Messages to send:`, messagesToSend);
     
     if (missingFields.length > 0) {
       console.log(`❌ Missing required fields: ${missingFields.join(', ')}`);
@@ -611,7 +619,7 @@ app.post('/api/messages/send-background', async (req, res) => {
         }
         
         // Send each message to this customer
-        for (const message of defaultMessages) {
+        for (const message of messagesToSend) {
           try {
             const messageText = message.content || message.text || message.message;
             if (!messageText) {
