@@ -419,6 +419,7 @@ app.post('/api/whatsapp/generate-qr/:userId/:sessionId', async (req, res) => {
     
     res.json({
       success: true,
+      qrCode: qrResult.qrCode,
       data: {
         qrCode: qrResult.qrCode
       }
