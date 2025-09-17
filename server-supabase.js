@@ -8,6 +8,39 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const supabase = require('./config/supabase');
+const { logger } = require('./optimized-logger');
+
+// Environment-based logging control
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Override logger methods for production
+if (isProduction) {
+  const originalInfo = logger.info;
+  const originalWarn = logger.warn;
+  
+  logger.info = (message, data) => {
+    if (LOG_LEVEL === 'error' || LOG_LEVEL === 'warn') return;
+    originalInfo(message, data);
+  };
+  
+  logger.warn = (message, data) => {
+    if (LOG_LEVEL === 'error') return;
+    originalWarn(message, data);
+  };
+}
+
+
+// Batch logging for high-frequency events
+function logBatchMessages(messages, customerName) {
+  if (messages.length > 5) {
+    logger.batchLog('info', messages.map((msg, idx) => `Message ${idx + 1} to ${customerName}`));
+  } else {
+    messages.forEach((msg, idx) => logger.info(`Message ${idx + 1} to ${customerName}`));
+  }
+}
+
+
 require('dotenv').config();
 
 const app = express();
@@ -138,7 +171,7 @@ function normalizePhoneNumber(phoneNumber) {
 
 // Background message processing function with processed messages
 async function processMessagesInBackgroundWithProcessed(processId, customers, processedMessages, userId, speedDelay, connection) {
-  console.log(`🔄 Starting background processing with processed messages for ${customers.length} customers`);
+  logger.info(`Starting background processing for ${customers.length} customers`);
   
   const process = backgroundProcesses.get(processId);
   if (!process) {
@@ -172,14 +205,14 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
       }
 
       const { messages, languages, phone, phone2 } = customerMessageGroup;
-      console.log(`📝 Processing ${messages.length} messages for ${customer.name} in languages:`, languages);
+      // logger.info(`Processing ${messages.length} messages for ${customer.name}`); // Reduced logging
 
       // Send each message for this customer
       for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
         const message = messages[msgIndex];
         const language = languages[msgIndex] || 'unknown';
         
-        console.log(`📤 Sending message ${msgIndex + 1}/${messages.length} to ${customer.name} (${language}):`, message.substring(0, 100) + '...');
+        // logger.info(`Sending message ${msgIndex + 1}/${messages.length} to ${customer.name}`); // Reduced logging
 
         // Send to primary phone number
         let phoneNumber = phone;
@@ -198,7 +231,7 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
         
         // Send message to primary phone
         await connection.sock.sendMessage(jid, { text: message });
-        console.log(`✅ Background message ${msgIndex + 1}/${messages.length} sent to ${customer.name} (${language}) - primary phone`);
+        // logger.info(`Message sent to ${customer.name}`); // Reduced logging
         
         // Send to secondary phone number if available
         if (phone2 && phone2.trim() !== '') {
@@ -218,7 +251,7 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
           
           try {
             await connection.sock.sendMessage(jid2, { text: message });
-            console.log(`✅ Background message ${msgIndex + 1}/${messages.length} sent to ${customer.name} (${language}) - secondary phone`);
+            // logger.info(`Message sent to ${customer.name} (secondary)`); // Reduced logging
           } catch (secondaryError) {
             console.error(`❌ Failed to send to secondary phone for ${customer.name}:`, secondaryError.message);
           }
@@ -249,12 +282,12 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
 
       // Add delay between customers (except for the last customer)
       if (speedDelay > 0 && i < customers.length - 1) {
-        console.log(`⏳ Background process waiting ${speedDelay} seconds...`);
+        // logger.info(`Waiting ${speedDelay} seconds`); // Reduced logging
         await new Promise(resolve => setTimeout(resolve, speedDelay * 1000));
       }
 
     } catch (error) {
-      console.error(`❌ Background message failed for ${customer.name}:`, error.message);
+      logger.error(`Background message failed for ${customer.name}`, error.message);
       process.failed++;
       
       // Log failed message
@@ -276,8 +309,8 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
   process.endTime = new Date();
   const duration = (process.endTime - process.startTime) / 1000;
   
-  console.log(`✅ Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`);
-  console.log(`📊 Results: ${process.completed} sent, ${process.failed} failed`);
+  logger.info(`Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`);
+  logger.info(`Results: ${process.completed} sent, ${process.failed} failed`);
   
   // Send completion update message
   try {
@@ -389,12 +422,12 @@ async function processMessagesInBackground(processId, customers, messageTemplate
 
       // Add delay between messages (except for the last message)
       if (speedDelay > 0 && i < customers.length - 1) {
-        console.log(`⏳ Background process waiting ${speedDelay} seconds...`);
+        // logger.info(`Waiting ${speedDelay} seconds`); // Reduced logging
         await new Promise(resolve => setTimeout(resolve, speedDelay * 1000));
       }
 
     } catch (error) {
-      console.error(`❌ Background message failed for ${customer.name}:`, error.message);
+      logger.error(`Background message failed for ${customer.name}`, error.message);
       process.failed++;
       
       // Log failed message
@@ -416,8 +449,8 @@ async function processMessagesInBackground(processId, customers, messageTemplate
   process.endTime = new Date();
   const duration = (process.endTime - process.startTime) / 1000;
   
-  console.log(`✅ Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`);
-  console.log(`📊 Results: ${process.completed} sent, ${process.failed} failed`);
+  logger.info(`Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`);
+  logger.info(`Results: ${process.completed} sent, ${process.failed} failed`);
   
   // Send completion update message
   try {
@@ -567,9 +600,9 @@ async function connectWhatsApp(userId, sessionId = null) {
     console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
     console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
 
-    console.log(`🔐 Loading auth state for user: ${userId}`);
+    // logger.info(`Loading auth state for user: ${userId}`); // Reduced logging
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    console.log(`✅ Auth state loaded for user: ${userId}`);
+    // logger.info(`Auth state loaded for user: ${userId}`); // Reduced logging
 
     console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
     const sock = makeWASocket({
@@ -594,7 +627,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         return null;
       }
     });
-    console.log(`✅ WhatsApp socket created for user: ${userId} with extended session settings`);
+    logger.info(`WhatsApp socket created for user: ${userId}`);
 
     // Session health monitoring
     const sessionStartTime = new Date();
@@ -694,7 +727,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection open
       else if (connection === 'open') {
-        console.log(`✅ Connection opened for user: ${userId}`);
+        logger.info(`Connection opened for user: ${userId}`);
         
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
@@ -1048,7 +1081,7 @@ async function connectWhatsApp(userId, sessionId = null) {
     console.log(`✅ WhatsApp connection setup completed for user: ${userId}`);
     return sock;
   } catch (error) {
-    console.error(`❌ Error connecting WhatsApp for user ${userId}:`, error);
+    logger.error(`Error connecting WhatsApp for user: ${userId}`, error.message);
     throw error;
   }
 }
