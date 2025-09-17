@@ -171,7 +171,7 @@ function normalizePhoneNumber(phoneNumber) {
 
 // Background message processing function with processed messages
 async function processMessagesInBackgroundWithProcessed(processId, customers, processedMessages, userId, speedDelay, connection) {
-  logger.info(`Starting background processing for ${customers.length} customers`);
+  console.log(`🚀 Starting background processing for ${customers.length} customers with ${processedMessages.length} processed message groups`);
   
   const process = backgroundProcesses.get(processId);
   if (!process) {
@@ -205,7 +205,7 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
       }
 
       const { messages, languages, phone, phone2 } = customerMessageGroup;
-      // logger.info(`Processing ${messages.length} messages for ${customer.name}`); // Reduced logging
+      console.log(`📤 Processing ${messages.length} messages for ${customer.name} (${phone})`);
 
       // Send each message for this customer
       for (let msgIndex = 0; msgIndex < messages.length; msgIndex++) {
@@ -231,7 +231,7 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
         
         // Send message to primary phone
         await connection.sock.sendMessage(jid, { text: message });
-        // logger.info(`Message sent to ${customer.name}`); // Reduced logging
+        console.log(`✅ Message sent to ${customer.name} (${phoneNumber}) - ${language}`);
         
         // Send to secondary phone number if available
         if (phone2 && phone2.trim() !== '') {
@@ -251,7 +251,7 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
           
           try {
             await connection.sock.sendMessage(jid2, { text: message });
-            // logger.info(`Message sent to ${customer.name} (secondary)`); // Reduced logging
+            console.log(`✅ Message sent to ${customer.name} (secondary: ${phoneNumber2}) - ${language}`);
           } catch (secondaryError) {
             console.error(`❌ Failed to send to secondary phone for ${customer.name}:`, secondaryError.message);
           }
@@ -397,7 +397,7 @@ async function processMessagesInBackground(processId, customers, messageTemplate
         
         // Send message
         await connection.sock.sendMessage(jid, { text: message });
-        console.log(`✅ Background message ${msgIndex + 1}/${messagesToSend.length} sent to ${customer.name} (${i + 1}/${customers.length})`);
+        console.log(`✅ Background message ${msgIndex + 1}/${messagesToSend.length} sent to ${customer.name} (${phoneNumber}) - ${i + 1}/${customers.length}`);
         
         // Add small delay between multiple messages to same customer
         if (msgIndex < messagesToSend.length - 1) {
