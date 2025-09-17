@@ -589,45 +589,69 @@ async function connectWhatsApp(userId, sessionId = null) {
   try {
     console.log(`🚀 Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
     
+    // Validate inputs
+    if (!userId) {
+      throw new Error('userId is required');
+    }
+    
     const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
     console.log(`📁 Session directory: ${sessionDir}`);
     
-    if (!fs.existsSync(sessionDir)) {
-      console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
-      fs.mkdirSync(sessionDir, { recursive: true });
+    try {
+      if (!fs.existsSync(sessionDir)) {
+        console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+      
+      console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
+      console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
+    } catch (fsError) {
+      console.error(`❌ File system error for user ${userId}:`, fsError);
+      throw new Error(`Failed to create session directory: ${fsError.message}`);
     }
-    
-    console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
-    console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
 
-    // logger.info(`Loading auth state for user: ${userId}`); // Reduced logging
-    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    // logger.info(`Auth state loaded for user: ${userId}`); // Reduced logging
+    console.log(`🔐 Loading auth state for user: ${userId}`);
+    let state, saveCreds;
+    try {
+      const authResult = await useMultiFileAuthState(sessionDir);
+      state = authResult.state;
+      saveCreds = authResult.saveCreds;
+      console.log(`✅ Auth state loaded for user: ${userId}`);
+    } catch (authError) {
+      console.error(`❌ Auth state error for user ${userId}:`, authError);
+      throw new Error(`Failed to load auth state: ${authError.message}`);
+    }
 
     console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
-    const sock = makeWASocket({
-      auth: state,
-      browser: ['WhatsApp Long Session', 'Chrome', '1.0.0'],
-      // Extended timeout settings for 10+ hour sessions
-      connectTimeoutMs: 60000, // 1 minute connection timeout
-      keepAliveIntervalMs: 30000, // Send keep-alive every 30 seconds
-      retryRequestDelayMs: 2000, // 2 seconds between retries
-      maxRetries: 5, // More retries for stability
-      defaultQueryTimeoutMs: 120000, // 2 minutes for queries
-      // Session persistence settings
-      emitOwnEvents: false,
-      markOnlineOnConnect: true,
-      generateHighQualityLinkPreview: true,
-      // Extended session settings
-      shouldSyncHistoryMessage: () => false, // Don't sync old messages
-      shouldIgnoreJid: () => false, // Don't ignore any JIDs
-      // Keep session alive settings
-      getMessage: async (key) => {
-        // Implement message retrieval logic for session persistence
-        return null;
-      }
-    });
-    logger.info(`WhatsApp socket created for user: ${userId}`);
+    let sock;
+    try {
+      sock = makeWASocket({
+        auth: state,
+        browser: ['WhatsApp Long Session', 'Chrome', '1.0.0'],
+        // Extended timeout settings for 10+ hour sessions
+        connectTimeoutMs: 60000, // 1 minute connection timeout
+        keepAliveIntervalMs: 30000, // Send keep-alive every 30 seconds
+        retryRequestDelayMs: 2000, // 2 seconds between retries
+        maxRetries: 5, // More retries for stability
+        defaultQueryTimeoutMs: 120000, // 2 minutes for queries
+        // Session persistence settings
+        emitOwnEvents: false,
+        markOnlineOnConnect: true,
+        generateHighQualityLinkPreview: true,
+        // Extended session settings
+        shouldSyncHistoryMessage: () => false, // Don't sync old messages
+        shouldIgnoreJid: () => false, // Don't ignore any JIDs
+        // Keep session alive settings
+        getMessage: async (key) => {
+          // Implement message retrieval logic for session persistence
+          return null;
+        }
+      });
+      console.log(`✅ WhatsApp socket created for user: ${userId}`);
+    } catch (socketError) {
+      console.error(`❌ Socket creation error for user ${userId}:`, socketError);
+      throw new Error(`Failed to create WhatsApp socket: ${socketError.message}`);
+    }
 
     // Session health monitoring
     const sessionStartTime = new Date();
@@ -1300,8 +1324,23 @@ app.post('/api/whatsapp/connect/:userId', async (req, res) => {
 
 // 1.2. Session-specific connect endpoint
 app.post('/api/whatsapp/connect/:userId/:sessionId', async (req, res) => {
+  const startTime = Date.now();
+  let errorDetails = null;
+  
   try {
     const { userId, sessionId } = req.params;
+    
+    // Validate parameters
+    if (!userId || !sessionId) {
+      errorDetails = { type: 'validation', message: 'Missing userId or sessionId' };
+      console.error(`❌ Validation error: ${errorDetails.message}`, { userId, sessionId });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required parameters',
+        details: errorDetails.message 
+      });
+    }
+    
     console.log(`🔗 Attempting to connect WhatsApp for user: ${userId}, session: ${sessionId}`);
     
     // Debug: Log all available connections for this user
@@ -1338,11 +1377,49 @@ app.post('/api/whatsapp/connect/:userId/:sessionId', async (req, res) => {
     }
 
     console.log(`🚀 Starting new WhatsApp connection for user: ${userId}, session: ${sessionId}`);
-    await connectWhatsApp(userId, sessionId);
-    res.json({ success: true, message: 'Connecting to WhatsApp...' });
+    
+    // Call connectWhatsApp with detailed error handling
+    try {
+      await connectWhatsApp(userId, sessionId);
+      console.log(`✅ WhatsApp connection initiated successfully for user: ${userId}, session: ${sessionId}`);
+      res.json({ success: true, message: 'Connecting to WhatsApp...' });
+    } catch (connectError) {
+      errorDetails = { 
+        type: 'connectWhatsApp', 
+        message: connectError.message,
+        stack: connectError.stack,
+        userId,
+        sessionId
+      };
+      console.error(`❌ connectWhatsApp error for user ${userId}, session ${sessionId}:`, errorDetails);
+      throw connectError; // Re-throw to be caught by outer catch
+    }
+    
   } catch (error) {
-    console.error('Error connecting WhatsApp:', error);
-    res.status(500).json({ success: false, error: 'Failed to connect' });
+    const duration = Date.now() - startTime;
+    errorDetails = errorDetails || { 
+      type: 'general', 
+      message: error.message,
+      stack: error.stack,
+      duration
+    };
+    
+    console.error(`❌ WhatsApp connection error for user ${req.params?.userId}, session ${req.params?.sessionId}:`, {
+      error: errorDetails,
+      duration: `${duration}ms`,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Ensure response is sent only once
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        success: false, 
+        error: 'Failed to connect to WhatsApp',
+        details: errorDetails.message,
+        timestamp: new Date().toISOString(),
+        duration: `${duration}ms`
+      });
+    }
   }
 });
 
