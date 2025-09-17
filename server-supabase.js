@@ -16,8 +16,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // Override logger methods for production
 if (isProduction) {
-  const originalInfo = logger.info;
-  const originalWarn = logger.warn;
+  const originalInfo = logger.info.bind(logger);
+  const originalWarn = logger.warn.bind(logger);
   
   logger.info = (message, data) => {
     if (LOG_LEVEL === 'error' || LOG_LEVEL === 'warn') return;
@@ -480,32 +480,7 @@ async function checkConnectionHealth(connection) {
   }
   
   try {
-    console.log('🔍 Socket inspection:', {
-      keysCount: Object.keys(connection.sock).length,
-      type: typeof connection.sock,
-      constructor: connection.sock.constructor?.name
-    });
-    
-    // Check WebSocket properties
-    console.log('🔍 WebSocket status:', {
-      hasWs: !!connection.sock.ws,
-      hasConn: !!connection.sock.conn,
-      readyState: connection.sock.ws?.readyState || 'unknown'
-    });
-    
-    if (connection.sock.ws) {
-      console.log('📊 WebSocket ready state:', connection.sock.ws.readyState);
-    }
-    
-    if (connection.sock.conn) {
-      console.log('📊 Connection ready state:', connection.sock.conn.readyState);
-    }
-    
-    // Check if socket has required methods
-    console.log('🔍 Socket methods:', {
-      sendMessage: typeof connection.sock.sendMessage,
-      send: typeof connection.sock.send
-    });
+    // Socket is valid - no need for verbose logging
     
     if (typeof connection.sock.sendMessage !== 'function') {
       console.log('❌ Socket missing sendMessage method');
@@ -1136,39 +1111,8 @@ app.get('/api/whatsapp/status/:userId', async (req, res) => {
   
   try {
     const connection = getConnection(userId, sessionId);
-    console.log(`📱 Current connections for user ${userId}: [ ${getUserConnections(userId).join(', ')} ]`);
-    console.log(`📊 Total users with connections: ${connections.size}`);
-    console.log(`🔗 Connection found: ${connection ? 'YES' : 'NO'}`);
-    
     if (connection) {
-      // Add detailed socket inspection here
-      console.log('🔍 Socket inspection for status:', {
-        hasSocket: !!connection.sock,
-        keysCount: connection.sock ? Object.keys(connection.sock).length : 0,
-        type: typeof connection.sock,
-        constructor: connection.sock?.constructor?.name
-      });
-      
-      // Check WebSocket properties
-      console.log('🔍 WebSocket status:', {
-        hasWs: !!connection.sock?.ws,
-        hasConn: !!connection.sock?.conn,
-        readyState: connection.sock?.ws?.readyState || 'unknown'
-      });
-      
-      if (connection.sock?.ws) {
-        console.log('📊 WebSocket ready state:', connection.sock.ws.readyState);
-      }
-      
-      if (connection.sock?.conn) {
-        console.log('📊 Connection ready state:', connection.sock.conn.readyState);
-      }
-      
-      // Check if socket has required methods
-      console.log('🔍 Socket methods:', {
-        sendMessage: typeof connection.sock?.sendMessage,
-        send: typeof connection.sock?.send
-      });
+      // Socket status check - no verbose logging needed
       
       // Try different ways to check WebSocket state
       let wsReady = false;
