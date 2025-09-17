@@ -665,14 +665,17 @@ async function connectWhatsApp(userId, sessionId = null) {
           qrCode: qr,
           sessionId: sessionId || 'default',
           sessionName: sessionId ? `Session ${sessionId}` : 'Default Session',
-          isDefault: !sessionId || sessionId === 'default'
+          isDefault: !sessionId || sessionId === 'default',
+          connectionType: 'qr_required' // Indicates QR code is needed
         };
         console.log(`🔗 Setting connection data:`, {
           userId,
           sessionId: sessionId || 'default',
-          connected: true,
+          connected: false,
+          connecting: true,
           hasSocket: !!sock,
-          socketReady: sock?.ws?.readyState === 1
+          socketReady: sock?.ws?.readyState === 1,
+          connectionType: 'qr_required'
         });
         setConnection(userId, sessionId || 'default', connectionData);
         console.log(`🔍 Connection set. Available connections for user ${userId}:`, getUserConnections(userId));
@@ -787,6 +790,13 @@ async function connectWhatsApp(userId, sessionId = null) {
           
           if (wsReady) {
             console.log(`✅ WebSocket is ready for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+            
+            // Check if this connection was established from a saved session (no QR code needed)
+            const existingConnection = getConnection(userId, sessionId || 'default');
+            const connectionType = existingConnection && existingConnection.connectionType === 'qr_required' 
+              ? 'qr_required' 
+              : 'saved_session'; // Connected from saved session
+            
             const connectionData = {
               sock,
               connected: true,
@@ -794,7 +804,8 @@ async function connectWhatsApp(userId, sessionId = null) {
               qrCode: null,
               sessionId: sessionId || 'default',
               sessionName: sessionId ? `Session ${sessionId}` : 'Default Session',
-              isDefault: !sessionId || sessionId === 'default'
+              isDefault: !sessionId || sessionId === 'default',
+              connectionType: connectionType
             };
             console.log(`🔗 Setting connected connection data:`, {
               userId,
@@ -802,6 +813,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               connected: true,
               hasSocket: !!sock,
               socketReady: sock?.ws?.readyState === 1,
+              connectionType: connectionType,
               userInfo: sock?.user ? {
                 id: sock.user.id,
                 name: sock.user.name
@@ -1212,6 +1224,7 @@ app.get('/api/whatsapp/status/:userId/:sessionId', async (req, res) => {
         qrCode: connection.qrCode,
         socketState: wsState,
         wsReady: wsReady,
+        connectionType: connection.connectionType || 'unknown',
         session: {
           id: connection.sessionId,
           name: connection.sessionName,

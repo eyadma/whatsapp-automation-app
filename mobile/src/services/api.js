@@ -444,6 +444,7 @@ export const whatsappAPI = {
           connected: result.connected || false,
           isConnecting: result.connecting || false,
           qrCode: result.qrCode || null,
+          connectionType: result.connectionType || 'unknown',
           session: result.session || null
         } 
       };

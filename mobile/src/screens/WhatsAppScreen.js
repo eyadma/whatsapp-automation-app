@@ -25,6 +25,7 @@ const WhatsAppScreen = ({ navigation }) => {
     isConnected: false,
     isConnecting: false,
     qrCode: null,
+    connectionType: 'unknown',
   });
   const [previousConnectionStatus, setPreviousConnectionStatus] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -86,6 +87,7 @@ const WhatsAppScreen = ({ navigation }) => {
           isConnected: false,
           isConnecting: false,
           qrCode: null,
+          connectionType: 'unknown',
         });
         setPreviousConnectionStatus(null);
       }
@@ -148,6 +150,7 @@ const WhatsAppScreen = ({ navigation }) => {
         isConnected: false,
         isConnecting: false,
         qrCode: null,
+        connectionType: 'unknown',
       };
       setConnectionStatus(defaultStatus);
       setPreviousConnectionStatus(defaultStatus);
@@ -384,8 +387,22 @@ const WhatsAppScreen = ({ navigation }) => {
   const getStatusText = () => {
     if (!selectedSession) return t('noSession');
     if (sessionSwitching) return t('switching');
-    if (connectionStatus.connected) return t('connected');
-    if (connectionStatus.isConnecting) return t('connecting');
+    if (connectionStatus.connected) {
+      // Show different message based on connection type
+      if (connectionStatus.connectionType === 'saved_session') {
+        return t('whatsappConnected');
+      } else {
+        return t('connected');
+      }
+    }
+    if (connectionStatus.isConnecting) {
+      // Show different message based on connection type
+      if (connectionStatus.connectionType === 'qr_required') {
+        return t('scanQRCodePlease');
+      } else {
+        return t('connecting');
+      }
+    }
     return t('disconnected');
   };
 
@@ -424,6 +441,7 @@ const WhatsAppScreen = ({ navigation }) => {
                         isConnected: false,
                         isConnecting: false,
                         qrCode: null,
+                        connectionType: 'unknown',
                       });
                       setPreviousConnectionStatus(null);
                       
