@@ -727,7 +727,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection open
       else if (connection === 'open') {
-        logger.info(`Connection opened for user: ${userId}`);
+        console.log(`✅ Connection opened for user: ${userId}`);
         
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
@@ -1081,7 +1081,7 @@ async function connectWhatsApp(userId, sessionId = null) {
     console.log(`✅ WhatsApp connection setup completed for user: ${userId}`);
     return sock;
   } catch (error) {
-    logger.error(`Error connecting WhatsApp for user: ${userId}`, error.message);
+    console.error(`❌ Error connecting WhatsApp for user: ${userId}`, error);
     throw error;
   }
 }
