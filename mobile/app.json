@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "WhatsApp Automation",
+    "slug": "whatsapp-automation",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#25D366"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "CFBundleDisplayName": "WhatsApp Automation"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#25D366"
+      },
+      "package": "com.eyadma.whatsappautomation",
+
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d6d62796-9f38-4f25-9070-4f8fbc0c7721"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
