@@ -480,33 +480,32 @@ async function checkConnectionHealth(connection) {
   }
   
   try {
-    console.log('🔍 Detailed socket inspection:');
-    console.log('📊 Socket object keys:', Object.keys(connection.sock));
-    console.log('📊 Socket type:', typeof connection.sock);
-    console.log('📊 Socket constructor:', connection.sock.constructor?.name);
+    console.log('🔍 Socket inspection:', {
+      keysCount: Object.keys(connection.sock).length,
+      type: typeof connection.sock,
+      constructor: connection.sock.constructor?.name
+    });
     
-    // Check for different possible WebSocket properties
-    console.log('🔍 WebSocket properties:');
-    console.log('- sock.ws:', !!connection.sock.ws);
-    console.log('- sock.conn:', !!connection.sock.conn);
-    console.log('- sock.connection:', !!connection.sock.connection);
-    console.log('- sock.socket:', !!connection.sock.socket);
+    // Check WebSocket properties
+    console.log('🔍 WebSocket status:', {
+      hasWs: !!connection.sock.ws,
+      hasConn: !!connection.sock.conn,
+      readyState: connection.sock.ws?.readyState || 'unknown'
+    });
     
     if (connection.sock.ws) {
-      console.log('📊 sock.ws properties:', Object.keys(connection.sock.ws));
-      console.log('📊 sock.ws.readyState:', connection.sock.ws.readyState);
+      console.log('📊 WebSocket ready state:', connection.sock.ws.readyState);
     }
     
     if (connection.sock.conn) {
-      console.log('📊 sock.conn properties:', Object.keys(connection.sock.conn));
-      console.log('📊 sock.conn.readyState:', connection.sock.conn.readyState);
+      console.log('📊 Connection ready state:', connection.sock.conn.readyState);
     }
     
     // Check if socket has required methods
-    console.log('🔍 Socket methods:');
-    console.log('- sendMessage:', typeof connection.sock.sendMessage);
-    console.log('- send:', typeof connection.sock.send);
-    console.log('- sendRawMessage:', typeof connection.sock.sendRawMessage);
+    console.log('🔍 Socket methods:', {
+      sendMessage: typeof connection.sock.sendMessage,
+      send: typeof connection.sock.send
+    });
     
     if (typeof connection.sock.sendMessage !== 'function') {
       console.log('❌ Socket missing sendMessage method');
@@ -693,7 +692,13 @@ async function connectWhatsApp(userId, sessionId = null) {
           sessionName: sessionId ? `Session ${sessionId}` : 'Default Session',
           isDefault: !sessionId || sessionId === 'default'
         };
-        console.log(`🔗 Setting connection data:`, connectionData);
+        console.log(`🔗 Setting connection data:`, {
+          userId,
+          sessionId: sessionId || 'default',
+          connected: true,
+          hasSocket: !!sock,
+          socketReady: sock?.ws?.readyState === 1
+        });
         setConnection(userId, sessionId || 'default', connectionData);
         console.log(`🔍 Connection set. Available connections for user ${userId}:`, getUserConnections(userId));
       }
@@ -816,7 +821,17 @@ async function connectWhatsApp(userId, sessionId = null) {
               sessionName: sessionId ? `Session ${sessionId}` : 'Default Session',
               isDefault: !sessionId || sessionId === 'default'
             };
-            console.log(`🔗 Setting connected connection data:`, connectionData);
+            console.log(`🔗 Setting connected connection data:`, {
+              userId,
+              sessionId: sessionId || 'default',
+              connected: true,
+              hasSocket: !!sock,
+              socketReady: sock?.ws?.readyState === 1,
+              userInfo: sock?.user ? {
+                id: sock.user.id,
+                name: sock.user.name
+              } : null
+            });
             setConnection(userId, sessionId || 'default', connectionData);
             console.log(`🔍 Connected connection set. Available connections for user ${userId}:`, getUserConnections(userId));
             
@@ -1127,37 +1142,33 @@ app.get('/api/whatsapp/status/:userId', async (req, res) => {
     
     if (connection) {
       // Add detailed socket inspection here
-      console.log('🔍 Detailed socket inspection for status:');
-      console.log('📊 Socket object keys:', connection.sock ? Object.keys(connection.sock) : 'No socket');
-      console.log('📊 Socket type:', typeof connection.sock);
-      console.log('📊 Socket constructor:', connection.sock?.constructor?.name);
+      console.log('🔍 Socket inspection for status:', {
+        hasSocket: !!connection.sock,
+        keysCount: connection.sock ? Object.keys(connection.sock).length : 0,
+        type: typeof connection.sock,
+        constructor: connection.sock?.constructor?.name
+      });
       
-      // Check for different possible WebSocket properties
-      console.log('🔍 WebSocket properties:');
-      console.log('- sock.ws:', !!connection.sock?.ws);
-      console.log('- sock.conn:', !!connection.sock?.conn);
-      console.log('- sock.connection:', !!connection.sock?.connection);
-      console.log('- sock.socket:', !!connection.sock?.socket);
+      // Check WebSocket properties
+      console.log('🔍 WebSocket status:', {
+        hasWs: !!connection.sock?.ws,
+        hasConn: !!connection.sock?.conn,
+        readyState: connection.sock?.ws?.readyState || 'unknown'
+      });
       
       if (connection.sock?.ws) {
-        console.log('📊 sock.ws properties:', Object.keys(connection.sock.ws));
-        console.log('📊 sock.ws.readyState:', connection.sock.ws.readyState);
-        if (connection.sock.ws.socket) {
-          console.log('📊 sock.ws.socket properties:', Object.keys(connection.sock.ws.socket));
-          console.log('📊 sock.ws.socket.readyState:', connection.sock.ws.socket.readyState);
-        }
+        console.log('📊 WebSocket ready state:', connection.sock.ws.readyState);
       }
       
       if (connection.sock?.conn) {
-        console.log('📊 sock.conn properties:', Object.keys(connection.sock.conn));
-        console.log('📊 sock.conn.readyState:', connection.sock.conn.readyState);
+        console.log('📊 Connection ready state:', connection.sock.conn.readyState);
       }
       
       // Check if socket has required methods
-      console.log('🔍 Socket methods:');
-      console.log('- sendMessage:', typeof connection.sock?.sendMessage);
-      console.log('- send:', typeof connection.sock?.send);
-      console.log('- sendRawMessage:', typeof connection.sock?.sendRawMessage);
+      console.log('🔍 Socket methods:', {
+        sendMessage: typeof connection.sock?.sendMessage,
+        send: typeof connection.sock?.send
+      });
       
       // Try different ways to check WebSocket state
       let wsReady = false;
