@@ -1,7 +1,7 @@
 # Dockerfile for WhatsApp Automation App
 # This is optional - Railway can auto-detect Node.js apps
 
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
