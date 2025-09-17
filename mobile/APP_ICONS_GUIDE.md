@@ -24,22 +24,22 @@ mobile/assets/
     "slug": "whatsapp-automation",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#25D366"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#25D366"
       },
       "package": "com.eyadma.whatsappautomation"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/images/favicon.png"
     }
   }
 }
@@ -48,14 +48,14 @@ mobile/assets/
 ## Icon Specifications
 
 ### **Main App Icon (icon.png)**
-- **File**: `./assets/icon.png`
+- **File**: `./assets/images/icon.png`
 - **Size**: 1024x1024px (recommended)
 - **Format**: PNG with transparency support
 - **Usage**: iOS app icon, fallback for Android
 - **Background**: Can be transparent or solid
 
 ### **Splash Screen (splash-icon.png)**
-- **File**: `./assets/splash-icon.png`
+- **File**: `./assets/images/splash-icon.png`
 - **Size**: 1284x2778px (iPhone 12 Pro Max resolution)
 - **Format**: PNG
 - **Resize Mode**: `contain` (maintains aspect ratio)
@@ -63,7 +63,7 @@ mobile/assets/
 - **Usage**: Loading screen when app starts
 
 ### **Android Adaptive Icon (adaptive-icon.png)**
-- **File**: `./assets/adaptive-icon.png`
+- **File**: `./assets/images/adaptive-icon.png`
 - **Size**: 1024x1024px
 - **Format**: PNG with transparent background
 - **Background Color**: `#25D366` (WhatsApp green)
@@ -71,7 +71,7 @@ mobile/assets/
 - **Note**: Should be designed to work with various mask shapes
 
 ### **Web Favicon (favicon.png)**
-- **File**: `./assets/favicon.png`
+- **File**: `./assets/images/favicon.png`
 - **Size**: 32x32px or 16x16px
 - **Format**: PNG
 - **Usage**: Browser tab icon for web version
@@ -154,7 +154,7 @@ To customize the splash screen:
 2. **Modify background color** in `app.json`:
    ```json
    "splash": {
-     "image": "./assets/splash-icon.png",
+     "image": "./assets/images/splash-icon.png",
      "resizeMode": "contain",
      "backgroundColor": "#YOUR_COLOR"
    }

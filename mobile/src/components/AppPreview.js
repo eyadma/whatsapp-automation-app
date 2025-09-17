@@ -86,7 +86,7 @@ const AppPreview = () => {
         <View style={styles.headerContent}>
           <View style={styles.appIconContainer}>
             <Image 
-              source={require('../../assets/icon.png')} 
+              source={require('../../assets/images/icon.png')} 
               style={styles.appIcon}
               resizeMode="contain"
             />

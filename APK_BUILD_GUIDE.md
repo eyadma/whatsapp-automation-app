@@ -66,9 +66,9 @@ node build-apk.js
     "name": "WhatsApp Automation",
     "slug": "whatsapp-automation",
     "version": "1.0.0",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/splash-icon.png",
       "backgroundColor": "#25D366"
     },
     "android": {

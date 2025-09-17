@@ -6,18 +6,18 @@ const path = require('path');
 console.log('🔍 Verifying App Assets Configuration');
 console.log('=====================================\n');
 
-// Check if assets directory exists
-const assetsDir = path.join(__dirname, 'assets');
+// Check if assets/images directory exists
+const assetsDir = path.join(__dirname, 'assets', 'images');
 console.log(`📁 Assets directory: ${assetsDir}`);
 console.log(`📁 Directory exists: ${fs.existsSync(assetsDir) ? '✅' : '❌'}`);
 
 if (!fs.existsSync(assetsDir)) {
-  console.error('❌ Assets directory not found!');
+  console.error('❌ Assets/images directory not found!');
   process.exit(1);
 }
 
-// List all files in assets directory
-console.log('\n📋 Files in assets directory:');
+// List all files in assets/images directory
+console.log('\n📋 Files in assets/images directory:');
 const files = fs.readdirSync(assetsDir);
 files.forEach(file => {
   const filePath = path.join(assetsDir, file);
@@ -87,8 +87,8 @@ if (allFilesExist) {
   console.log('✅ App configuration is properly set up');
   console.log('✅ Ready to build and deploy with custom icons');
 } else {
-  console.log('❌ Some required files are missing');
-  console.log('❌ Please ensure all PNG files are in the assets folder');
+console.log('❌ Some required files are missing');
+console.log('❌ Please ensure all PNG files are in the assets/images folder');
 }
 
 console.log('\n🚀 Next steps:');

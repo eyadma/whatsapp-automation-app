@@ -21,7 +21,7 @@
 ### **2. Icon Path Fix**
 
 #### **AppPreview.js Fix**
-- **Fixed Icon Path**: Changed from `require('../assets/icon.png')` to `require('../../assets/icon.png')`
+- **Fixed Icon Path**: Changed from `require('../assets/icon.png')` to `require('../../assets/images/icon.png')`
 - **Correct Asset Reference**: Now properly references the icon in the assets folder
 
 ### **3. Existing Configuration Verified**
@@ -92,17 +92,17 @@ const requestContactsPermission = async () => {
 ### **Icon Configuration**
 ```json
 {
-  "icon": "./assets/icon.png",
+  "icon": "./assets/images/icon.png",
   "splash": {
-    "image": "./assets/splash-icon.png"
+    "image": "./assets/images/splash-icon.png"
   },
   "android": {
     "adaptiveIcon": {
-      "foregroundImage": "./assets/adaptive-icon.png"
+      "foregroundImage": "./assets/images/adaptive-icon.png"
     }
   },
   "web": {
-    "favicon": "./assets/favicon.png"
+    "favicon": "./assets/images/favicon.png"
   }
 }
 ```

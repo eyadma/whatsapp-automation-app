@@ -92,9 +92,9 @@ Your WhatsApp automation app now has a **comprehensive app preview** with profes
 {
   "expo": {
     "name": "WhatsApp Automation",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/splash-icon.png",
       "backgroundColor": "#25D366"
     },
     "ios": {

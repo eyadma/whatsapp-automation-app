@@ -5,10 +5,10 @@
 Your WhatsApp automation app now includes a comprehensive preview with:
 
 ### **✅ Professional App Icons & Splash Screen**
-- **App Icon**: Uses your custom PNG files from `assets/icon.png`
-- **Splash Screen**: Uses `assets/splash-icon.png` with WhatsApp green background
-- **Adaptive Icon**: Android adaptive icon with `assets/adaptive-icon.png`
-- **Favicon**: Web favicon using `assets/favicon.png`
+- **App Icon**: Uses your custom PNG files from `assets/images/icon.png`
+- **Splash Screen**: Uses `assets/images/splash-icon.png` with WhatsApp green background
+- **Adaptive Icon**: Android adaptive icon with `assets/images/adaptive-icon.png`
+- **Favicon**: Web favicon using `assets/images/favicon.png`
 
 ### **✅ Contacts Permission Management**
 - **Permission Request**: Professional permission request screen
@@ -90,9 +90,9 @@ The script will start the Expo development server and show you options:
     "name": "WhatsApp Automation",
     "slug": "whatsapp-automation",
     "version": "1.0.0",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/splash-icon.png",
       "backgroundColor": "#25D366"
     },
     "ios": {
