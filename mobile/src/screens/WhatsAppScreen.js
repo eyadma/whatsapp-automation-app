@@ -315,6 +315,61 @@ const WhatsAppScreen = ({ navigation }) => {
     );
   };
 
+  const handleDeleteSession = async () => {
+    if (!selectedSession) {
+      Alert.alert(t('error'), t('noSessionSelectedError'));
+      return;
+    }
+
+    Alert.alert(
+      t('deleteSession'),
+      t('deleteSessionMessage').replace('{sessionName}', selectedSession.session_name),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              console.log('🗑️ Deleting session:', selectedSession.session_id);
+              
+              // Delete session from database
+              const { error } = await supabase
+                .from('whatsapp_sessions')
+                .delete()
+                .eq('session_id', selectedSession.session_id)
+                .eq('user_id', userId);
+
+              if (error) throw error;
+
+              // Reset connection status
+              setConnectionStatus({
+                isConnected: false,
+                isConnecting: false,
+                qrCode: null,
+              });
+              
+              // Clear selected session
+              setSelectedSession(null);
+              setPreviousConnectionStatus(null);
+              
+              // Reload sessions to update the list
+              await loadSessions();
+              
+              Alert.alert(t('success'), t('sessionDeletedSuccessfully'));
+            } catch (error) {
+              console.error('❌ Error deleting session:', error);
+              Alert.alert(t('error'), t('failedToDeleteSession').replace('{error}', error.message));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
 
 
@@ -541,6 +596,24 @@ const WhatsAppScreen = ({ navigation }) => {
                 </Text>
               </View>
             </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={handleDeleteSession}
+              disabled={loading || !selectedSession}
+              style={[dynamicStyles.customButton, dynamicStyles.deleteButton]}
+            >
+              <Ionicons name="trash" size={14} color="#FF3B30" style={{ marginRight: 4 }} />
+              <View style={dynamicStyles.textContainer}>
+                <Text
+                  style={[
+                    dynamicStyles.customButtonText,
+                    { writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr' }
+                  ]}
+                >
+                  {t('deleteSession')}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
 
@@ -746,7 +819,7 @@ const createStyles = (theme) => StyleSheet.create({
     marginTop: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 6,
   },
   customButton: {
     borderWidth: 1,
