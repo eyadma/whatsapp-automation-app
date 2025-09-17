@@ -1,5 +1,7 @@
-# Use Node.js 20 LTS
-FROM node:20-alpine
+# Dockerfile for WhatsApp Automation App
+# This is optional - Railway can auto-detect Node.js apps
+
+FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
@@ -10,8 +12,11 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy source code
+# Copy application code
 COPY . .
+
+# Create sessions directory
+RUN mkdir -p sessions
 
 # Expose port
 EXPOSE 3000

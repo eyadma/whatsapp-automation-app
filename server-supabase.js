@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const supabase = require('./config/supabase');
-const EnhancedSessionStorageManager = require('./enhanced-session-storage-manager');
 require('dotenv').config();
 
 const app = express();
@@ -25,12 +24,6 @@ const userSessions = new Map(); // userId -> Set of active sessionIds
 
 // Background message processing management
 const backgroundProcesses = new Map();
-
-// Enhanced session storage manager with cloud integration
-const sessionStorageManager = new EnhancedSessionStorageManager();
-
-// Start periodic sync to cloud storage (every 5 minutes)
-sessionStorageManager.startPeriodicSync(300000);
 
 // Utility function to convert WhatsApp phone numbers to Israeli local format
 function convertWhatsAppPhoneToLocal(whatsappPhoneNumber) {
@@ -563,15 +556,67 @@ async function connectWhatsApp(userId, sessionId = null) {
   try {
     console.log(`🚀 Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
     
-    // Use the enhanced session storage manager
-    const result = await sessionStorageManager.connectWhatsApp(userId, sessionId);
+    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
+    console.log(`📁 Session directory: ${sessionDir}`);
     
-    if (!result.success) {
-      throw new Error(result.error);
+    if (!fs.existsSync(sessionDir)) {
+      console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
+      fs.mkdirSync(sessionDir, { recursive: true });
     }
     
-    console.log(`✅ WhatsApp connection initiated for user: ${userId}, session: ${sessionId}`);
-    return result;
+    console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
+    console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
+
+    console.log(`🔐 Loading auth state for user: ${userId}`);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    console.log(`✅ Auth state loaded for user: ${userId}`);
+
+    console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
+    const sock = makeWASocket({
+      auth: state,
+      browser: ['WhatsApp Long Session', 'Chrome', '1.0.0'],
+      // Extended timeout settings for 10+ hour sessions
+      connectTimeoutMs: 60000, // 1 minute connection timeout
+      keepAliveIntervalMs: 30000, // Send keep-alive every 30 seconds
+      retryRequestDelayMs: 2000, // 2 seconds between retries
+      maxRetries: 5, // More retries for stability
+      defaultQueryTimeoutMs: 120000, // 2 minutes for queries
+      // Session persistence settings
+      emitOwnEvents: false,
+      markOnlineOnConnect: true,
+      generateHighQualityLinkPreview: true,
+      // Extended session settings
+      shouldSyncHistoryMessage: () => false, // Don't sync old messages
+      shouldIgnoreJid: () => false, // Don't ignore any JIDs
+      // Keep session alive settings
+      getMessage: async (key) => {
+        // Implement message retrieval logic for session persistence
+        return null;
+      }
+    });
+    console.log(`✅ WhatsApp socket created for user: ${userId} with extended session settings`);
+
+    // Session health monitoring
+    const sessionStartTime = new Date();
+    const sessionHealthCheck = setInterval(() => {
+      const sessionDuration = new Date() - sessionStartTime;
+      const hoursAlive = Math.floor(sessionDuration / (1000 * 60 * 60));
+      const minutesAlive = Math.floor((sessionDuration % (1000 * 60 * 60)) / (1000 * 60));
+      
+      console.log(`💚 Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive`);
+      
+      // Log session milestone every hour
+      if (minutesAlive === 0 && hoursAlive > 0) {
+        console.log(`🎉 Session milestone: ${hoursAlive} hours alive for user ${userId}`);
+      }
+      
+      // Check if socket is still healthy
+      if (sock && sock.ws && sock.ws.readyState === 1) {
+        console.log(`✅ Socket healthy for user ${userId} - ReadyState: ${sock.ws.readyState}`);
+      } else {
+        console.log(`⚠️ Socket health warning for user ${userId} - ReadyState: ${sock?.ws?.readyState}`);
+      }
+    }, 300000); // Check every 5 minutes
 
     // Handle connection updates
     sock.ev.on('connection.update', async (update) => {
@@ -599,13 +644,48 @@ async function connectWhatsApp(userId, sessionId = null) {
       // Handle connection close
       if (connection === 'close') {
         console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        
+        // Clear the health check interval
+        if (sessionHealthCheck) {
+          clearInterval(sessionHealthCheck);
+          console.log(`🧹 Cleared health check interval for user: ${userId}`);
+        }
+        
+        // Clear the keep-alive interval
+        const connection = getConnection(userId, sessionId || 'default');
+        if (connection && connection.keepAliveInterval) {
+          clearInterval(connection.keepAliveInterval);
+          console.log(`🧹 Cleared keep-alive interval for user: ${userId}`);
+        }
+        
         const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
         
         if (shouldReconnect) {
           console.log(`🔄 Attempting to reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
-          setTimeout(() => {
-            connectWhatsApp(userId, sessionId);
-          }, 3000);
+          // Progressive reconnection delay: 3s, 10s, 30s, 60s, then every 2 minutes
+          const reconnectDelays = [3000, 10000, 30000, 60000, 120000];
+          let reconnectAttempts = 0;
+          
+          const attemptReconnect = () => {
+            reconnectAttempts++;
+            const delay = reconnectDelays[Math.min(reconnectAttempts - 1, reconnectDelays.length - 1)];
+            
+            console.log(`🔄 Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`);
+            
+            setTimeout(() => {
+              connectWhatsApp(userId, sessionId).catch(error => {
+                console.error(`❌ Reconnection attempt ${reconnectAttempts} failed for user ${userId}:`, error);
+                if (reconnectAttempts < 10) { // Max 10 reconnection attempts
+                  attemptReconnect();
+                } else {
+                  console.log(`❌ Max reconnection attempts reached for user ${userId}`);
+                  removeConnection(userId, sessionId || 'default');
+                }
+              });
+            }, delay);
+          };
+          
+          attemptReconnect();
         } else {
           console.log(`❌ Connection closed permanently for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
           removeConnection(userId, sessionId || 'default');
@@ -615,6 +695,27 @@ async function connectWhatsApp(userId, sessionId = null) {
       // Handle connection open
       else if (connection === 'open') {
         console.log(`✅ Connection opened for user: ${userId}`);
+        
+        // Start session keep-alive mechanism
+        const keepAliveInterval = setInterval(async () => {
+          try {
+            if (sock && sock.ws && sock.ws.readyState === 1) {
+              // Send a ping to keep the connection alive
+              await sock.ping();
+              console.log(`💓 Keep-alive ping sent for user: ${userId}`);
+            } else {
+              console.log(`⚠️ Cannot send keep-alive ping for user ${userId} - socket not ready`);
+            }
+          } catch (error) {
+            console.error(`❌ Keep-alive ping failed for user ${userId}:`, error);
+          }
+        }, 300000); // Send ping every 5 minutes
+        
+        // Store the keep-alive interval for cleanup
+        const connection = getConnection(userId, sessionId || 'default');
+        if (connection) {
+          connection.keepAliveInterval = keepAliveInterval;
+        }
         
         // Wait a moment for WebSocket to be fully initialized
         setTimeout(async () => {
@@ -775,50 +876,50 @@ async function connectWhatsApp(userId, sessionId = null) {
               
               console.log(`🔍 Normalized phone numbers: WhatsApp=${normalizedWhatsAppPhone}, Local=${normalizedLocalPhone}`);
               
-              // First, let's get all customers for this user to debug
-              const { data: allCustomers, error: allCustomersError } = await supabase
-                .from('customers')
+              // First, let's get all locations for this user to debug
+              const { data: allLocations, error: allLocationsError } = await supabase
+                .from('locations')
                 .select('id, name, phone, phone2')
                 .eq('user_id', userId);
 
-              if (allCustomersError) {
-                console.error(`❌ Error fetching all customers:`, allCustomersError);
+              if (allLocationsError) {
+                console.error(`❌ Error fetching all locations:`, allLocationsError);
                 continue;
               }
 
-              console.log(`🔍 Total customers for user ${userId}: ${allCustomers?.length || 0}`);
+              console.log(`🔍 Total locations for user ${userId}: ${allLocations?.length || 0}`);
               
-              // Check for exact matches - find ALL matching customers
-              let matchingCustomers = [];
-              if (allCustomers && allCustomers.length > 0) {
-                for (const customer of allCustomers) {
-                  const customerPhoneNormalized = normalizePhoneNumber(customer.phone);
-                  const customerPhone2Normalized = normalizePhoneNumber(customer.phone2);
+              // Check for exact matches - find ALL matching locations
+              let matchingLocations = [];
+              if (allLocations && allLocations.length > 0) {
+                for (const location of allLocations) {
+                  const locationPhoneNormalized = normalizePhoneNumber(location.phone);
+                  const locationPhone2Normalized = normalizePhoneNumber(location.phone2);
                   
-                  console.log(`   Checking customer: ${customer.name}`);
-                  console.log(`     Phone: ${customer.phone} -> Normalized: ${customerPhoneNormalized}`);
-                  console.log(`     Phone2: ${customer.phone2} -> Normalized: ${customerPhone2Normalized}`);
+                  console.log(`   Checking location: ${location.name}`);
+                  console.log(`     Phone: ${location.phone} -> Normalized: ${locationPhoneNormalized}`);
+                  console.log(`     Phone2: ${location.phone2} -> Normalized: ${locationPhone2Normalized}`);
                   
-                  if (customerPhoneNormalized === normalizedWhatsAppPhone || 
-                      customerPhoneNormalized === normalizedLocalPhone ||
-                      customerPhone2Normalized === normalizedWhatsAppPhone || 
-                      customerPhone2Normalized === normalizedLocalPhone) {
-                    console.log(`✅ Found matching customer: ${customer.name} (ID: ${customer.id})`);
-                    matchingCustomers.push(customer);
+                  if (locationPhoneNormalized === normalizedWhatsAppPhone || 
+                      locationPhoneNormalized === normalizedLocalPhone ||
+                      locationPhone2Normalized === normalizedWhatsAppPhone || 
+                      locationPhone2Normalized === normalizedLocalPhone) {
+                    console.log(`✅ Found matching location: ${location.name} (ID: ${location.id})`);
+                    matchingLocations.push(location);
                   }
                 }
               }
 
-              if (matchingCustomers.length === 0) {
-                console.log(`❌ No matching customers found. Creating new one.`);
+              if (matchingLocations.length === 0) {
+                console.log(`❌ No matching locations found. Creating new one.`);
                 
                 // Additional check: try to find by exact phone number match before creating
                 console.log(`🔍 Double-checking for exact phone matches...`);
-                const exactMatches = allCustomers.filter(customer => 
-                  customer.phone === phoneNumber || 
-                  customer.phone === whatsappPhoneNumber ||
-                  customer.phone2 === phoneNumber || 
-                  customer.phone2 === whatsappPhoneNumber
+                const exactMatches = allLocations.filter(location => 
+                  location.phone === phoneNumber || 
+                  location.phone === whatsappPhoneNumber ||
+                  location.phone2 === phoneNumber || 
+                  location.phone2 === whatsappPhoneNumber
                 );
                 
                 if (exactMatches.length > 0) {
@@ -826,9 +927,9 @@ async function connectWhatsApp(userId, sessionId = null) {
                   exactMatches.forEach(match => {
                     console.log(`     - ${match.name} (ID: ${match.id})`);
                   });
-                  matchingCustomers = exactMatches;
+                  matchingLocations = exactMatches;
                 } else {
-                  console.log(`✅ Confirmed no existing customers found. Safe to create new one.`);
+                  console.log(`✅ Confirmed no existing locations found. Safe to create new one.`);
                 }
               }
 
@@ -840,39 +941,39 @@ async function connectWhatsApp(userId, sessionId = null) {
                 updated_at: new Date()
               };
 
-              if (matchingCustomers.length > 0) {
-                // Update ALL matching customers
-                console.log(`🔄 Updating ${matchingCustomers.length} matching customers with location data`);
+              if (matchingLocations.length > 0) {
+                // Update ALL matching locations
+                console.log(`🔄 Updating ${matchingLocations.length} matching locations with location data`);
                 
                 let updatedCount = 0;
                 let errorCount = 0;
                 
-                for (const customer of matchingCustomers) {
+                for (const location of matchingLocations) {
                   try {
-                    console.log(`   Updating customer: ${customer.name} (ID: ${customer.id})`);
+                    console.log(`   Updating location: ${location.name} (ID: ${location.id})`);
                     const { error: updateError } = await supabase
-                      .from('customers')
+                      .from('locations')
                       .update(locationUpdateData)
-                      .eq('id', customer.id);
+                      .eq('id', location.id);
 
                     if (updateError) {
-                      console.error(`❌ Error updating customer ${customer.name}:`, updateError);
+                      console.error(`❌ Error updating location ${location.name}:`, updateError);
                       errorCount++;
                     } else {
-                      console.log(`✅ Successfully updated customer location: ${customer.name}`);
+                      console.log(`✅ Successfully updated location: ${location.name}`);
                       updatedCount++;
                     }
                   } catch (updateError) {
-                    console.error(`❌ Exception updating customer ${customer.name}:`, updateError);
+                    console.error(`❌ Exception updating location ${location.name}:`, updateError);
                     errorCount++;
                   }
                 }
                 
                 console.log(`📊 Update Summary: ${updatedCount} successful, ${errorCount} failed`);
               } else {
-                // Create new customer
-                console.log(`🆕 Creating new customer from location: ${contactName}`);
-                const newCustomerData = {
+                // Create new location entry
+                console.log(`🆕 Creating new location entry: ${contactName}`);
+                const newLocationData = {
                   ...locationUpdateData,
                   name: contactName,
                   phone: phoneNumber, // This is now in Israeli local format (0567891234)
@@ -881,38 +982,38 @@ async function connectWhatsApp(userId, sessionId = null) {
                 };
 
                 const { error: insertError } = await supabase
-                  .from('customers')
-                  .insert([newCustomerData]);
+                  .from('locations')
+                  .insert([newLocationData]);
 
                 if (insertError) {
-                  console.error(`❌ Error creating new customer:`, insertError);
+                  console.error(`❌ Error creating new location:`, insertError);
                 } else {
-                  console.log(`✅ Successfully created new customer from location: ${contactName}`);
+                  console.log(`✅ Successfully created new location entry: ${contactName}`);
                 }
               }
 
-              // Log the location message to message history for each updated customer
-              if (matchingCustomers.length > 0) {
-                console.log(`📝 Logging location message to history for ${matchingCustomers.length} customers`);
+              // Log the location message to message history for each updated location
+              if (matchingLocations.length > 0) {
+                console.log(`📝 Logging location message to history for ${matchingLocations.length} locations`);
                 
-                for (const customer of matchingCustomers) {
+                for (const location of matchingLocations) {
                   try {
                     await supabase
                       .from('message_history')
                       .insert([{
                         user_id: userId,
-                        customer_id: customer.id,
+                        customer_id: location.id, // Using location ID as customer_id for message history
                         message_text: `Location shared: ${locationData.name || 'Unknown location'} at ${locationData.degreesLatitude}, ${locationData.degreesLongitude}`,
                         status: 'received',
                         message_type: 'location'
                       }]);
-                    console.log(`   ✅ Logged for customer: ${customer.name}`);
+                    console.log(`   ✅ Logged for location: ${location.name}`);
                   } catch (logError) {
-                    console.error(`❌ Error logging for customer ${customer.name}:`, logError);
+                    console.error(`❌ Error logging for location ${location.name}:`, logError);
                   }
                 }
               } else {
-                // Log for new customer
+                // Log for new location
                 await supabase
                   .from('message_history')
                   .insert([{
@@ -925,13 +1026,13 @@ async function connectWhatsApp(userId, sessionId = null) {
               }
 
               // Summary log
-              if (matchingCustomers.length > 0) {
-                console.log(`📝 Summary: Updated ${matchingCustomers.length} existing customers with location data`);
-                matchingCustomers.forEach(customer => {
-                  console.log(`   - ${customer.name} (ID: ${customer.id})`);
+              if (matchingLocations.length > 0) {
+                console.log(`📝 Summary: Updated ${matchingLocations.length} existing locations with location data`);
+                matchingLocations.forEach(location => {
+                  console.log(`   - ${location.name} (ID: ${location.id})`);
                 });
               } else {
-                console.log(`📝 Summary: Created new customer "${contactName}" with phone ${phoneNumber} and location data`);
+                console.log(`📝 Summary: Created new location entry "${contactName}" with phone ${phoneNumber} and location data`);
               }
 
             } catch (locationError) {

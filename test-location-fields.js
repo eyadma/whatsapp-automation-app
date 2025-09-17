@@ -16,6 +16,52 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Status tracking object
+const connectionStatus = {
+  connected: false,
+  lastCheck: null,
+  errors: [],
+  testsPassed: 0,
+  totalTests: 0
+};
+
+// Function to refresh and display status
+function refreshStatus(message = '') {
+  const timestamp = new Date().toLocaleTimeString();
+  connectionStatus.lastCheck = timestamp;
+  
+  console.log(`\n🔄 Status Refresh - ${timestamp}`);
+  console.log('================================');
+  console.log(`📡 Connection: ${connectionStatus.connected ? '✅ Connected' : '❌ Disconnected'}`);
+  console.log(`🧪 Tests: ${connectionStatus.testsPassed}/${connectionStatus.totalTests} passed`);
+  console.log(`⏰ Last Check: ${connectionStatus.lastCheck}`);
+  
+  if (connectionStatus.errors.length > 0) {
+    console.log(`⚠️  Recent Errors: ${connectionStatus.errors.length}`);
+    connectionStatus.errors.slice(-3).forEach((error, index) => {
+      console.log(`   ${index + 1}. ${error}`);
+    });
+  }
+  
+  if (message) {
+    console.log(`📝 ${message}`);
+  }
+  console.log('================================\n');
+}
+
+// Function to update connection status
+function updateConnectionStatus(connected, error = null) {
+  connectionStatus.connected = connected;
+  if (error) {
+    connectionStatus.errors.push(`${new Date().toLocaleTimeString()}: ${error}`);
+    // Keep only last 5 errors
+    if (connectionStatus.errors.length > 5) {
+      connectionStatus.errors = connectionStatus.errors.slice(-5);
+    }
+  }
+  refreshStatus();
+}
+
 // Utility function to convert WhatsApp phone numbers to Israeli local format
 function convertWhatsAppPhoneToLocal(whatsappPhoneNumber) {
   let localPhoneNumber = whatsappPhoneNumber;
@@ -46,6 +92,13 @@ async function testLocationFields() {
   console.log('🧪 Testing Location Fields in Customers Table');
   console.log('=============================================\n');
 
+  // Initialize status tracking
+  connectionStatus.totalTests = 6;
+  connectionStatus.testsPassed = 0;
+  
+  // Initial status refresh
+  refreshStatus('Starting location fields test...');
+
   try {
     // Test 1: Check if location fields exist
     console.log('1. Checking if location fields exist...');
@@ -71,6 +124,11 @@ async function testLocationFields() {
     console.log('   - longitude: DECIMAL(10, 8)');
     console.log('   - latitude: DECIMAL(11, 8)');
     console.log('   - location_received: BOOLEAN');
+    
+    // Update status after successful test
+    connectionStatus.testsPassed++;
+    updateConnectionStatus(true, null);
+    refreshStatus('Test 1 completed: Location fields verified');
 
     // Test 2: Check message_history table
     console.log('\n2. Checking message_history table...');
@@ -93,6 +151,11 @@ async function testLocationFields() {
     }
 
     console.log('✅ Message type field exists in message_history table');
+    
+    // Update status after successful test
+    connectionStatus.testsPassed++;
+    updateConnectionStatus(true, null);
+    refreshStatus('Test 2 completed: Message history table verified');
 
     // Test 3: Try to insert a test customer with location data
     console.log('\n3. Testing location data insertion...');
@@ -122,6 +185,11 @@ async function testLocationFields() {
     console.log('✅ Successfully inserted test customer with location data');
     console.log('   Customer ID:', insertedCustomer[0].id);
     console.log('   Location:', `${insertedCustomer[0].latitude}, ${insertedCustomer[0].longitude}`);
+    
+    // Update status after successful test
+    connectionStatus.testsPassed++;
+    updateConnectionStatus(true, null);
+    refreshStatus('Test 3 completed: Customer location data insertion verified');
 
     // Test 4: Try to insert a test message with location type
     console.log('\n4. Testing location message insertion...');
@@ -148,6 +216,11 @@ async function testLocationFields() {
     console.log('✅ Successfully inserted test message with location type');
     console.log('   Message ID:', insertedMessage[0].id);
     console.log('   Message Type:', insertedMessage[0].message_type);
+    
+    // Update status after successful test
+    connectionStatus.testsPassed++;
+    updateConnectionStatus(true, null);
+    refreshStatus('Test 4 completed: Location message insertion verified');
 
     // Test 5: Clean up test data
     console.log('\n5. Cleaning up test data...');
@@ -163,6 +236,11 @@ async function testLocationFields() {
       .eq('id', insertedCustomer[0].id);
 
     console.log('✅ Test data cleaned up');
+    
+    // Update status after successful test
+    connectionStatus.testsPassed++;
+    updateConnectionStatus(true, null);
+    refreshStatus('Test 5 completed: Test data cleanup verified');
 
     // Test 6: Check if calculate_distance function exists
     console.log('\n6. Checking calculate_distance function...');
@@ -185,8 +263,17 @@ async function testLocationFields() {
     } catch (error) {
       console.log('⚠️  calculate_distance function not found (optional)');
     }
+    
+    // Update status after test 6 (optional test)
+    connectionStatus.testsPassed++;
+    updateConnectionStatus(true, null);
+    refreshStatus('Test 6 completed: Distance calculation function checked');
 
     console.log('\n🎉 All tests passed! Location message listener is ready to use.');
+    
+    // Final status refresh
+    refreshStatus('🎉 ALL TESTS COMPLETED SUCCESSFULLY! System is ready for location messages.');
+    
     console.log('\n📋 Next steps:');
     console.log('1. Start your WhatsApp server');
     console.log('2. Connect WhatsApp to the application');
@@ -212,6 +299,11 @@ async function testLocationFields() {
 
   } catch (error) {
     console.error('\n❌ Test failed:', error.message);
+    
+    // Update status with error
+    updateConnectionStatus(false, error.message);
+    refreshStatus('❌ TEST FAILED - Check error details above');
+    
     console.log('\n🔧 Troubleshooting:');
     console.log('1. Make sure you have run the SQL script: add-location-fields-to-customers.sql');
     console.log('2. Check your Supabase credentials');
