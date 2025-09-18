@@ -1401,8 +1401,30 @@ app.post('/api/whatsapp/disconnect/:userId', async (req, res) => {
     const connection = getConnection(userId, sessionId);
     
     if (connection && connection.sock) {
+      console.log(`🔌 Logging out WhatsApp session for user: ${userId}, session: ${sessionId || 'default'}`);
       await connection.sock.logout();
       removeConnection(userId, sessionId);
+      
+      // Clean up session files after logout to allow fresh reconnection
+      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
+      try {
+        if (fs.existsSync(sessionDir)) {
+          console.log(`🧹 Cleaning up session files for user: ${userId}, session: ${sessionId || 'default'}`);
+          // Remove all files in the session directory
+          const files = fs.readdirSync(sessionDir);
+          for (const file of files) {
+            const filePath = path.join(sessionDir, file);
+            if (fs.statSync(filePath).isFile()) {
+              fs.unlinkSync(filePath);
+              console.log(`🗑️ Removed file: ${file}`);
+            }
+          }
+          console.log(`✅ Session files cleaned up for user: ${userId}, session: ${sessionId || 'default'}`);
+        }
+      } catch (cleanupError) {
+        console.error(`❌ Error cleaning up session files for user ${userId}, session ${sessionId || 'default'}:`, cleanupError);
+        // Don't throw error here, just log it
+      }
     }
 
     // Update session status in Supabase instead of deleting
@@ -1433,8 +1455,30 @@ app.post('/api/whatsapp/disconnect/:userId/:sessionId', async (req, res) => {
     const connection = getConnection(userId, sessionId);
     
     if (connection && connection.sock) {
+      console.log(`🔌 Logging out WhatsApp session for user: ${userId}, session: ${sessionId}`);
       await connection.sock.logout();
       removeConnection(userId, sessionId);
+      
+      // Clean up session files after logout to allow fresh reconnection
+      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
+      try {
+        if (fs.existsSync(sessionDir)) {
+          console.log(`🧹 Cleaning up session files for user: ${userId}, session: ${sessionId}`);
+          // Remove all files in the session directory
+          const files = fs.readdirSync(sessionDir);
+          for (const file of files) {
+            const filePath = path.join(sessionDir, file);
+            if (fs.statSync(filePath).isFile()) {
+              fs.unlinkSync(filePath);
+              console.log(`🗑️ Removed file: ${file}`);
+            }
+          }
+          console.log(`✅ Session files cleaned up for user: ${userId}, session: ${sessionId}`);
+        }
+      } catch (cleanupError) {
+        console.error(`❌ Error cleaning up session files for user ${userId}, session ${sessionId}:`, cleanupError);
+        // Don't throw error here, just log it
+      }
     }
 
     // Update session status in Supabase
