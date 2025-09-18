@@ -19,7 +19,7 @@ CREATE OR REPLACE FUNCTION is_within_allowed_hours(user_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
     user_profile RECORD;
-    current_time TIME;
+    current_time_local TIME;
     israel_time TIMESTAMPTZ;
 BEGIN
     -- Get user's time restriction settings
@@ -39,11 +39,11 @@ BEGIN
     
     -- Get current time in Israel timezone
     israel_time := NOW() AT TIME ZONE user_profile.time_restriction_timezone;
-    current_time := israel_time::TIME;
+    current_time_local := israel_time::TIME;
     
     -- Check if current time is within allowed hours (09:00 to 12:30)
-    RETURN current_time >= user_profile.time_restriction_start 
-           AND current_time <= user_profile.time_restriction_end;
+    RETURN current_time_local >= user_profile.time_restriction_start 
+           AND current_time_local <= user_profile.time_restriction_end;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
