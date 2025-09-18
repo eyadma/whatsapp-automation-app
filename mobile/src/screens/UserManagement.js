@@ -21,6 +21,7 @@ import {
   Modal,
   TextInput,
   SegmentedButtons,
+  Switch,
   useTheme,
 } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +45,15 @@ const UserManagement = ({ navigation }) => {
     role: 'regular',
   });
   const [addingUser, setAddingUser] = useState(false);
+  const [showTimeRestrictionModal, setShowTimeRestrictionModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [timeRestrictionData, setTimeRestrictionData] = useState({
+    time_restriction_enabled: false,
+    time_restriction_start: '09:00',
+    time_restriction_end: '12:30',
+    time_restriction_timezone: 'Asia/Jerusalem'
+  });
+  const [updatingRestrictions, setUpdatingRestrictions] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -225,6 +235,115 @@ const UserManagement = ({ navigation }) => {
     }
   };
 
+  const handleTimeRestrictions = async (user) => {
+    try {
+      setSelectedUser(user);
+      
+      // Fetch current time restriction settings
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/time-restrictions/${user.id}`);
+      const result = await response.json();
+      
+      if (result.success) {
+        setTimeRestrictionData({
+          time_restriction_enabled: result.data.time_restriction_enabled || false,
+          time_restriction_start: result.data.time_restriction_start || '09:00',
+          time_restriction_end: result.data.time_restriction_end || '12:30',
+          time_restriction_timezone: result.data.time_restriction_timezone || 'Asia/Jerusalem'
+        });
+      } else {
+        // Set default values if fetch fails
+        setTimeRestrictionData({
+          time_restriction_enabled: false,
+          time_restriction_start: '09:00',
+          time_restriction_end: '12:30',
+          time_restriction_timezone: 'Asia/Jerusalem'
+        });
+      }
+      
+      setShowTimeRestrictionModal(true);
+    } catch (error) {
+      console.error('Error fetching time restrictions:', error);
+      Alert.alert('Error', 'Failed to load time restrictions');
+    }
+  };
+
+  const handleUpdateTimeRestrictions = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      setUpdatingRestrictions(true);
+      
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/time-restrictions/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(timeRestrictionData),
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        Alert.alert('Success', 'Time restrictions updated successfully');
+        setShowTimeRestrictionModal(false);
+        loadUsers(); // Refresh the user list
+      } else {
+        Alert.alert('Error', result.error || 'Failed to update time restrictions');
+      }
+    } catch (error) {
+      console.error('Error updating time restrictions:', error);
+      Alert.alert('Error', 'Failed to update time restrictions');
+    } finally {
+      setUpdatingRestrictions(false);
+    }
+  };
+
+  const handleResetUsageTracking = async (user) => {
+    try {
+      Alert.alert(
+        'Reset Usage Tracking',
+        'This will reset the user\'s daily messaging usage tracking. They will need to send a message during allowed hours (09:00-12:30) to regain messaging privileges.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Reset', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/time-restrictions/${user.id}`, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    time_restriction_enabled: true,
+                    time_restriction_start: '09:00',
+                    time_restriction_end: '12:30',
+                    time_restriction_timezone: 'Asia/Jerusalem'
+                  }),
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                  Alert.alert('Success', 'Usage tracking reset successfully');
+                  loadUsers(); // Refresh the user list
+                } else {
+                  Alert.alert('Error', result.error || 'Failed to reset usage tracking');
+                }
+              } catch (error) {
+                console.error('Error resetting usage tracking:', error);
+                Alert.alert('Error', 'Failed to reset usage tracking');
+              }
+            }
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error showing reset dialog:', error);
+    }
+  };
+
   return (
     <View style={dynamicStyles.container}>
       <View style={dynamicStyles.header}>
@@ -302,6 +421,24 @@ const UserManagement = ({ navigation }) => {
                   disabled={user.id === userId}
                 >
                   {user.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
+                </Button>
+                
+                <Button
+                  mode="outlined"
+                  onPress={() => handleTimeRestrictions(user)}
+                  style={dynamicStyles.actionButton}
+                  icon="clock-outline"
+                >
+                  Time Restrictions
+                </Button>
+                
+                <Button
+                  mode="outlined"
+                  onPress={() => handleResetUsageTracking(user)}
+                  style={dynamicStyles.actionButton}
+                  icon="refresh-outline"
+                >
+                  Reset Usage
                 </Button>
                 
                 <Button
@@ -396,6 +533,90 @@ const UserManagement = ({ navigation }) => {
                   style={dynamicStyles.modalButton}
                 >
                   Create User
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+        </Modal>
+      </Portal>
+
+      {/* Time Restriction Modal */}
+      <Portal>
+        <Modal
+          visible={showTimeRestrictionModal}
+          onDismiss={() => setShowTimeRestrictionModal(false)}
+          contentContainerStyle={dynamicStyles.modalContainer}
+        >
+          <Card style={dynamicStyles.modalCard}>
+            <Card.Content>
+              <Title style={dynamicStyles.modalTitle}>
+                Time Restrictions - {selectedUser?.full_name || selectedUser?.email}
+              </Title>
+              
+              <View style={dynamicStyles.switchContainer}>
+                <Text style={dynamicStyles.switchLabel}>Enable Time Restrictions</Text>
+                <Switch
+                  value={timeRestrictionData.time_restriction_enabled}
+                  onValueChange={(value) => 
+                    setTimeRestrictionData({ ...timeRestrictionData, time_restriction_enabled: value })
+                  }
+                />
+              </View>
+              
+              {timeRestrictionData.time_restriction_enabled && (
+                <>
+                  <TextInput
+                    label="Start Time (HH:MM)"
+                    value={timeRestrictionData.time_restriction_start}
+                    onChangeText={(text) => 
+                      setTimeRestrictionData({ ...timeRestrictionData, time_restriction_start: text })
+                    }
+                    style={dynamicStyles.input}
+                    placeholder="09:00"
+                  />
+                  
+                  <TextInput
+                    label="End Time (HH:MM)"
+                    value={timeRestrictionData.time_restriction_end}
+                    onChangeText={(text) => 
+                      setTimeRestrictionData({ ...timeRestrictionData, time_restriction_end: text })
+                    }
+                    style={dynamicStyles.input}
+                    placeholder="12:30"
+                  />
+                  
+                  <TextInput
+                    label="Timezone"
+                    value={timeRestrictionData.time_restriction_timezone}
+                    onChangeText={(text) => 
+                      setTimeRestrictionData({ ...timeRestrictionData, time_restriction_timezone: text })
+                    }
+                    style={dynamicStyles.input}
+                    placeholder="Asia/Jerusalem"
+                  />
+                  
+                  <Paragraph style={dynamicStyles.helpText}>
+                    Users can send messages during the specified hours (09:00-12:30). After 12:30, they can only send messages if they used the messaging feature at least once during the allowed hours today.
+                  </Paragraph>
+                </>
+              )}
+              
+              <View style={dynamicStyles.modalActions}>
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowTimeRestrictionModal(false)}
+                  style={dynamicStyles.modalButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleUpdateTimeRestrictions}
+                  loading={updatingRestrictions}
+                  disabled={updatingRestrictions}
+                  style={dynamicStyles.modalButton}
+                >
+                  Update Restrictions
                 </Button>
               </View>
             </Card.Content>
@@ -500,14 +721,32 @@ const createStyles = (theme) => StyleSheet.create({
   },
   userActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   actionButton: {
     flex: 1,
-    marginHorizontal: 5,
+    marginHorizontal: 2,
+    marginVertical: 2,
   },
   deleteButton: {
     borderColor: theme.colors.error,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  switchLabel: {
+    fontSize: 16,
+    color: theme.colors.onSurface,
+  },
+  helpText: {
+    fontSize: 12,
+    color: theme.colors.onSurfaceVariant,
+    fontStyle: 'italic',
+    marginTop: 10,
   },
   emptyCard: {
     margin: 20,

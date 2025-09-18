@@ -1795,6 +1795,46 @@ app.post('/api/messages/send', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
+    // Check time restrictions before proceeding
+    const { data: canSend, error: timeCheckError } = await supabase
+      .rpc('can_send_messages', { user_id: userId });
+
+    if (timeCheckError) {
+      console.error('Error checking time restrictions:', timeCheckError);
+      return res.status(500).json({ success: false, error: 'Failed to check time restrictions' });
+    }
+
+    if (!canSend) {
+      // Get user's restriction details for better error message
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('time_restriction_start, time_restriction_end, time_restriction_timezone, last_message_sent_during_window, daily_usage_tracked')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching user profile:', profileError);
+      }
+
+      const currentTime = new Date().toLocaleTimeString('en-US', { 
+        timeZone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
+        hour12: false 
+      });
+
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Message sending is only allowed during business hours or after using messaging during allowed hours',
+        details: {
+          allowedHours: `${userProfile?.time_restriction_start || '09:00'} - ${userProfile?.time_restriction_end || '12:30'}`,
+          currentTime: currentTime,
+          timezone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
+          lastMessageDuringWindow: userProfile?.last_message_sent_during_window,
+          dailyUsageTracked: userProfile?.daily_usage_tracked,
+          message: 'You can send messages during 09:00-12:30 Israel time, or after sending at least one message during those hours today.'
+        }
+      });
+    }
+
     console.log(`🚀 Starting message sending for user ${userId}${sessionId ? `, session: ${sessionId}` : ''} with speed delay: ${speedDelay} seconds`);
     console.log(`🔍 Available connections for user ${userId}: [ ${getUserConnections(userId).join(', ')} ]`);
     console.log(`🔍 Requested sessionId: ${sessionId || 'default'}`);
@@ -1956,6 +1996,16 @@ app.post('/api/messages/send', async (req, res) => {
           
           await connection.sock.sendMessage(jid, { text: personalizedMessage });
           console.log(`✅ Message sent successfully to ${customer.name}`);
+          
+          // Track message usage for time restrictions (only for first successful message)
+          if (i === 0) {
+            try {
+              await supabase.rpc('track_message_usage', { user_id: userId });
+              console.log(`📊 Message usage tracked for user ${userId}`);
+            } catch (trackError) {
+              console.error(`⚠️ Failed to track message usage:`, trackError.message);
+            }
+          }
         } catch (sendError) {
           console.error(`❌ Send error for ${customer.name}:`, sendError.message);
           console.error(`❌ Full error:`, sendError);
@@ -2198,6 +2248,76 @@ app.post('/api/messages/background-cancel/:processId', async (req, res) => {
   }
 });
 
+// 4.5. Time Restriction Management
+app.get('/api/time-restrictions/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('time_restriction_enabled, time_restriction_start, time_restriction_end, time_restriction_timezone, last_message_sent_during_window, daily_usage_tracked')
+      .eq('id', userId)
+      .single();
+
+    if (error) throw error;
+
+    // Check current restriction status
+    const { data: canSend, error: canSendError } = await supabase
+      .rpc('can_send_messages', { user_id: userId });
+
+    if (canSendError) throw canSendError;
+
+    const currentTime = new Date().toLocaleTimeString('en-US', { 
+      timeZone: profile?.time_restriction_timezone || 'Asia/Jerusalem',
+      hour12: false 
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ...profile,
+        canSendMessages: canSend,
+        currentTime,
+        hasUsedMessagingToday: profile?.daily_usage_tracked ? new Date().toDateString() === new Date(profile.daily_usage_tracked).toDateString() : false
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching time restrictions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/time-restrictions/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { time_restriction_enabled, time_restriction_start, time_restriction_end, time_restriction_timezone } = req.body;
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        time_restriction_enabled,
+        time_restriction_start,
+        time_restriction_end,
+        time_restriction_timezone
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data,
+      message: 'Time restrictions updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating time restrictions:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 // 5. Send Single Message
 app.post('/api/messages/send-single', async (req, res) => {
   try {
@@ -2213,6 +2333,46 @@ app.post('/api/messages/send-single', async (req, res) => {
     
     if (!userId || !phoneNumber || !message) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    // Check time restrictions before proceeding
+    const { data: canSend, error: timeCheckError } = await supabase
+      .rpc('can_send_messages', { user_id: userId });
+
+    if (timeCheckError) {
+      console.error('Error checking time restrictions:', timeCheckError);
+      return res.status(500).json({ success: false, error: 'Failed to check time restrictions' });
+    }
+
+    if (!canSend) {
+      // Get user's restriction details for better error message
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('time_restriction_start, time_restriction_end, time_restriction_timezone, last_message_sent_during_window, daily_usage_tracked')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching user profile:', profileError);
+      }
+
+      const currentTime = new Date().toLocaleTimeString('en-US', { 
+        timeZone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
+        hour12: false 
+      });
+
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Message sending is only allowed during business hours or after using messaging during allowed hours',
+        details: {
+          allowedHours: `${userProfile?.time_restriction_start || '09:00'} - ${userProfile?.time_restriction_end || '12:30'}`,
+          currentTime: currentTime,
+          timezone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
+          lastMessageDuringWindow: userProfile?.last_message_sent_during_window,
+          dailyUsageTracked: userProfile?.daily_usage_tracked,
+          message: 'You can send messages during 09:00-12:30 Israel time, or after sending at least one message during those hours today.'
+        }
+      });
     }
 
     console.log(`📤 Send single message request for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
@@ -2395,6 +2555,14 @@ app.post('/api/messages/send-single', async (req, res) => {
       
       await Promise.race([sendPromise, timeoutPromise]);
       console.log(`✅ Single message sent successfully to ${phoneNumber}`);
+      
+      // Track message usage for time restrictions
+      try {
+        await supabase.rpc('track_message_usage', { user_id: userId });
+        console.log(`📊 Message usage tracked for user ${userId}`);
+      } catch (trackError) {
+        console.error(`⚠️ Failed to track message usage:`, trackError.message);
+      }
     } catch (sendError) {
       console.error(`❌ Send message error:`, sendError);
       console.error(`❌ Error details:`, {
