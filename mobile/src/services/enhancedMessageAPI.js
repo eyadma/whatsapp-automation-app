@@ -157,15 +157,15 @@ export const enhancedMessageAPI = {
 
       // If no template text found for primary language, fallback to available languages
       if (!templateText) {
-        if (template.template_arabic) {
-          templateText = template.template_arabic;
-          primaryLanguage = 'ar';
+        if (template.template_english) {
+          templateText = template.template_english;
+          primaryLanguage = 'en';
         } else if (template.template_hebrew) {
           templateText = template.template_hebrew;
           primaryLanguage = 'he';
-        } else if (template.template_english) {
-          templateText = template.template_english;
-          primaryLanguage = 'en';
+        } else if (template.template_arabic) {
+          templateText = template.template_arabic;
+          primaryLanguage = 'ar';
         }
       }
 
@@ -789,11 +789,11 @@ export const enhancedMessageAPI = {
         if (typeof template === 'object' && template.template_arabic) {
           // Template object with multiple language versions
           if (language === 'ar') {
-            languageTemplate = template.template_arabic || template.template_hebrew || template.template_english;
+            languageTemplate = template.template_arabic || template.template_english || template.template_hebrew;
           } else if (language === 'he') {
-            languageTemplate = template.template_hebrew || template.template_arabic || template.template_english;
+            languageTemplate = template.template_hebrew || template.template_english || template.template_arabic;
           } else {
-            languageTemplate = template.template_english || template.template_arabic || template.template_hebrew;
+            languageTemplate = template.template_english || template.template_hebrew || template.template_arabic;
           }
         }
         
@@ -817,11 +817,11 @@ export const enhancedMessageAPI = {
         if (typeof template === 'object' && template.template_arabic) {
           // Template object with multiple language versions
           if (language === 'ar') {
-            languageTemplate = template.template_arabic || template.template_hebrew || template.template_english;
+            languageTemplate = template.template_arabic || template.template_english || template.template_hebrew;
           } else if (language === 'he') {
-            languageTemplate = template.template_hebrew || template.template_arabic || template.template_english;
+            languageTemplate = template.template_hebrew || template.template_english || template.template_arabic;
           } else {
-            languageTemplate = template.template_english || template.template_arabic || template.template_hebrew;
+            languageTemplate = template.template_english || template.template_hebrew || template.template_arabic;
           }
         }
         
