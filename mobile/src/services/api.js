@@ -658,6 +658,15 @@ export const messagesAPI = {
   // Send messages to customers
   sendMessages: async (userId, messageTemplate, customerIds, speedDelay = 35, sessionId = null) => {
     try {
+      // Track message usage for time restrictions
+      try {
+        const { timeRestrictionsAPI } = await import('./timeRestrictionsAPI');
+        await timeRestrictionsAPI.trackMessageUsage(userId);
+        console.log('✅ Message usage tracked for sendMessages');
+      } catch (error) {
+        console.warn('⚠️ Failed to track message usage in sendMessages:', error);
+      }
+
       const baseUrl = await resolveApiBaseUrl();
       console.log('📤 Sending messages to URL:', baseUrl);
       console.log('📤 Speed delay:', speedDelay, 'seconds');
@@ -694,6 +703,15 @@ export const messagesAPI = {
   // Send single message
   sendSingleMessage: async (userId, phoneNumber, message, sessionId = null) => {
     try {
+      // Track message usage for time restrictions
+      try {
+        const { timeRestrictionsAPI } = await import('./timeRestrictionsAPI');
+        await timeRestrictionsAPI.trackMessageUsage(userId);
+        console.log('✅ Message usage tracked for sendSingleMessage');
+      } catch (error) {
+        console.warn('⚠️ Failed to track message usage in sendSingleMessage:', error);
+      }
+
       const baseUrl = await resolveApiBaseUrl();
       console.log('📤 Sending single message to URL:', baseUrl);
       const response = await fetch(`${baseUrl}/api/messages/send-single`, {
@@ -725,6 +743,15 @@ export const messagesAPI = {
   // Send messages in background
   sendMessagesBackground: async (userId, processedMessages, customerIds, speedDelay = 35, sessionId = null) => {
     try {
+      // Track message usage for time restrictions
+      try {
+        const { timeRestrictionsAPI } = await import('./timeRestrictionsAPI');
+        await timeRestrictionsAPI.trackMessageUsage(userId);
+        console.log('✅ Message usage tracked for sendMessagesBackground');
+      } catch (error) {
+        console.warn('⚠️ Failed to track message usage in sendMessagesBackground:', error);
+      }
+
       const baseUrl = await resolveApiBaseUrl();
       console.log('📤 Starting background message sending to URL:', baseUrl);
       console.log('📤 Speed delay:', speedDelay, 'seconds');

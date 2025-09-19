@@ -10,6 +10,7 @@ import { customersAPI, messageTemplatesAPI, whatsappAPI } from '../services/api'
 import { areasAPI } from '../services/areasAPI';
 import { enhancedMessageAPI } from '../services/enhancedMessageAPI';
 import { messagesAPI } from '../services/api';
+import { timeRestrictionsAPI } from '../services/timeRestrictionsAPI';
 import { supabase } from '../services/supabase';
 
 const EnhancedMessageScreen = ({ navigation }) => {
@@ -463,6 +464,20 @@ const EnhancedMessageScreen = ({ navigation }) => {
             setShouldStop(false);
             setSendingProgress(0);
             setSendingResults(null);
+            
+            // Track message usage for time restrictions
+            try {
+              console.log('📊 Tracking message usage for time restrictions...');
+              const trackResult = await timeRestrictionsAPI.trackMessageUsage(userId);
+              if (trackResult.success) {
+                console.log('✅ Message usage tracked successfully');
+              } else {
+                console.warn('⚠️ Failed to track message usage:', trackResult.error);
+              }
+            } catch (error) {
+              console.warn('⚠️ Error tracking message usage:', error);
+              // Don't stop sending if tracking fails
+            }
             
             try {
               if (backgroundSending) {

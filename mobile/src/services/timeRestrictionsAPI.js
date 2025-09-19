@@ -98,6 +98,28 @@ export const timeRestrictionsAPI = {
   },
 
   /**
+   * Track message usage for time restrictions
+   * This should be called when user starts sending messages
+   */
+  trackMessageUsage: async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .rpc('track_message_usage', { user_id: userId });
+
+      if (error) {
+        console.error('Error tracking message usage:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Message usage tracked successfully for user:', userId);
+      return { success: true, data, error: null };
+    } catch (error) {
+      console.error('Error in trackMessageUsage:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
    * Get time restriction status with detailed information
    */
   getTimeRestrictionStatus: async (userId) => {
