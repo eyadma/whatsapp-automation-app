@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
+import { View, Text, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -34,7 +35,79 @@ const Tab = createBottomTabNavigator();
 
 // Main App Tab Navigator (for regular users)
 const MainAppTabs = () => {
-  const { t, theme } = useContext(AppContext);
+  const { t, theme, userId } = useContext(AppContext);
+  const [timeRestrictionStatus, setTimeRestrictionStatus] = useState(null);
+  const [loadingRestrictions, setLoadingRestrictions] = useState(true);
+
+  useEffect(() => {
+    const checkTimeRestrictions = async () => {
+      if (!userId) return;
+      
+      try {
+        setLoadingRestrictions(true);
+        const { timeRestrictionsAPI } = await import('./src/services/timeRestrictionsAPI');
+        const result = await timeRestrictionsAPI.getTimeRestrictionStatus(userId);
+        
+        if (result.success) {
+          setTimeRestrictionStatus(result.data);
+        } else {
+          console.error('Error checking time restrictions:', result.error);
+          // Default to showing Messages tab if there's an error
+          setTimeRestrictionStatus({ canSendMessages: true });
+        }
+      } catch (error) {
+        console.error('Error loading time restrictions:', error);
+        // Default to showing Messages tab if there's an error
+        setTimeRestrictionStatus({ canSendMessages: true });
+      } finally {
+        setLoadingRestrictions(false);
+      }
+    };
+
+    checkTimeRestrictions();
+    
+    // Check every minute to update restrictions
+    const interval = setInterval(checkTimeRestrictions, 60000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
+  // Show loading state while checking restrictions
+  if (loadingRestrictions) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === "dark" ? "#121212" : "#ffffff" }}>
+        <ActivityIndicator size="large" color="#25D366" />
+        <Text style={{ marginTop: 10, color: theme === "dark" ? "#fff" : "#000" }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Determine if Messages tab should be shown
+  const showMessagesTab = timeRestrictionStatus?.canSendMessages !== false;
+
+  // If Messages tab is hidden, show a custom screen with time restriction info
+  const MessagesScreen = showMessagesTab ? EnhancedMessageScreen : () => {
+    const TimeRestrictionMessage = require('./src/components/TimeRestrictionMessage').default;
+    return (
+      <TimeRestrictionMessage 
+        timeRestrictionStatus={timeRestrictionStatus}
+        onRefresh={async () => {
+          try {
+            setLoadingRestrictions(true);
+            const { timeRestrictionsAPI } = await import('./src/services/timeRestrictionsAPI');
+            const result = await timeRestrictionsAPI.getTimeRestrictionStatus(userId);
+            
+            if (result.success) {
+              setTimeRestrictionStatus(result.data);
+            }
+          } catch (error) {
+            console.error('Error refreshing time restrictions:', error);
+          } finally {
+            setLoadingRestrictions(false);
+          }
+        }}
+      />
+    );
+  };
 
   return (
     <Tab.Navigator
@@ -71,7 +144,13 @@ const MainAppTabs = () => {
     >
       <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") }} />
       <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") }} />
-      <Tab.Screen name="Messages" component={EnhancedMessageScreen} options={{ title: t("sendMessages") }} />
+      <Tab.Screen 
+        name="Messages" 
+        component={MessagesScreen} 
+        options={{ 
+          title: showMessagesTab ? t("sendMessages") : "Messages (Restricted)"
+        }} 
+      />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") }} />
     </Tab.Navigator>
   );

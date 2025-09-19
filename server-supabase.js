@@ -1794,45 +1794,7 @@ app.post('/api/messages/send', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
-    // Check time restrictions before proceeding
-    const { data: canSend, error: timeCheckError } = await supabase
-      .rpc('can_send_messages', { user_id: userId });
-
-    if (timeCheckError) {
-      console.error('Error checking time restrictions:', timeCheckError);
-      return res.status(500).json({ success: false, error: 'Failed to check time restrictions' });
-    }
-
-    if (!canSend) {
-      // Get user's restriction details for better error message
-      const { data: userProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('time_restriction_start, time_restriction_end, time_restriction_timezone, last_message_sent_during_window, daily_usage_tracked')
-        .eq('id', userId)
-        .single();
-
-      if (profileError) {
-        console.error('Error fetching user profile:', profileError);
-      }
-
-      const currentTime = new Date().toLocaleTimeString('en-US', { 
-        timeZone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
-        hour12: false 
-      });
-
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Message sending is only allowed during business hours or after using messaging during allowed hours',
-        details: {
-          allowedHours: `${userProfile?.time_restriction_start || '09:00'} - ${userProfile?.time_restriction_end || '12:30'}`,
-          currentTime: currentTime,
-          timezone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
-          lastMessageDuringWindow: userProfile?.last_message_sent_during_window,
-          dailyUsageTracked: userProfile?.daily_usage_tracked,
-          message: 'You can send messages during 09:00-12:30 Israel time, or after sending at least one message during those hours today.'
-        }
-      });
-    }
+    // Time restrictions are now handled at the UI level, not API level
 
     console.log(`🚀 Starting message sending for user ${userId}${sessionId ? `, session: ${sessionId}` : ''} with speed delay: ${speedDelay} seconds`);
     console.log(`🔍 Session: ${sessionId || 'default'}`);
@@ -2300,45 +2262,7 @@ app.post('/api/messages/send-single', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
-    // Check time restrictions before proceeding
-    const { data: canSend, error: timeCheckError } = await supabase
-      .rpc('can_send_messages', { user_id: userId });
-
-    if (timeCheckError) {
-      console.error('Error checking time restrictions:', timeCheckError);
-      return res.status(500).json({ success: false, error: 'Failed to check time restrictions' });
-    }
-
-    if (!canSend) {
-      // Get user's restriction details for better error message
-      const { data: userProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('time_restriction_start, time_restriction_end, time_restriction_timezone, last_message_sent_during_window, daily_usage_tracked')
-        .eq('id', userId)
-        .single();
-
-      if (profileError) {
-        console.error('Error fetching user profile:', profileError);
-      }
-
-      const currentTime = new Date().toLocaleTimeString('en-US', { 
-        timeZone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
-        hour12: false 
-      });
-
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Message sending is only allowed during business hours or after using messaging during allowed hours',
-        details: {
-          allowedHours: `${userProfile?.time_restriction_start || '09:00'} - ${userProfile?.time_restriction_end || '12:30'}`,
-          currentTime: currentTime,
-          timezone: userProfile?.time_restriction_timezone || 'Asia/Jerusalem',
-          lastMessageDuringWindow: userProfile?.last_message_sent_during_window,
-          dailyUsageTracked: userProfile?.daily_usage_tracked,
-          message: 'You can send messages during 09:00-12:30 Israel time, or after sending at least one message during those hours today.'
-        }
-      });
-    }
+    // Time restrictions are now handled at the UI level, not API level
 
     console.log(`📤 Send single message request for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
     console.log(`📱 Available connections for user ${userId}: [ ${getUserConnections(userId).join(', ')} ]`);
