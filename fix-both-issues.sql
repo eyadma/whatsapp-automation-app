@@ -19,7 +19,7 @@ WHERE time_restriction_enabled = true
 -- Fix area 967: جديرا جنوب (should have proper Hebrew translation)
 UPDATE areas 
 SET name_hebrew = 'גדירה דרום'
-WHERE areaId = 967 AND name_english = 'جديرا جنوب';
+WHERE "areaId" = 967 AND name_english = 'جديرا جنوب';
 
 -- Fix other common duplicate name issues
 -- Add more fixes here as needed
@@ -43,7 +43,7 @@ WHERE time_restriction_enabled = true;
 -- Check areas data
 SELECT 
     'AREAS' as fix_type,
-    areaId,
+    "areaId",
     name_english,
     name_hebrew,
     name_arabic,
@@ -57,4 +57,4 @@ FROM areas
 WHERE name_hebrew = name_english 
    OR name_arabic = name_english 
    OR name_hebrew = name_arabic
-ORDER BY areaId;
+ORDER BY "areaId";

@@ -3,7 +3,7 @@
 
 -- First, let's see what areas have duplicate names
 SELECT 
-    areaId,
+    "areaId",
     name_english,
     name_hebrew,
     name_arabic,
@@ -17,20 +17,20 @@ FROM areas
 WHERE name_hebrew = name_english 
    OR name_arabic = name_english 
    OR name_hebrew = name_arabic
-ORDER BY areaId;
+ORDER BY "areaId";
 
 -- Fix specific problematic areas
 -- Area 967: جديرا جنوب (should have proper Hebrew translation)
 UPDATE areas 
 SET name_hebrew = 'גדירה דרום'
-WHERE areaId = 967 AND name_english = 'جديرا جنوب';
+WHERE "areaId" = 967 AND name_english = 'جديرا جنوب';
 
 -- Add more fixes for other areas with duplicate names
 -- You can add more UPDATE statements here for other problematic areas
 
 -- Verify the fixes
 SELECT 
-    areaId,
+    "areaId",
     name_english,
     name_hebrew,
     name_arabic,
@@ -41,4 +41,4 @@ SELECT
         ELSE 'OK'
     END as issue_type
 FROM areas 
-WHERE areaId = 967;
+WHERE "areaId" = 967;
