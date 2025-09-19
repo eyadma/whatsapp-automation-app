@@ -109,6 +109,25 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  // Auto-save language and theme changes
+  const handleLanguageChange = async (newLanguage) => {
+    setLanguage(newLanguage);
+    try {
+      await AsyncStorage.setItem('userLanguage', newLanguage);
+    } catch (error) {
+      console.error('Error saving language:', error);
+    }
+  };
+
+  const handleThemeChange = async (newTheme) => {
+    setTheme(newTheme);
+    try {
+      await AsyncStorage.setItem('userTheme', newTheme);
+    } catch (error) {
+      console.error('Error saving theme:', error);
+    }
+  };
+
   // Create dynamic styles based on theme
   const dynamicStyles = createStyles(paperTheme);
 
@@ -144,10 +163,10 @@ const SettingsScreen = ({ navigation }) => {
                 <RadioButton
                   value={lang.code}
                   status={language === lang.code ? 'checked' : 'unchecked'}
-                  onPress={() => setLanguage(lang.code)}
+                  onPress={() => handleLanguageChange(lang.code)}
                 />
               )}
-              onPress={() => setLanguage(lang.code)}
+              onPress={() => handleLanguageChange(lang.code)}
               style={dynamicStyles.listItem}
             />
           ))}
@@ -174,10 +193,10 @@ const SettingsScreen = ({ navigation }) => {
                 <RadioButton
                   value={themeOption.code}
                   status={theme === themeOption.code ? 'checked' : 'unchecked'}
-                  onPress={() => setTheme(themeOption.code)}
+                  onPress={() => handleThemeChange(themeOption.code)}
                 />
               )}
-              onPress={() => setTheme(themeOption.code)}
+              onPress={() => handleThemeChange(themeOption.code)}
               style={dynamicStyles.listItem}
             />
           ))}

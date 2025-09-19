@@ -193,11 +193,7 @@ export default function App() {
   const [language, setLanguage] = useState("en");
   const [theme, setTheme] = useState("light");
 
-  // Load user preferences on app start
-  useEffect(() => {
-    loadUserPreferences();
-  }, []);
-
+  // Load user preferences function
   const loadUserPreferences = async () => {
     try {
       const savedLanguage = await AsyncStorage.getItem("userLanguage");
@@ -209,6 +205,11 @@ export default function App() {
       console.error("Error loading preferences:", error);
     }
   };
+
+  // Load user preferences on app start
+  useEffect(() => {
+    loadUserPreferences();
+  }, []);
 
 
   useEffect(() => {

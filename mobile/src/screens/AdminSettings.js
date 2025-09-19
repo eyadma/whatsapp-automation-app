@@ -24,6 +24,7 @@ import {
   useTheme,
 } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
 
@@ -33,6 +34,25 @@ const AdminSettings = ({ navigation }) => {
   const { userId, t, language, setLanguage, theme, setTheme } = useContext(AppContext);
   const paperTheme = useTheme();
   const [loading, setLoading] = useState(false);
+
+  // Auto-save language and theme changes
+  const handleLanguageChange = async (newLanguage) => {
+    setLanguage(newLanguage);
+    try {
+      await AsyncStorage.setItem('userLanguage', newLanguage);
+    } catch (error) {
+      console.error('Error saving language:', error);
+    }
+  };
+
+  const handleThemeChange = async (newTheme) => {
+    setTheme(newTheme);
+    try {
+      await AsyncStorage.setItem('userTheme', newTheme);
+    } catch (error) {
+      console.error('Error saving theme:', error);
+    }
+  };
   const [systemStats, setSystemStats] = useState({});
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
@@ -336,7 +356,7 @@ const AdminSettings = ({ navigation }) => {
           <Text style={dynamicStyles.settingLabel}>Language</Text>
           <SegmentedButtons
             value={language}
-            onValueChange={setLanguage}
+            onValueChange={handleLanguageChange}
             buttons={[
               { value: 'en', label: 'English' },
               { value: 'he', label: 'עברית' },
@@ -350,7 +370,7 @@ const AdminSettings = ({ navigation }) => {
           <Text style={dynamicStyles.settingLabel}>Theme</Text>
           <SegmentedButtons
             value={theme}
-            onValueChange={setTheme}
+            onValueChange={handleThemeChange}
             buttons={[
               { value: 'light', label: 'Light' },
               { value: 'dark', label: 'Dark' },
