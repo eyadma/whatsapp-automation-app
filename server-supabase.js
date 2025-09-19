@@ -678,7 +678,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           connectionType: 'qr_required'
         });
         setConnection(userId, sessionId || 'default', connectionData);
-        console.log(`🔍 Connection set. Available connections for user ${userId}:`, getUserConnections(userId));
+        console.log(`🔍 Connection set for user ${userId}`);
       }
       
       // Handle connection close
@@ -820,7 +820,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               } : null
             });
             setConnection(userId, sessionId || 'default', connectionData);
-            console.log(`🔍 Connected connection set. Available connections for user ${userId}:`, getUserConnections(userId));
+            console.log(`🔍 Connected for user ${userId}`);
             
             // Update Supabase
             try {
@@ -1194,9 +1194,8 @@ app.get('/api/whatsapp/status/:userId/:sessionId', async (req, res) => {
   const { userId, sessionId } = req.params;
   console.log(`🔍 Checking status for user: ${userId}, session: ${sessionId}`);
   
-  // Debug: Log all available connections for this user
-  console.log(`🔍 Available connections for user ${userId}:`, getUserConnections(userId));
-  console.log(`🔍 Current connections map:`, Array.from(connections.entries()));
+  // Debug: Log connection status
+  console.log(`🔍 Checking connections for user ${userId}`);
   
   try {
     const connection = getConnection(userId, sessionId);
@@ -1836,17 +1835,10 @@ app.post('/api/messages/send', async (req, res) => {
     }
 
     console.log(`🚀 Starting message sending for user ${userId}${sessionId ? `, session: ${sessionId}` : ''} with speed delay: ${speedDelay} seconds`);
-    console.log(`🔍 Available connections for user ${userId}: [ ${getUserConnections(userId).join(', ')} ]`);
-    console.log(`🔍 Requested sessionId: ${sessionId || 'default'}`);
+    console.log(`🔍 Session: ${sessionId || 'default'}`);
     
     const connection = getConnection(userId, sessionId);
-    console.log(`🔍 Connection object:`, connection ? {
-      hasConnection: !!connection,
-      connected: connection.connected,
-      connecting: connection.connecting,
-      hasSocket: !!connection.sock,
-      sessionId: connection.sessionId
-    } : 'null');
+    console.log(`🔍 Connection status: ${connection ? (connection.connected ? 'Connected' : 'Disconnected') : 'Not found'}`);
     
     if (!connection || !connection.connected) {
       return res.status(400).json({ 
@@ -1909,15 +1901,8 @@ app.post('/api/messages/send', async (req, res) => {
           }
         }
         
-        console.log(`📱 Sending message to ${customer.name} at ${phoneNumber}`);
-        console.log(`🔗 Connection status:`, connection.connected);
-        console.log(`📱 Socket state:`, connection.sock ? 'Connected' : 'Not connected');
-        console.log(`📱 Connection object:`, {
-          isConnected: connection.connected,
-          isConnecting: connection.connecting,
-          hasSocket: !!connection.sock,
-          socketState: connection.sock?.ws?.readyState
-        });
+        console.log(`📱 Sending to ${customer.name} at ${phoneNumber}`);
+        console.log(`📱 Connection: ${connection.connected ? 'Connected' : 'Disconnected'}`);
         
         // Validate phone number format
         if (!phoneNumber.match(/^\+[1-9]\d{1,14}$/)) {
@@ -1934,23 +1919,10 @@ app.post('/api/messages/send', async (req, res) => {
           throw new Error('WhatsApp not connected. Please connect first.');
         }
         
-        // Additional connection state check
-        console.log(`🔗 Connection status: ${connection.connected}`);
-        console.log(`📱 Socket state: ${connection.sock ? 'Available' : 'Not Available'}`);
-        console.log(`📱 Connection object:`, {
-          isConnected: connection.connected,
-          isConnecting: connection.connecting,
-          hasSocket: !!connection.sock,
-          socketState: connection.sock?.ws?.readyState
-        });
+        // Connection state verified
+        console.log(`📱 Connection: ${connection.connected ? 'Connected' : 'Disconnected'}`);
         
-        // Check socket state - improved check
-        console.log(`🔍 Socket state check:`, {
-          hasSock: !!connection.sock,
-          hasWs: !!(connection.sock && connection.sock.ws),
-          readyState: connection.sock?.ws?.readyState,
-          sockKeys: connection.sock ? Object.keys(connection.sock) : []
-        });
+        // Socket state verified
         
         // More robust socket state check
         if (!connection.sock) {
@@ -2076,17 +2048,10 @@ app.post('/api/messages/send-background', async (req, res) => {
     console.log(`🔍 Processed messages count: ${processedMessages ? processedMessages.length : 0}`);
 
     console.log(`🚀 Starting background message sending for user ${userId}${sessionId ? `, session: ${sessionId}` : ''} with speed delay: ${speedDelay} seconds`);
-    console.log(`🔍 Available connections for user ${userId}: [ ${getUserConnections(userId).join(', ')} ]`);
-    console.log(`🔍 Requested sessionId: ${sessionId || 'default'}`);
+    console.log(`🔍 Session: ${sessionId || 'default'}`);
     
     const connection = getConnection(userId, sessionId);
-    console.log(`🔍 Connection object:`, connection ? {
-      hasConnection: !!connection,
-      connected: connection.connected,
-      connecting: connection.connecting,
-      hasSocket: !!connection.sock,
-      sessionId: connection.sessionId
-    } : 'null');
+    console.log(`🔍 Connection status: ${connection ? (connection.connected ? 'Connected' : 'Disconnected') : 'Not found'}`);
     
     if (!connection || !connection.connected) {
       return res.status(400).json({ 
