@@ -2,7 +2,7 @@
   "expo": {
     "name": "WhatsApp Automation",
     "slug": "whatsapp-automation",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
@@ -30,7 +30,7 @@
         "backgroundColor": "#25D366"
       },
       "package": "com.eyadma.whatsappautomation",
-
+      "versionCode": 2,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
