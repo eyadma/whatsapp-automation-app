@@ -16,8 +16,12 @@
     ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.eyadma.whatsappautomation",
       "infoPlist": {
         "CFBundleDisplayName": "WhatsApp Automation"
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
