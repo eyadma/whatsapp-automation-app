@@ -87,8 +87,8 @@ const EnhancedMessageScreen = ({ navigation }) => {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Initialize areas table if needed
-      await enhancedMessageAPI.initializeAreasIfNeeded();
+      // 🔍 DEBUG: Areas table initialization removed - areas should be managed by admin only
+      console.log('🔍 DEBUG: Skipping areas initialization - areas table is read-only for normal users');
       
       // Load current user profile
       const { data: userProfile, error: profileError } = await supabase
@@ -930,49 +930,16 @@ const EnhancedMessageScreen = ({ navigation }) => {
       );
       
       if (!kfarSabaExists) {
-        console.log('⚠️ Kfar Saba area not found, adding it...');
-        
-        // Get the next available areaId
-        const maxAreaId = Math.max(...userAreas.map(a => a.areaId || 0), 0);
-        const nextAreaId = maxAreaId + 1;
-        
-        // Add Kfar Saba area with proper areaId
-        const newArea = {
-          areaId: nextAreaId,
-          name_arabic: 'كفر سابا',
-          name_english: 'Kfar Saba',
-          name_hebrew: 'כפר סבא',
-          preferred_language_1: 'he',
-          preferred_language_2: 'en'
-        };
-        
-        try {
-          const { data, error } = await supabase
-            .from('areas')
-            .insert(newArea)
-            .select()
-            .single();
-          
-          if (error) {
-            console.error('❌ Failed to add Kfar Saba area:', error);
-            if (error.code === '23505') {
-              console.log('ℹ️ Area already exists with different areaId, skipping...');
-            }
-          } else {
-            console.log('✅ Kfar Saba area added successfully:', data);
-            // Refresh areas
-            loadData();
-          }
-        } catch (insertError) {
-          console.error('❌ Error inserting Kfar Saba area:', insertError);
-        }
+        console.log('⚠️ Kfar Saba area not found - areas table is read-only for normal users');
+        console.log('ℹ️ Please contact admin to add missing areas to the areas table');
+        // Don't try to insert - areas table should be read-only for normal users
       } else {
         console.log('✅ Kfar Saba area already exists:', kfarSabaExists);
       }
       
-      // Only add other areas if they're specifically needed
-      // For now, let's focus on just Kfar Saba
-      console.log('ℹ️ Skipping other areas for now - focus on fixing Kfar Saba first');
+      // Areas table is read-only for normal users
+      // All area modifications must be done by admin
+      console.log('ℹ️ Areas table is read-only - no modifications allowed for normal users');
       
     } catch (error) {
       console.error('❌ Error checking/adding missing areas:', error);

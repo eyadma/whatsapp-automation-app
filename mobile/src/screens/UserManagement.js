@@ -353,7 +353,7 @@ const UserManagement = ({ navigation }) => {
 
       <View style={dynamicStyles.filters}>
         <Searchbar
-          placeholder="Search users..."
+          placeholder={t('searchUsers')}
           onChangeText={handleSearch}
           value={searchQuery}
           style={dynamicStyles.searchbar}
@@ -481,7 +481,7 @@ const UserManagement = ({ navigation }) => {
               <Title style={dynamicStyles.modalTitle}>Add New User</Title>
               
               <TextInput
-                label="Full Name"
+                label={t('fullName')}
                 value={newUser.fullName}
                 onChangeText={(text) => setNewUser({ ...newUser, fullName: text })}
                 style={dynamicStyles.input}
@@ -489,7 +489,7 @@ const UserManagement = ({ navigation }) => {
               />
               
               <TextInput
-                label="Email"
+                label={t('email')}
                 value={newUser.email}
                 onChangeText={(text) => setNewUser({ ...newUser, email: text })}
                 style={dynamicStyles.input}
@@ -499,7 +499,7 @@ const UserManagement = ({ navigation }) => {
               />
               
               <TextInput
-                label="Password"
+                label={t('password')}
                 value={newUser.password}
                 onChangeText={(text) => setNewUser({ ...newUser, password: text })}
                 style={dynamicStyles.input}
@@ -550,11 +550,11 @@ const UserManagement = ({ navigation }) => {
           <Card style={dynamicStyles.modalCard}>
             <Card.Content>
               <Title style={dynamicStyles.modalTitle}>
-                Time Restrictions - {selectedUser?.full_name || selectedUser?.email}
+                {t('timeRestrictions')} - {selectedUser?.full_name || selectedUser?.email}
               </Title>
               
               <View style={dynamicStyles.switchContainer}>
-                <Text style={dynamicStyles.switchLabel}>Enable Time Restrictions</Text>
+                <Text style={dynamicStyles.switchLabel}>{t('timeRestrictionEnabled')}</Text>
                 <Switch
                   value={timeRestrictionData.time_restriction_enabled}
                   onValueChange={(value) => 
@@ -566,7 +566,7 @@ const UserManagement = ({ navigation }) => {
               {timeRestrictionData.time_restriction_enabled && (
                 <>
                   <TextInput
-                    label="Start Time (HH:MM)"
+                    label={t('startTime')}
                     value={timeRestrictionData.time_restriction_start}
                     onChangeText={(text) => 
                       setTimeRestrictionData({ ...timeRestrictionData, time_restriction_start: text })
@@ -576,7 +576,7 @@ const UserManagement = ({ navigation }) => {
                   />
                   
                   <TextInput
-                    label="End Time (HH:MM)"
+                    label={t('endTime')}
                     value={timeRestrictionData.time_restriction_end}
                     onChangeText={(text) => 
                       setTimeRestrictionData({ ...timeRestrictionData, time_restriction_end: text })
@@ -586,13 +586,13 @@ const UserManagement = ({ navigation }) => {
                   />
                   
                   <TextInput
-                    label="Timezone"
+                    label={t('timezone')}
                     value={timeRestrictionData.time_restriction_timezone}
                     onChangeText={(text) => 
                       setTimeRestrictionData({ ...timeRestrictionData, time_restriction_timezone: text })
                     }
                     style={dynamicStyles.input}
-                    placeholder="Asia/Jerusalem"
+                    placeholder={t('timezonePlaceholder')}
                   />
                   
                   <Paragraph style={dynamicStyles.helpText}>
@@ -628,7 +628,7 @@ const UserManagement = ({ navigation }) => {
         icon="plus"
         style={dynamicStyles.fab}
         onPress={() => setShowAddModal(true)}
-        label="Add User"
+        label={t('addUser')}
       />
     </View>
   );

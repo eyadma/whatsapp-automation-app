@@ -118,10 +118,7 @@ const VCardScreen = ({ navigation, route }) => {
 
       for (const customer of selectedCustomersData) {
         try {
-          const contact = {
-            [Contacts.Fields.FirstName]: vcardType === 'withId' ? String(customer.id).slice(3, 7) : '',
-            [Contacts.Fields.LastName]: customer.name || '',
-            [Contacts.Fields.MiddleName]: customer.area || '',
+          let contact = {
             [Contacts.Fields.PhoneNumbers]: [
               {
                 number: customer.phone,
@@ -130,6 +127,20 @@ const VCardScreen = ({ navigation, route }) => {
               }
             ]
           };
+
+          // Set name fields based on vcard type
+          if (vcardType === 'normal') {
+            // Normal: area as middle name, customer name as last name
+            contact[Contacts.Fields.LastName] = customer.name || '';
+            contact[Contacts.Fields.MiddleName] = customer.area || '';
+          } else if (vcardType === 'withId') {
+            // With ID: package ID as first name, customer name as last name
+            contact[Contacts.Fields.FirstName] = String(customer.package_id || '');
+            contact[Contacts.Fields.LastName] = customer.name || '';
+          } else if (vcardType === 'none') {
+            // Clean: only customer name as last name, no other fields
+            contact[Contacts.Fields.LastName] = customer.name || '';
+          }
 
           // Add second phone if available
           if (customer.phone2 && customer.phone2.trim() !== '') {
@@ -330,7 +341,7 @@ const VCardScreen = ({ navigation, route }) => {
                 />
                 <View style={dynamicStyles.typeOptionContent}>
                   <Text style={dynamicStyles.typeOptionTitle}>With ID Contact</Text>
-                  <Text style={dynamicStyles.typeOptionDescription}>Includes customer ID as first name</Text>
+                  <Text style={dynamicStyles.typeOptionDescription}>Includes package ID as first name</Text>
                 </View>
               </TouchableOpacity>
 
@@ -348,7 +359,7 @@ const VCardScreen = ({ navigation, route }) => {
                 />
                 <View style={dynamicStyles.typeOptionContent}>
                   <Text style={dynamicStyles.typeOptionTitle}>Clean Contact</Text>
-                  <Text style={dynamicStyles.typeOptionDescription}>No additional fields, clean format</Text>
+                  <Text style={dynamicStyles.typeOptionDescription}>Only customer name, no area or ID</Text>
                 </View>
               </TouchableOpacity>
             </View>

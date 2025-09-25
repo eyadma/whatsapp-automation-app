@@ -66,8 +66,8 @@ const MainAppTabs = () => {
 
     checkTimeRestrictions();
     
-    // Check every minute to update restrictions
-    const interval = setInterval(checkTimeRestrictions, 60000);
+    // Check every 10 minutes to update restrictions (also checked when Messages tab is pressed)
+    const interval = setInterval(checkTimeRestrictions, 600000);
     return () => clearInterval(interval);
   }, [userId]);
 
@@ -149,7 +149,24 @@ const MainAppTabs = () => {
         component={MessagesScreen} 
         options={{ 
           title: showMessagesTab ? t("sendMessages") : "Messages (Restricted)"
-        }} 
+        }}
+        listeners={{
+          tabPress: async () => {
+            // Check time restrictions when Messages tab is pressed
+            try {
+              console.log('🔄 Messages tab pressed - checking time restrictions...');
+              const { timeRestrictionsAPI } = await import('./src/services/timeRestrictionsAPI');
+              const result = await timeRestrictionsAPI.getTimeRestrictionStatus(userId);
+              
+              if (result.success) {
+                setTimeRestrictionStatus(result.data);
+                console.log('✅ Time restrictions updated on tab press');
+              }
+            } catch (error) {
+              console.error('Error checking time restrictions on tab press:', error);
+            }
+          }
+        }}
       />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") }} />
     </Tab.Navigator>

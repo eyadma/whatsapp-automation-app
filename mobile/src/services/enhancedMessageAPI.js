@@ -633,18 +633,11 @@ export const enhancedMessageAPI = {
     }
   },
 
-  // Initialize areas table if empty
+  // Initialize areas table if empty - DISABLED FOR SECURITY
   initializeAreasIfNeeded: async () => {
-    try {
-      const result = await areasAPI.initializeDefaultAreas();
-      if (result.data.initialized) {
-        console.log('Areas table initialized with default data');
-      }
-      return result;
-    } catch (error) {
-      console.error('Error initializing areas:', error);
-      throw error;
-    }
+    console.warn('⚠️ initializeAreasIfNeeded is DISABLED - areas table is read-only for normal users');
+    console.warn('⚠️ Only admins can modify areas. Contact admin to add areas.');
+    return { data: { initialized: false, message: 'Areas table is read-only for normal users' } };
   },
 
   // Get areas for user (areas that have customers assigned to the user)

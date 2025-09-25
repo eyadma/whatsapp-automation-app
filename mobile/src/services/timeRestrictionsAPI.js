@@ -88,13 +88,55 @@ export const timeRestrictionsAPI = {
    * Get current time in Israel timezone
    */
   getCurrentIsraelTime: () => {
-    const now = new Date();
-    const israelTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
-    return {
-      time: israelTime.toLocaleTimeString('en-US', { hour12: false }),
-      date: israelTime.toLocaleDateString('en-US'),
-      fullDateTime: israelTime.toLocaleString('en-US')
-    };
+    try {
+      const now = new Date();
+      
+      // Get time in Israel timezone using Intl.DateTimeFormat
+      const timeFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jerusalem',
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      const dateFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      
+      const fullFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jerusalem',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+      
+      const time = timeFormatter.format(now);
+      const date = dateFormatter.format(now);
+      const fullDateTime = fullFormatter.format(now);
+      
+      return {
+        time: time,
+        date: date,
+        fullDateTime: fullDateTime
+      };
+    } catch (error) {
+      console.error('Error getting Israel time:', error);
+      // Fallback to local time if timezone conversion fails
+      const now = new Date();
+      return {
+        time: now.toLocaleTimeString('en-US', { hour12: false }),
+        date: now.toLocaleDateString('en-US'),
+        fullDateTime: now.toLocaleString('en-US')
+      };
+    }
   },
 
   /**

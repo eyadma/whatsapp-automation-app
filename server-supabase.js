@@ -2680,6 +2680,27 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
     console.log(`📊 Received API response structure:`, JSON.stringify(shipmentsData, null, 2));
     console.log(`📦 Found ${shipments.length} shipments from API`);
     
+    // 🔍 DEBUG: Log a warning about areas table protection
+    console.log(`🔍 DEBUG: Areas table is READ-ONLY - no modifications will be made to areas during customer fetch`);
+    
+    // 🔍 DEBUG: Log the full API response structure to see what we're getting from Opost
+    console.log(`🔍 DEBUG: Full Opost API Response:`, JSON.stringify(apiData, null, 2));
+    
+    // 🔍 DEBUG: Check areas table state before processing
+    const { data: areasBefore, error: areasBeforeError } = await supabase
+      .from('areas')
+      .select('areaId, name_arabic, name_english, name_hebrew, preferred_language_1, preferred_language_2')
+      .limit(5);
+    
+    if (areasBeforeError) {
+      console.error('🔍 DEBUG: Error checking areas before processing:', areasBeforeError);
+    } else {
+      console.log('🔍 DEBUG: Areas table state BEFORE processing:', areasBefore);
+    }
+    
+    // 🔍 DEBUG: Log timestamp for tracking
+    console.log('🔍 DEBUG: Customer fetch started at:', new Date().toISOString());
+    
     if (!shipments || shipments.length === 0) {
       return res.json({ 
         success: true, 
@@ -2697,24 +2718,62 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
     // Process each shipment
     for (const shipment of shipments) {
       try {
-        // Ensure area exists in areas table (FK target)
+        // Check if area exists in areas table (FK target) - READ ONLY
         const areaIdVal = shipment['consignee.area']?.id || null;
         const areaName = shipment['consignee.area']?.name || null;
+        
+        // 🔍 DEBUG: Log the area data from Opost API
+        console.log(`🔍 DEBUG Opost Area Data for shipment ${shipment.id}:`, {
+          areaId: areaIdVal,
+          areaName: areaName,
+          fullAreaObject: shipment['consignee.area']
+        });
+        
         if (areaIdVal) {
-          const { error: upsertAreaError } = await supabase
+          // Only check if area exists, don't create new ones
+          const { data: existingArea, error: areaCheckError } = await supabase
             .from('areas')
-            .upsert([
-              {
-                areaId: areaIdVal,
-                name_arabic: areaName || `منطقة ${areaIdVal}`,
-                name_english: areaName || `Area ${areaIdVal}`,
-                name_hebrew: areaName || `אזור ${areaIdVal}`,
-                preferred_language_1: 'ar',
-                preferred_language_2: null,
-              },
-            ], { onConflict: 'areaId' });
-          if (upsertAreaError) {
-            console.warn(`⚠️ Failed to upsert area ${areaIdVal}:`, upsertAreaError);
+            .select('areaId, name_arabic, name_english, name_hebrew, preferred_language_1, preferred_language_2')
+            .eq('areaId', areaIdVal)
+            .single();
+          
+        // 🔍 DEBUG: Log existing area data
+        console.log(`🔍 DEBUG Existing Area Data for areaId ${areaIdVal}:`, existingArea);
+        
+        // 🔍 DEBUG: Check if the area data from Opost matches what's in the database
+        if (existingArea && areaName) {
+          console.log(`🔍 DEBUG Area Comparison for areaId ${areaIdVal}:`);
+          console.log(`   - Opost area name: "${areaName}"`);
+          console.log(`   - DB name_arabic: "${existingArea.name_arabic}"`);
+          console.log(`   - DB name_english: "${existingArea.name_english}"`);
+          console.log(`   - DB name_hebrew: "${existingArea.name_hebrew}"`);
+          console.log(`   - DB preferred_language_1: "${existingArea.preferred_language_1}"`);
+          console.log(`   - DB preferred_language_2: "${existingArea.preferred_language_2}"`);
+          
+          // Check if Opost name matches any of the database names
+          const matchesArabic = existingArea.name_arabic && existingArea.name_arabic.includes(areaName);
+          const matchesEnglish = existingArea.name_english && existingArea.name_english.includes(areaName);
+          const matchesHebrew = existingArea.name_hebrew && existingArea.name_hebrew.includes(areaName);
+          
+          console.log(`   - Matches Arabic: ${matchesArabic}`);
+          console.log(`   - Matches English: ${matchesEnglish}`);
+          console.log(`   - Matches Hebrew: ${matchesHebrew}`);
+        }
+          
+          if (areaCheckError && areaCheckError.code === 'PGRST116') {
+            console.warn(`⚠️ Area ${areaIdVal} (${areaName}) not found in areas table - contact admin to add it`);
+            // Don't create the area - areas table should be managed by admin only
+          } else if (areaCheckError) {
+            console.warn(`⚠️ Error checking area ${areaIdVal}:`, areaCheckError);
+          } else {
+            console.log(`✅ Area ${areaIdVal} (${areaName}) exists in areas table`);
+            console.log(`🔍 DEBUG Area details:`, {
+              name_arabic: existingArea.name_arabic,
+              name_english: existingArea.name_english,
+              name_hebrew: existingArea.name_hebrew,
+              preferred_language_1: existingArea.preferred_language_1,
+              preferred_language_2: existingArea.preferred_language_2
+            });
           }
         }
 
@@ -2846,6 +2905,39 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
     }
     
     console.log(`📊 Fetch completed: ${totalCreated} created, ${totalUpdated} updated`);
+    
+    // 🔍 DEBUG: Check areas table state after processing
+    const { data: areasAfter, error: areasAfterError } = await supabase
+      .from('areas')
+      .select('areaId, name_arabic, name_english, name_hebrew, preferred_language_1, preferred_language_2')
+      .limit(5);
+    
+    if (areasAfterError) {
+      console.error('🔍 DEBUG: Error checking areas after processing:', areasAfterError);
+    } else {
+      console.log('🔍 DEBUG: Areas table state AFTER processing:', areasAfter);
+      
+      // Compare before and after states
+      if (areasBefore && areasAfter) {
+        const changed = areasBefore.some((before, index) => {
+          const after = areasAfter[index];
+          return after && (
+            before.name_arabic !== after.name_arabic ||
+            before.name_english !== after.name_english ||
+            before.name_hebrew !== after.name_hebrew ||
+            before.preferred_language_1 !== after.preferred_language_1 ||
+            before.preferred_language_2 !== after.preferred_language_2
+          );
+        });
+        
+        if (changed) {
+          console.error('🚨 DEBUG: AREAS TABLE WAS MODIFIED DURING CUSTOMER FETCH!');
+          console.error('🚨 This should not happen - areas table should be read-only!');
+        } else {
+          console.log('✅ DEBUG: Areas table unchanged during customer fetch');
+        }
+      }
+    }
     
     res.json({
       success: true,

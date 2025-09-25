@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Card, Button, TextInput, Divider, List, RadioButton, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
-import { supabase } from '../services/supabase';
+import { supabase, sessionAPI } from '../services/supabase';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, userId, setUser, setUserId, language, setLanguage, theme, setTheme, t } = useContext(AppContext);
@@ -23,6 +23,9 @@ const SettingsScreen = ({ navigation }) => {
     newPassword: '',
     confirmPassword: '',
   });
+  const [sessionDuration, setSessionDuration] = useState(30);
+  const [sessionInfo, setSessionInfo] = useState(null);
+  const [showSessionSettings, setShowSessionSettings] = useState(false);
 
   const languages = [
     { code: 'en', name: 'English', nativeName: 'English' },
@@ -34,6 +37,14 @@ const SettingsScreen = ({ navigation }) => {
     { code: 'light', name: t('light'), icon: 'sunny' },
     { code: 'dark', name: t('dark'), icon: 'moon' },
     { code: 'auto', name: t('auto'), icon: 'settings' },
+  ];
+
+  const sessionDurations = [
+    { days: 1, label: '1 Day', description: 'Short session' },
+    { days: 7, label: '1 Week', description: 'Standard session' },
+    { days: 30, label: '1 Month', description: 'Long session (Recommended)' },
+    { days: 90, label: '3 Months', description: 'Extended session' },
+    { days: 365, label: '1 Year', description: 'Maximum session' },
   ];
 
   const handlePasswordChange = async () => {
@@ -128,6 +139,67 @@ const SettingsScreen = ({ navigation }) => {
     }
   };
 
+  // Session management functions
+  const loadSessionInfo = async () => {
+    try {
+      const sessionResult = await sessionAPI.getCurrentSession();
+      if (sessionResult.success && sessionResult.session) {
+        const expiryInfo = sessionAPI.getSessionExpiryInfo(sessionResult.session);
+        setSessionInfo(expiryInfo);
+      }
+    } catch (error) {
+      console.error('Error loading session info:', error);
+    }
+  };
+
+  const loadSessionDuration = async () => {
+    try {
+      const durationResult = await sessionAPI.getSessionDuration(userId);
+      if (durationResult.success) {
+        setSessionDuration(durationResult.duration);
+      }
+    } catch (error) {
+      console.error('Error loading session duration:', error);
+    }
+  };
+
+  const handleSessionDurationChange = async (newDuration) => {
+    setSessionDuration(newDuration);
+    try {
+      await sessionAPI.setSessionDuration(userId, newDuration);
+      Alert.alert(t('success'), `Session duration set to ${newDuration} days`);
+    } catch (error) {
+      console.error('Error saving session duration:', error);
+      Alert.alert(t('error'), 'Failed to save session duration');
+    }
+  };
+
+  const handleRefreshSession = async () => {
+    setLoading(true);
+    try {
+      const result = await sessionAPI.refreshSession();
+      if (result.success) {
+        await loadSessionInfo();
+        Alert.alert(t('success'), 'Session refreshed successfully');
+      } else {
+        Alert.alert(t('error'), 'Failed to refresh session');
+      }
+    } catch (error) {
+      console.error('Error refreshing session:', error);
+      Alert.alert(t('error'), 'Failed to refresh session');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load session info on component mount
+  React.useEffect(() => {
+    if (userId) {
+      loadSessionInfo();
+      loadSessionDuration();
+    }
+  }, [userId]);
+
   // Create dynamic styles based on theme
   const dynamicStyles = createStyles(paperTheme);
 
@@ -200,6 +272,88 @@ const SettingsScreen = ({ navigation }) => {
               style={dynamicStyles.listItem}
             />
           ))}
+        </Card.Content>
+      </Card>
+
+      {/* Login Session Settings */}
+      <Card style={dynamicStyles.card}>
+        <Card.Content>
+          <Text style={dynamicStyles.sectionTitle}>Login Session</Text>
+          <Divider style={dynamicStyles.divider} />
+          
+          {/* Current Session Info */}
+          {sessionInfo && (
+            <View style={dynamicStyles.sessionInfo}>
+              <Text style={dynamicStyles.sessionInfoTitle}>Current Session:</Text>
+              <Text style={[
+                dynamicStyles.sessionInfoText,
+                sessionInfo.expired ? dynamicStyles.sessionExpired : dynamicStyles.sessionActive
+              ]}>
+                {sessionInfo.expired ? 'Expired' : `Expires in: ${sessionInfo.message}`}
+              </Text>
+            </View>
+          )}
+
+          {/* Session Duration Settings */}
+          <List.Item
+            title="Session Duration"
+            description={`Current: ${sessionDuration} days`}
+            left={(props) => (
+              <Ionicons name="time" size={24} color="#25D366" />
+            )}
+            right={(props) => (
+              <Ionicons 
+                name={showSessionSettings ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color="#666" 
+              />
+            )}
+            onPress={() => setShowSessionSettings(!showSessionSettings)}
+            style={dynamicStyles.listItem}
+          />
+
+          {showSessionSettings && (
+            <View style={dynamicStyles.sessionSettings}>
+              {sessionDurations.map((duration) => (
+                <List.Item
+                  key={duration.days}
+                  title={duration.label}
+                  description={duration.description}
+                  left={(props) => (
+                    <RadioButton
+                      value={duration.days}
+                      status={sessionDuration === duration.days ? 'checked' : 'unchecked'}
+                      onPress={() => handleSessionDurationChange(duration.days)}
+                    />
+                  )}
+                  onPress={() => handleSessionDurationChange(duration.days)}
+                  style={dynamicStyles.listItem}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Session Actions */}
+          <View style={dynamicStyles.sessionActions}>
+            <Button
+              mode="outlined"
+              onPress={handleRefreshSession}
+              loading={loading}
+              disabled={loading}
+              icon="refresh"
+              style={dynamicStyles.sessionButton}
+            >
+              Refresh Session
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={loadSessionInfo}
+              icon="information-circle"
+              style={dynamicStyles.sessionButton}
+            >
+              Check Status
+            </Button>
+          </View>
         </Card.Content>
       </Card>
 
@@ -397,6 +551,42 @@ const createStyles = (theme) => StyleSheet.create({
   logoutButton: {
     borderColor: '#FF3B30',
     marginBottom: 20,
+  },
+  // Session settings styles
+  sessionInfo: {
+    backgroundColor: theme.colors.surfaceVariant,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  sessionInfoTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.onSurface,
+    marginBottom: 4,
+  },
+  sessionInfoText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sessionActive: {
+    color: '#25D366',
+  },
+  sessionExpired: {
+    color: '#FF3B30',
+  },
+  sessionSettings: {
+    marginTop: 8,
+    paddingLeft: 16,
+  },
+  sessionActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 8,
+  },
+  sessionButton: {
+    flex: 1,
   },
 });
 

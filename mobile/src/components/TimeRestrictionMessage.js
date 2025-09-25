@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Card, Button, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
+import { AppContext } from '../context/AppContext';
 
 const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
+  const { t } = useContext(AppContext);
   const theme = useTheme();
   const dynamicStyles = createStyles(theme);
 
@@ -29,8 +31,8 @@ const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
   const getMessage = () => {
     if (withinAllowedHours) {
       return {
-        title: "Messages Available",
-        message: "You can send messages during business hours.",
+        title: t('messagesAvailable'),
+        message: t('messageSendingAllowedWithinHours'),
         icon: "checkmark-circle",
         color: "#4CAF50"
       };
@@ -38,16 +40,16 @@ const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
 
     if (hasUsedMessagingToday) {
       return {
-        title: "Messages Available",
-        message: "You can send messages because you used the messaging feature during allowed hours today.",
+        title: t('messagesAvailable'),
+        message: t('messageSendingAllowedAfterUsage'),
         icon: "checkmark-circle",
         color: "#4CAF50"
       };
     }
 
     return {
-      title: "Messages Temporarily Unavailable",
-      message: `Message sending is only available during business hours (${time_restriction_start} - ${time_restriction_end} Israel time) or after using the messaging feature during those hours.`,
+      title: t('messagesTemporarilyUnavailable'),
+      message: t('messageSendingRestrictedOutsideHours'),
       icon: "time-outline",
       color: "#FF9800"
     };
@@ -76,20 +78,27 @@ const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
           </Text>
           
           <View style={dynamicStyles.infoContainer}>
-            <Text style={dynamicStyles.infoLabel}>Current Time (Israel):</Text>
+            <Text style={dynamicStyles.infoLabel}>{t('currentIsraelTime')}:</Text>
             <Text style={dynamicStyles.infoValue}>{currentIsraelTime}</Text>
           </View>
           
           <View style={dynamicStyles.infoContainer}>
-            <Text style={dynamicStyles.infoLabel}>Allowed Hours:</Text>
+            <Text style={dynamicStyles.infoLabel}>{t('allowedHours')}:</Text>
             <Text style={dynamicStyles.infoValue}>{time_restriction_start} - {time_restriction_end}</Text>
           </View>
           
           {last_message_sent_during_window && (
             <View style={dynamicStyles.infoContainer}>
-              <Text style={dynamicStyles.infoLabel}>Last Message During Allowed Hours:</Text>
+              <Text style={dynamicStyles.infoLabel}>{t('lastMessageDuringWindow')}:</Text>
               <Text style={dynamicStyles.infoValue}>
-                {new Date(last_message_sent_during_window).toLocaleString()}
+                {(() => {
+                  try {
+                    const date = new Date(last_message_sent_during_window);
+                    return isNaN(date.getTime()) ? t('notSet') : date.toLocaleString();
+                  } catch (error) {
+                    return t('notSet');
+                  }
+                })()}
               </Text>
             </View>
           )}
@@ -100,7 +109,7 @@ const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
             style={dynamicStyles.refreshButton}
             icon="refresh"
           >
-            Check Again
+            {t('checkAgain')}
           </Button>
         </Card.Content>
       </Card>
