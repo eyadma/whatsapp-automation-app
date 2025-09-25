@@ -334,27 +334,27 @@ const AddETAScreen = ({ navigation, route }) => {
 
             <Divider style={dynamicStyles.divider} />
 
-            <Text style={dynamicStyles.sectionTitle}>{t('etaFormat') || 'ETA Format'}</Text>
+            <Text style={dynamicStyles.sectionTitle}>{t('etaFormat')}</Text>
             <View style={dynamicStyles.etaFormatRow}>
               <Button
                 mode={etaFormat === 'single' ? 'contained' : 'outlined'}
                 onPress={() => setEtaFormat('single')}
                 style={dynamicStyles.etaFormatButton}
               >
-                {t('singleHour') || 'Single hour'}
+                {t('singleTime')}
               </Button>
               <Button
                 mode={etaFormat === 'range' ? 'contained' : 'outlined'}
                 onPress={() => setEtaFormat('range')}
                 style={dynamicStyles.etaFormatButton}
               >
-                {t('betweenTwoHours') || 'Between two hours'}
+                {t('timeRange')}
               </Button>
             </View>
 
             {etaFormat === 'single' ? (
               <>
-                <Text style={dynamicStyles.sectionTitle}>{t('time') || 'Time'}</Text>
+                <Text style={dynamicStyles.sectionTitle}>{t('time')}</Text>
                 <TextInput
                   value={formatTime(singleTime)}
                   editable={false}
@@ -363,13 +363,13 @@ const AddETAScreen = ({ navigation, route }) => {
                   style={dynamicStyles.input}
                 />
                 <View style={dynamicStyles.buttonContainer}>
-                  <Button onPress={() => setPickerTarget('single')} mode="outlined" style={dynamicStyles.button}>{t('pickTime') || 'Pick time'}</Button>
-                  <Button onPress={() => setSingleTime(new Date())} mode="text" style={dynamicStyles.button}>{t('now') || 'Now'}</Button>
+                  <Button onPress={() => setPickerTarget('single')} mode="outlined" style={dynamicStyles.button}>{t('pickTime')}</Button>
+                  <Button onPress={() => setSingleTime(new Date())} mode="text" style={dynamicStyles.button}>{t('now')}</Button>
                 </View>
               </>
             ) : (
               <>
-                <Text style={dynamicStyles.sectionTitle}>{t('startTime') || 'Start time'}</Text>
+                <Text style={dynamicStyles.sectionTitle}>{t('startTime')}</Text>
                 <TextInput 
                   value={formatTime(startTime)} 
                   editable={false} 
@@ -378,11 +378,11 @@ const AddETAScreen = ({ navigation, route }) => {
                   style={dynamicStyles.input} 
                 />
                 <View style={dynamicStyles.buttonContainer}>
-                  <Button onPress={() => setPickerTarget('start')} mode="outlined" style={dynamicStyles.button}>{t('pickTime') || 'Pick time'}</Button>
-                  <Button onPress={() => setStartTime(new Date())} mode="text" style={dynamicStyles.button}>{t('now') || 'Now'}</Button>
+                  <Button onPress={() => setPickerTarget('start')} mode="outlined" style={dynamicStyles.button}>{t('pickTime')}</Button>
+                  <Button onPress={() => setStartTime(new Date())} mode="text" style={dynamicStyles.button}>{t('now')}</Button>
                 </View>
 
-                <Text style={[dynamicStyles.sectionTitle, { marginTop: 8 }]}>{t('endTime') || 'End time'}</Text>
+                <Text style={[dynamicStyles.sectionTitle, { marginTop: 8 }]}>{t('endTime')}</Text>
                 <TextInput 
                   value={formatTime(endTime)} 
                   editable={false} 
@@ -391,8 +391,8 @@ const AddETAScreen = ({ navigation, route }) => {
                   style={dynamicStyles.input} 
                 />
                 <View style={dynamicStyles.buttonContainer}>
-                  <Button onPress={() => setPickerTarget('end')} mode="outlined" style={dynamicStyles.button}>{t('pickTime') || 'Pick time'}</Button>
-                  <Button onPress={() => setEndTime(new Date())} mode="text" style={dynamicStyles.button}>{t('now') || 'Now'}</Button>
+                  <Button onPress={() => setPickerTarget('end')} mode="outlined" style={dynamicStyles.button}>{t('pickTime')}</Button>
+                  <Button onPress={() => setEndTime(new Date())} mode="text" style={dynamicStyles.button}>{t('now')}</Button>
                 </View>
               </>
             )}
@@ -430,7 +430,7 @@ const AddETAScreen = ({ navigation, route }) => {
                   icon="content-copy"
                   disabled={saving}
                 >
-                  Copy ETA to Other Areas
+                  {t('copyETA')}
                 </Button>
               </View>
             )}
@@ -445,7 +445,7 @@ const AddETAScreen = ({ navigation, route }) => {
                   icon="clock-plus"
                   disabled={saving}
                 >
-                  Add 1 Hour to All ETAs
+                  {t('addHourToAll')}
                 </Button>
               </View>
             )}
@@ -468,7 +468,7 @@ const AddETAScreen = ({ navigation, route }) => {
         {showCopyModal && (
           <View style={dynamicStyles.modalOverlay}>
             <View style={dynamicStyles.modalContent}>
-              <Text style={dynamicStyles.modalTitle}>Copy ETA to Other Areas</Text>
+              <Text style={dynamicStyles.modalTitle}>{t('copyETAToOtherAreas')}</Text>
               <Text style={dynamicStyles.modalSubtitle}>
                 Select areas to copy "{areaETAs[selectedAreaId]}" to:
               </Text>
@@ -528,7 +528,7 @@ const AddETAScreen = ({ navigation, route }) => {
         {showBulkModal && (
           <View style={dynamicStyles.modalOverlay}>
             <View style={dynamicStyles.modalContent}>
-              <Text style={dynamicStyles.modalTitle}>Add 1 Hour to All ETAs</Text>
+              <Text style={dynamicStyles.modalTitle}>{t('addHourToAllETAs')}</Text>
               <Text style={dynamicStyles.modalSubtitle}>
                 This will add 1 hour to all existing ETAs. Are you sure?
               </Text>
@@ -575,7 +575,7 @@ const AddETAScreen = ({ navigation, route }) => {
                   disabled={saving}
                   style={[dynamicStyles.modalButton, dynamicStyles.confirmButton]}
                 >
-                  Add 1 Hour to All
+                  {t('confirmAddHour')}
                 </Button>
               </View>
             </View>

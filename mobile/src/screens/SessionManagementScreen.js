@@ -588,12 +588,12 @@ const SessionManagementScreen = ({ navigation }) => {
                   <Text style={dynamicStyles.sessionName}>{session.session_name}</Text>
                   {isDefault && (
                     <Chip icon="star" style={dynamicStyles.defaultChip}>
-                      Default
+                      {t('default')}
                     </Chip>
                   )}
                   {isActive && (
                     <Chip icon="check" style={dynamicStyles.activeChip}>
-                      Active
+                      {t('active')}
                     </Chip>
                   )}
                 </View>
@@ -603,7 +603,7 @@ const SessionManagementScreen = ({ navigation }) => {
               <View style={dynamicStyles.sessionStatus}>
                 <View style={[dynamicStyles.statusDot, { backgroundColor: statusColor }]} />
                 <Text style={[dynamicStyles.statusText, { color: statusColor }]}>
-                  {isConnected ? 'connected' : isConnecting ? 'connecting' : 'disconnected'}
+                  {isConnected ? t('connected') : isConnecting ? t('connecting') : t('disconnected')}
                 </Text>
               </View>
             </View>
@@ -625,7 +625,7 @@ const SessionManagementScreen = ({ navigation }) => {
               <View style={dynamicStyles.detailRow}>
                 <Ionicons name="time" size={16} color="#666" />
                 <Text style={dynamicStyles.detailText}>
-                  Created: {new Date(session.created_at).toLocaleDateString()}
+                  {t('created')}: {new Date(session.created_at).toLocaleDateString()}
                 </Text>
               </View>
             </View>
@@ -642,7 +642,7 @@ const SessionManagementScreen = ({ navigation }) => {
                   loading={loading}
                   disabled={loading}
                 >
-                  Connect
+                  {t('connect')}
                 </Button>
               ) : (
                 <Button
@@ -655,7 +655,7 @@ const SessionManagementScreen = ({ navigation }) => {
                   disabled={loading}
                   textColor="#FF3B30"
                 >
-                  Disconnect
+                  {t('disconnect')}
                 </Button>
               )}
             </View>
@@ -665,7 +665,7 @@ const SessionManagementScreen = ({ navigation }) => {
               <View style={dynamicStyles.qrCodeContainer}>
                 {qrCodeData && qrCodeData[session.session_id] && qrCodeData[session.session_id].trim() ? (
                   <>
-                    <Text style={dynamicStyles.qrCodeTitle}>Scan QR Code to Connect</Text>
+                    <Text style={dynamicStyles.qrCodeTitle}>{t('scanQRCodeToConnect')}</Text>
                     <TouchableOpacity
                       style={dynamicStyles.qrCodeWrapper}
                       onPress={() => showQRCode(session.session_id, qrCodeData[session.session_id])}
@@ -708,18 +708,18 @@ const SessionManagementScreen = ({ navigation }) => {
                       })()}
                       <View style={[dynamicStyles.qrCodeOverlay, { opacity: 0.3 }]}>
                         <Ionicons name="expand" size={24} color="#666" />
-                        <Text style={dynamicStyles.qrCodeTapText}>Tap to zoom</Text>
+                        <Text style={dynamicStyles.qrCodeTapText}>{t('tapToZoom')}</Text>
                       </View>
                     </TouchableOpacity>
                     <Text style={dynamicStyles.qrCodeInstructions}>
-                      Open WhatsApp on your phone and scan this QR code
+                      {t('qrCodeInstructions')}
                     </Text>
                   </>
                 ) : (
                   <>
-                    <Text style={dynamicStyles.qrCodeTitle}>QR Code Not Available</Text>
+                    <Text style={dynamicStyles.qrCodeTitle}>{t('qrCodeNotAvailable')}</Text>
                     <Text style={dynamicStyles.qrCodeInstructions}>
-                      Click the button below to generate a QR code for this session
+                      {t('qrCodeNotAvailableDesc')}
                     </Text>
                     <Button
                       mode="contained"
@@ -729,7 +729,7 @@ const SessionManagementScreen = ({ navigation }) => {
                       loading={loading}
                       disabled={loading}
                     >
-                      Generate QR Code
+                      {t('generateQRCode')}
                     </Button>
                   </>
                 )}
@@ -746,7 +746,7 @@ const SessionManagementScreen = ({ navigation }) => {
                   icon="star"
                   compact
                 >
-                  Set Default
+                  {t('setDefault')}
                 </Button>
               )}
               
@@ -758,7 +758,7 @@ const SessionManagementScreen = ({ navigation }) => {
                   icon="check"
                   compact
                 >
-                  Use for Messages
+                  {t('useForMessages')}
                 </Button>
               )}
               
@@ -772,7 +772,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 icon="cog"
                 compact
               >
-                Settings
+                {t('settings')}
               </Button>
               
               <Button
@@ -783,7 +783,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 compact
                 textColor="#FF3B30"
               >
-                Delete
+                {t('delete')}
               </Button>
             </View>
           </Card.Content>
@@ -810,17 +810,17 @@ const SessionManagementScreen = ({ navigation }) => {
       >
         <Card style={dynamicStyles.statsCard}>
           <Card.Content>
-            <Title style={dynamicStyles.statsTitle}>Session Overview</Title>
+            <Title style={dynamicStyles.statsTitle}>{t('sessionOverview')}</Title>
             
             <View style={dynamicStyles.statsGrid}>
               <View style={dynamicStyles.statItem}>
                 <Text style={dynamicStyles.statNumber}>{stats.totalSessions}</Text>
-                <Text style={dynamicStyles.statLabel}>Total Sessions</Text>
+                <Text style={dynamicStyles.statLabel}>{t('totalSessions')}</Text>
               </View>
               
               <View style={dynamicStyles.statItem}>
                 <Text style={dynamicStyles.statNumber}>{stats.connectedSessions}</Text>
-                <Text style={dynamicStyles.statLabel}>Connected</Text>
+                <Text style={dynamicStyles.statLabel}>{t('connected')}</Text>
               </View>
               
               <View style={dynamicStyles.statItem}>
@@ -849,9 +849,9 @@ const SessionManagementScreen = ({ navigation }) => {
       >
         {/* Header */}
         <View style={dynamicStyles.header}>
-          <Title style={dynamicStyles.headerTitle}>WhatsApp Sessions</Title>
+          <Title style={dynamicStyles.headerTitle}>{t('whatsAppSessions')}</Title>
           <Paragraph style={dynamicStyles.headerSubtitle}>
-            Manage multiple WhatsApp accounts and connections
+            {t('manageMultipleAccounts')}
           </Paragraph>
         </View>
 
@@ -862,9 +862,9 @@ const SessionManagementScreen = ({ navigation }) => {
               <View style={dynamicStyles.activeSessionInfo}>
                 <Ionicons name="chatbubbles" size={24} color="#4CAF50" />
                 <View style={dynamicStyles.activeSessionText}>
-                  <Text style={dynamicStyles.activeSessionTitle}>Active for Messaging</Text>
+                  <Text style={dynamicStyles.activeSessionTitle}>{t('activeForMessaging')}</Text>
                   <Text style={dynamicStyles.activeSessionName}>
-                    {sessions.find(s => s.session_id === activeSessionId)?.session_name || 'Unknown Session'}
+                    {sessions.find(s => s.session_id === activeSessionId)?.session_name || t('unknownArea')}
                   </Text>
                 </View>
                 <Button
@@ -874,7 +874,7 @@ const SessionManagementScreen = ({ navigation }) => {
                   icon="swap-horizontal"
                   compact
                 >
-                  Change
+                  {t('change')}
                 </Button>
               </View>
             </Card.Content>
@@ -887,24 +887,24 @@ const SessionManagementScreen = ({ navigation }) => {
         {/* Sessions List */}
         <View style={dynamicStyles.sessionsContainer}>
           <View style={dynamicStyles.sessionsHeader}>
-            <Text style={dynamicStyles.sessionsTitle}>Your Sessions</Text>
+            <Text style={dynamicStyles.sessionsTitle}>{t('yourSessions')}</Text>
             <Text style={dynamicStyles.sessionsSubtitle}>
-              {sessions.length} session{sessions.length !== 1 ? 's' : ''} configured
+              {sessions.length} {t('sessionsConfigured')}
             </Text>
           </View>
 
           {loading ? (
             <View style={dynamicStyles.loadingContainer}>
               <ProgressBar indeterminate color="#667eea" />
-              <Text style={dynamicStyles.loadingText}>Loading sessions...</Text>
+              <Text style={dynamicStyles.loadingText}>{t('loadingSessions')}</Text>
             </View>
           ) : sessions.length === 0 ? (
             <Card style={dynamicStyles.emptyStateCard}>
               <Card.Content style={dynamicStyles.emptyStateContent}>
                 <Ionicons name="chatbubbles-outline" size={64} color="#ccc" />
-                <Title style={dynamicStyles.emptyStateTitle}>No Sessions Yet</Title>
+                <Title style={dynamicStyles.emptyStateTitle}>{t('noSessionsYet')}</Title>
                 <Paragraph style={dynamicStyles.emptyStateText}>
-                  Create your first WhatsApp session to start managing multiple accounts
+                  {t('createFirstSessionDesc')}
                 </Paragraph>
                 <Button
                   mode="contained"
@@ -912,7 +912,7 @@ const SessionManagementScreen = ({ navigation }) => {
                   style={dynamicStyles.createFirstButton}
                   icon="add"
                 >
-                  Create First Session
+                  {t('createFirstSession')}
                 </Button>
               </Card.Content>
             </Card>
@@ -930,31 +930,31 @@ const SessionManagementScreen = ({ navigation }) => {
           contentContainerStyle={dynamicStyles.modalContainer}
         >
           <View style={dynamicStyles.modalContent}>
-            <Title style={dynamicStyles.modalTitle}>Create New Session</Title>
+            <Title style={dynamicStyles.modalTitle}>{t('createNewSession')}</Title>
             
             <TextInput
-              label="Session Name"
+              label={t('sessionName')}
               value={newSessionData.name}
               onChangeText={(text) => setNewSessionData({ ...newSessionData, name: text })}
-              placeholder="e.g., Business Account, Support Team"
+              placeholder={t('sessionNamePlaceholder')}
               style={dynamicStyles.modalInput}
               mode="outlined"
             />
             
             <TextInput
-              label="Session Alias (Optional)"
+              label={t('sessionAlias')}
               value={newSessionData.alias}
               onChangeText={(text) => setNewSessionData({ ...newSessionData, alias: text })}
-              placeholder="e.g., MB, ST, DS"
+              placeholder={t('sessionAliasPlaceholder')}
               style={dynamicStyles.modalInput}
               mode="outlined"
             />
             
             <TextInput
-              label="Phone Number (Optional)"
+              label={t('phoneNumberOptional')}
               value={newSessionData.phoneNumber}
               onChangeText={(text) => setNewSessionData({ ...newSessionData, phoneNumber: text })}
-              placeholder="+972501234567"
+              placeholder={t('phoneNumberPlaceholder')}
               style={dynamicStyles.modalInput}
               mode="outlined"
               keyboardType="phone-pad"
@@ -966,7 +966,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 onPress={() => setShowCreateModal(false)}
                 style={dynamicStyles.modalButton}
               >
-                Cancel
+                {t('cancel')}
               </Button>
               <Button
                 mode="contained"
@@ -974,7 +974,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 style={dynamicStyles.modalButton}
                 icon="plus"
               >
-                Create Session
+                {t('createSession')}
               </Button>
             </View>
           </View>
@@ -990,13 +990,13 @@ const SessionManagementScreen = ({ navigation }) => {
         >
           <View style={dynamicStyles.modalContent}>
             <Title style={dynamicStyles.modalTitle}>
-              {selectedSession?.session_name} Settings
+              {selectedSession?.session_name} {t('sessionSettings')}
             </Title>
             
             {selectedSession && (
               <View style={dynamicStyles.sessionDetailsModal}>
                 <View style={dynamicStyles.detailRowModal}>
-                  <Text style={dynamicStyles.detailLabel}>Status:</Text>
+                  <Text style={dynamicStyles.detailLabel}>{t('status')}:</Text>
                   <View style={dynamicStyles.statusContainer}>
                     <View style={[dynamicStyles.statusDot, { backgroundColor: getStatusColor(selectedSession.status) }]} />
                     <Text style={dynamicStyles.statusText}>{selectedSession.status}</Text>
@@ -1004,12 +1004,12 @@ const SessionManagementScreen = ({ navigation }) => {
                 </View>
                 
                 <View style={dynamicStyles.detailRowModal}>
-                  <Text style={dynamicStyles.detailLabel}>Type:</Text>
+                  <Text style={dynamicStyles.detailLabel}>{t('type')}:</Text>
                   <Text style={dynamicStyles.detailValue}>{selectedSession.connection_type}</Text>
                 </View>
                 
                 <View style={dynamicStyles.detailRowModal}>
-                  <Text style={dynamicStyles.detailLabel}>Created:</Text>
+                  <Text style={dynamicStyles.detailLabel}>{t('created')}:</Text>
                   <Text style={dynamicStyles.detailValue}>
                     {new Date(selectedSession.created_at).toLocaleDateString()}
                   </Text>
@@ -1017,7 +1017,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 
                 {selectedSession.phone_number && (
                   <View style={dynamicStyles.detailRowModal}>
-                    <Text style={dynamicStyles.detailLabel}>Phone:</Text>
+                    <Text style={dynamicStyles.detailLabel}>{t('phone')}:</Text>
                     <Text style={dynamicStyles.detailValue}>{selectedSession.phone_number}</Text>
                   </View>
                 )}
@@ -1030,7 +1030,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 onPress={() => setShowSessionModal(false)}
                 style={dynamicStyles.modalButton}
               >
-                Close
+                {t('close')}
               </Button>
             </View>
           </View>
@@ -1045,10 +1045,10 @@ const SessionManagementScreen = ({ navigation }) => {
           contentContainerStyle={dynamicStyles.modalContainer}
         >
           <View style={dynamicStyles.modalContent}>
-            <Title style={dynamicStyles.modalTitle}>Select Session for Messaging</Title>
+            <Title style={dynamicStyles.modalTitle}>{t('selectSessionForMessaging')}</Title>
             
             <Text style={dynamicStyles.modalSubtitle}>
-              Choose which WhatsApp session to use for sending messages:
+              {t('selectSessionDesc')}
             </Text>
             
             <View style={dynamicStyles.sessionSelectionList}>
@@ -1077,7 +1077,7 @@ const SessionManagementScreen = ({ navigation }) => {
                     <View style={dynamicStyles.sessionSelectionStatus}>
                       {isCurrentlyActive && (
                         <Chip icon="check" style={dynamicStyles.activeChip}>
-                          Active
+                          {t('active')}
                         </Chip>
                       )}
                       
@@ -1087,7 +1087,7 @@ const SessionManagementScreen = ({ navigation }) => {
                           { backgroundColor: isConnected ? '#25D366' : '#FF3B30' }
                         ]} />
                         <Text style={dynamicStyles.connectionText}>
-                          {isConnected ? 'Connected' : 'Disconnected'}
+                          {isConnected ? t('connected') : t('disconnected')}
                         </Text>
                       </View>
                     </View>
@@ -1102,7 +1102,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 onPress={() => setShowConnectionModal(false)}
                 style={dynamicStyles.modalButton}
               >
-                Cancel
+                {t('cancel')}
               </Button>
             </View>
           </View>
@@ -1119,7 +1119,7 @@ const SessionManagementScreen = ({ navigation }) => {
         <View style={dynamicStyles.qrModalOverlay}>
           <View style={dynamicStyles.qrModalContent}>
             <View style={dynamicStyles.qrModalHeader}>
-              <Text style={dynamicStyles.qrModalTitle}>WhatsApp QR Code</Text>
+              <Text style={dynamicStyles.qrModalTitle}>{t('whatsAppQRCode')}</Text>
               <TouchableOpacity
                 onPress={() => setShowQRModal(false)}
                 style={dynamicStyles.qrModalCloseButton}
@@ -1175,7 +1175,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 </View>
                 
                 <Text style={dynamicStyles.qrModalInstructions}>
-                  Open WhatsApp on your phone and scan this QR code to connect
+                  {t('qrCodeInstructions')}
                 </Text>
                 
                 <View style={dynamicStyles.qrModalActions}>
@@ -1185,7 +1185,7 @@ const SessionManagementScreen = ({ navigation }) => {
                     style={[dynamicStyles.qrModalActionButton, dynamicStyles.qrModalActionButtonLeft]}
                     icon="copy"
                   >
-                    Copy Data
+                    {t('copyData')}
                   </Button>
                   <Button
                     mode="contained"
@@ -1193,7 +1193,7 @@ const SessionManagementScreen = ({ navigation }) => {
                     style={[dynamicStyles.qrModalActionButton, dynamicStyles.qrModalActionButtonRight]}
                     icon="share"
                   >
-                    Share
+                    {t('share')}
                   </Button>
                 </View>
               </View>
@@ -1208,7 +1208,7 @@ const SessionManagementScreen = ({ navigation }) => {
           icon="plus"
           style={dynamicStyles.fab}
           onPress={() => setShowCreateModal(true)}
-          label="New Session"
+          label={t('newSession')}
         />
       )}
     </View>

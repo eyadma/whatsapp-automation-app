@@ -253,7 +253,7 @@ const VCardScreen = ({ navigation, route }) => {
         <View style={dynamicStyles.headerInfo}>
           <Text style={dynamicStyles.title}>Contact Importer</Text>
           <Text style={dynamicStyles.subtitle}>
-            Selected Customers: {selectedCustomers.length} / {customers.length}
+            {t('selectedCustomers')}: {selectedCustomers.length} / {customers.length}
           </Text>
         </View>
         
@@ -263,7 +263,7 @@ const VCardScreen = ({ navigation, route }) => {
             style={[dynamicStyles.actionButton, dynamicStyles.selectAllButton]}
           >
             <Ionicons name="checkmark-circle-outline" size={16} color="#25D366" />
-            <Text style={dynamicStyles.actionText}>Select All</Text>
+            <Text style={dynamicStyles.actionText}>{t('selectAll')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -271,7 +271,7 @@ const VCardScreen = ({ navigation, route }) => {
             style={[dynamicStyles.actionButton, dynamicStyles.deselectButton]}
           >
             <Ionicons name="close-circle-outline" size={16} color="#FF3B30" />
-            <Text style={dynamicStyles.actionText}>Deselect All</Text>
+            <Text style={dynamicStyles.actionText}>{t('deselectAll')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -287,7 +287,7 @@ const VCardScreen = ({ navigation, route }) => {
       <FAB
         style={dynamicStyles.fab}
         icon="contacts"
-        label="Import Contacts"
+        label={t('generateVCard')}
         onPress={() => setShowModal(true)}
         disabled={selectedCustomers.length === 0}
       />
@@ -299,7 +299,7 @@ const VCardScreen = ({ navigation, route }) => {
           contentContainerStyle={dynamicStyles.modalContent}
         >
           <View style={dynamicStyles.modalHeader}>
-            <Text style={dynamicStyles.modalTitle}>Import Contacts</Text>
+            <Text style={dynamicStyles.modalTitle}>{t('vCardGenerator')}</Text>
             <TouchableOpacity onPress={() => setShowModal(false)}>
               <Ionicons name="close" size={24} color="#666" />
             </TouchableOpacity>
@@ -387,7 +387,7 @@ const VCardScreen = ({ navigation, route }) => {
               disabled={generating}
               style={dynamicStyles.modalButton}
             >
-              {generating ? 'Importing...' : 'Import Contacts'}
+              {generating ? t('generating') : t('generateVCard')}
             </Button>
           </View>
         </Modal>

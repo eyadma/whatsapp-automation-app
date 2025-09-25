@@ -861,7 +861,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
 
   // Get localized area name for a specific language
   const getLocalizedAreaName = (area, language) => {
-    if (!area) return 'Unknown Area';
+    if (!area) return t('unknownArea');
     
     let localizedName;
     
@@ -872,7 +872,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
         localizedName = area.name_arabic;
         if (!localizedName) {
           console.warn(`❌ Arabic name not available for area ${area.areaId}, using 'Unknown Area'`);
-          localizedName = 'Unknown Area';
+          localizedName = t('unknownArea');
         }
         break;
         
@@ -881,7 +881,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
         localizedName = area.name_hebrew;
         if (!localizedName) {
           console.warn(`❌ Hebrew name not available for area ${area.areaId}, using 'Unknown Area'`);
-          localizedName = 'Unknown Area';
+          localizedName = t('unknownArea');
         }
         break;
         
@@ -891,7 +891,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
         localizedName = area.name_english;
         if (!localizedName) {
           console.warn(`❌ English name not available for area ${area.areaId}, using 'Unknown Area'`);
-          localizedName = 'Unknown Area';
+          localizedName = t('unknownArea');
         }
         break;
     }
@@ -995,7 +995,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
       console.log(`   Arabic (ar): "${arabicName}"`);
       
       // Check if names are different
-      if (hebrewName !== englishName && hebrewName !== 'Unknown Area') {
+      if (hebrewName !== englishName && hebrewName !== t('unknownArea')) {
         console.log(`   ✅ Hebrew and English names are different`);
       } else {
         console.warn(`   ❌ Hebrew and English names are the same or missing`);
@@ -1139,7 +1139,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
                         dynamicStyles.sessionStatusText,
                         { color: session.connected ? '#25D366' : session.connecting ? '#FFA500' : '#FF3B30' }
                       ]}>
-                        {session.connected ? 'Connected' : session.connecting ? 'Connecting...' : 'Disconnected'}
+                        {session.connected ? t('connected') : session.connecting ? t('connecting') : t('disconnected')}
                       </Text>
                     </View>
                   </View>
@@ -1341,16 +1341,16 @@ const EnhancedMessageScreen = ({ navigation }) => {
                     // Check if a session is selected and connected
                     if (!selectedSessionForSending) {
                       Alert.alert(
-                        'No Session Selected',
+                        t('noSessionSelected'),
                         'Please select a WhatsApp session to use background sending.',
-                        [{ text: 'OK', onPress: () => setBackgroundSending(false) }]
+                        [{ text: t('ok'), onPress: () => setBackgroundSending(false) }]
                       );
                       return;
                     }
                     
                     if (!selectedSessionForSending.connected) {
                       Alert.alert(
-                        'Session Not Connected',
+                        t('sessionNotConnected'),
                         `The selected session "${selectedSessionForSending.session_name || selectedSessionForSending.session_id}" is not connected.\n\nPlease go to the WhatsApp tab and connect this session first.`,
                         [
                           { text: t('goToWhatsApp'), onPress: () => navigation.navigate('WhatsApp') },
@@ -1364,9 +1364,9 @@ const EnhancedMessageScreen = ({ navigation }) => {
                     const isAvailable = await testBackgroundAPI();
                     if (!isAvailable) {
                       Alert.alert(
-                        'Background API Unavailable',
+                        t('backgroundAPIUnavailable'),
                         'The background sending feature is not available. Please ensure the server is running and the background API endpoint is accessible.\n\nFalling back to regular sending mode.',
-                        [{ text: 'OK', onPress: () => setBackgroundSending(false) }]
+                        [{ text: t('ok'), onPress: () => setBackgroundSending(false) }]
                       );
                       return;
                     }
