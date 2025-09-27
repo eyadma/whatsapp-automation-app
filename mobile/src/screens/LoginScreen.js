@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,54 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { TextInput, Button, Title, Paragraph, Card, useTheme } from 'react-native-paper';
+import { TextInput, Button, Title, Paragraph, Card, useTheme, Checkbox } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
+import { loginPersistenceAPI } from '../services/loginPersistenceAPI';
 
 const LoginScreen = ({ navigation }) => {
-  const { setUserId, setUser } = useContext(AppContext);
+  const { setUserId, setUser, t } = useContext(AppContext);
   const paperTheme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberLogin, setRememberLogin] = useState(false);
+  const [loadingCredentials, setLoadingCredentials] = useState(true);
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    loadSavedCredentials();
+  }, []);
+
+  const loadSavedCredentials = async () => {
+    try {
+      setLoadingCredentials(true);
+      const result = await loginPersistenceAPI.getSavedCredentials();
+      
+      if (result.success && result.credentials) {
+        const { email: savedEmail, password: savedPassword, rememberLogin: savedRememberLogin } = result.credentials;
+        
+        if (savedEmail) {
+          setEmail(savedEmail);
+        }
+        
+        if (savedPassword && savedRememberLogin) {
+          setPassword(savedPassword);
+          setRememberLogin(true);
+        } else {
+          setRememberLogin(savedRememberLogin);
+        }
+        
+        console.log('✅ Saved credentials loaded');
+      }
+    } catch (error) {
+      console.error('❌ Error loading saved credentials:', error);
+    } finally {
+      setLoadingCredentials(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -29,6 +65,10 @@ const LoginScreen = ({ navigation }) => {
 
     try {
       setLoading(true);
+      
+      // Track login attempt
+      await loginPersistenceAPI.trackLoginAttempt(email, false);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -41,6 +81,11 @@ const LoginScreen = ({ navigation }) => {
       }
 
       if (data.user) {
+        // Login successful - save credentials and clear failed attempts
+        await loginPersistenceAPI.saveLoginCredentials(email, password, rememberLogin);
+        await loginPersistenceAPI.trackLoginAttempt(email, true);
+        await loginPersistenceAPI.clearLoginAttempts(email);
+        
         setUserId(data.user.id);
         setUser(data.user);
         console.log('Login successful:', data.user.email);
@@ -99,6 +144,18 @@ const LoginScreen = ({ navigation }) => {
                 />
               }
             />
+
+            {/* Remember Login Checkbox */}
+            <View style={dynamicStyles.rememberLoginContainer}>
+              <Checkbox
+                status={rememberLogin ? 'checked' : 'unchecked'}
+                onPress={() => setRememberLogin(!rememberLogin)}
+                color="#25D366"
+              />
+              <Text style={dynamicStyles.rememberLoginText}>
+                Remember my login
+              </Text>
+            </View>
 
             <Button
               mode="contained"
@@ -177,6 +234,17 @@ const createStyles = (theme) => StyleSheet.create({
   },
   input: {
     marginBottom: 15,
+  },
+  rememberLoginContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    marginTop: 5,
+  },
+  rememberLoginText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: theme.colors.onSurface,
   },
   loginButton: {
     marginTop: 10,

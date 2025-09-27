@@ -12,6 +12,7 @@ import { Card, Button, TextInput, Divider, List, RadioButton, useTheme } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
 import { supabase, sessionAPI } from '../services/supabase';
+import { loginPersistenceAPI } from '../services/loginPersistenceAPI';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, userId, setUser, setUserId, language, setLanguage, theme, setTheme, t } = useContext(AppContext);
@@ -83,6 +84,32 @@ const SettingsScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearSavedLogin = async () => {
+    Alert.alert(
+      'Clear Saved Login',
+      'This will remove your saved email and password. You will need to enter them again next time you log in.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await loginPersistenceAPI.clearSavedCredentials();
+              if (result.success) {
+                Alert.alert('Success', 'Saved login credentials have been cleared.');
+              } else {
+                Alert.alert('Error', 'Failed to clear saved credentials: ' + result.error);
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear saved credentials: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleLogout = async () => {
@@ -461,6 +488,17 @@ const SettingsScreen = ({ navigation }) => {
         {t('savePreferences')}
       </Button>
 
+      {/* Clear Saved Login */}
+      <Button
+        mode="outlined"
+        onPress={handleClearSavedLogin}
+        style={dynamicStyles.clearLoginButton}
+        icon="delete"
+        textColor="#FF9500"
+      >
+        Clear Saved Login
+      </Button>
+
       {/* Logout */}
       <Button
         mode="outlined"
@@ -547,6 +585,10 @@ const createStyles = (theme) => StyleSheet.create({
   saveButton: {
     marginBottom: 12,
     backgroundColor: '#25D366',
+  },
+  clearLoginButton: {
+    borderColor: '#FF9500',
+    marginBottom: 12,
   },
   logoutButton: {
     borderColor: '#FF3B30',

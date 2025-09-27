@@ -19,6 +19,7 @@
     "@react-navigation/stack": "^7.4.7",
     "@supabase/supabase-js": "^2.37.0",
     "axios": "^1.11.0",
+    "crypto-js": "^4.2.0",
     "expo": "~54.0.0",
     "expo-contacts": "~15.0.8",
     "expo-dev-client": "~6.0.12",
