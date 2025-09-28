@@ -280,6 +280,8 @@ const VCardScreen = ({ navigation, route }) => {
         style={dynamicStyles.customerList}
         contentContainerStyle={dynamicStyles.scrollContent}
         showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={Platform.OS === 'web'}
+        keyboardShouldPersistTaps="handled"
       >
         {customers.length === 0 ? (
           <Text style={dynamicStyles.noDataText}>No customers found</Text>
@@ -420,6 +422,10 @@ const createStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+    ...(Platform.OS === 'web' && {
+      height: '100vh',
+      overflow: 'hidden',
+    }),
   },
   loadingContainer: {
     flex: 1,
@@ -475,9 +481,16 @@ const createStyles = (theme) => StyleSheet.create({
   customerList: {
     flex: 1,
     padding: 16,
+    ...(Platform.OS === 'web' && {
+      maxHeight: 'calc(100vh - 200px)', // Ensure it doesn't overflow viewport
+      overflow: 'auto',
+    }),
   },
   scrollContent: {
-    paddingBottom: Platform.OS === 'web' ? 100 : 16, // Extra padding for web button
+    paddingBottom: Platform.OS === 'web' ? 120 : 16, // Extra padding for web button
+    ...(Platform.OS === 'web' && {
+      minHeight: '100%',
+    }),
   },
   customerCard: {
     marginBottom: 12,
@@ -640,7 +653,7 @@ const createStyles = (theme) => StyleSheet.create({
   },
   // Web-specific styles
   webButtonContainer: {
-    position: 'absolute',
+    position: 'fixed',
     bottom: 16,
     left: 16,
     right: 16,
@@ -655,6 +668,10 @@ const createStyles = (theme) => StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    zIndex: 1000,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+    }),
   },
   webImportButton: {
     backgroundColor: '#25D366',
