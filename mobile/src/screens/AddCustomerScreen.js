@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Text, Switch, HelperText, ActivityIndicator, Divider, useTheme } from 'react-native-paper';
 import { customersAPI } from '../services/api';
 import { AppContext } from '../context/AppContext';
-import { Picker } from '@react-native-picker/picker';
+import WebCompatiblePicker from '../components/WebCompatiblePicker';
 
 const AddCustomerScreen = ({ navigation }) => {
   const { userId, t } = useContext(AppContext);
@@ -168,20 +168,20 @@ const AddCustomerScreen = ({ navigation }) => {
         
         <Text style={dynamicStyles.label}>{t('Area')}</Text>
         <View style={dynamicStyles.pickerContainer}>
-          <Picker
-                    selectedValue={formData.areaId}
-        onValueChange={(value) => handleChange('areaId', value)}
+          <WebCompatiblePicker
+            selectedValue={formData.areaId}
+            onValueChange={(value) => handleChange('areaId', value)}
             style={dynamicStyles.picker}
           >
-            <Picker.Item label={t('Select Area')} value={null} />
+            <WebCompatiblePicker.Item label={t('Select Area')} value={null} />
             {areas.map((area) => (
-              <Picker.Item 
+              <WebCompatiblePicker.Item 
                 key={area.areaid} 
                 label={area.name_english} 
-                value={area.areaid} 
+                value={area.areaid}
               />
             ))}
-          </Picker>
+          </WebCompatiblePicker>
         </View>
         
         <TextInput

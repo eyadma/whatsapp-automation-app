@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Text, Card, ActivityIndicator, Divider, useTheme } from 'react-native-paper';
-import { Picker } from '@react-native-picker/picker';
+import WebCompatiblePicker from '../components/WebCompatiblePicker';
 import { AppContext } from '../context/AppContext';
 import { enhancedMessageAPI } from '../services/enhancedMessageAPI';
 import { areasAPI } from '../services/areasAPI';
@@ -313,7 +313,7 @@ const AddETAScreen = ({ navigation, route }) => {
           <Card.Content>
             <Text style={dynamicStyles.sectionTitle}>{t('selectArea')}</Text>
             <View style={dynamicStyles.pickerContainer}>
-              <Picker
+              <WebCompatiblePicker
                 selectedValue={selectedAreaId}
                 onValueChange={(value) => {
                   const numeric = value != null ? Number(value) : null;
@@ -321,15 +321,15 @@ const AddETAScreen = ({ navigation, route }) => {
                 }}
                 style={dynamicStyles.picker}
               >
-                <Picker.Item label={t('selectArea')} value={null} />
+                <WebCompatiblePicker.Item label={t('selectArea')} value={null} />
                 {areas.map((area) => (
-                  <Picker.Item 
+                  <WebCompatiblePicker.Item 
                     key={area.areaId} 
                     label={`${area.name_english}${areaETAs[area.areaId] ? ' (ETA: ' + areaETAs[area.areaId] + ')' : ''}`} 
                     value={area.areaId} 
                   />
                 ))}
-              </Picker>
+              </WebCompatiblePicker>
             </View>
 
             <Divider style={dynamicStyles.divider} />
