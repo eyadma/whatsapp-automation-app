@@ -568,7 +568,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       throw new Error('userId is required');
     }
     
-    const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
+    const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
     console.log(`📁 Session directory: ${sessionDir}`);
     
     try {
@@ -1405,7 +1405,7 @@ app.post('/api/whatsapp/disconnect/:userId', async (req, res) => {
       removeConnection(userId, sessionId);
       
       // Clean up session files after logout to allow fresh reconnection
-      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId || 'default');
+      const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
       try {
         if (fs.existsSync(sessionDir)) {
           console.log(`🧹 Cleaning up session files for user: ${userId}, session: ${sessionId || 'default'}`);
@@ -1459,7 +1459,7 @@ app.post('/api/whatsapp/disconnect/:userId/:sessionId', async (req, res) => {
       removeConnection(userId, sessionId);
       
       // Clean up session files after logout to allow fresh reconnection
-      const sessionDir = path.join(__dirname, 'sessions', userId, sessionId);
+      const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId);
       try {
         if (fs.existsSync(sessionDir)) {
           console.log(`🧹 Cleaning up session files for user: ${userId}, session: ${sessionId}`);
@@ -1521,7 +1521,7 @@ app.post('/api/whatsapp/delete-session/:userId', async (req, res) => {
       .eq('session_id', userId);
 
     // Delete session files
-    const sessionDir = path.join(__dirname, 'sessions', userId);
+    const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId);
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
       console.log(`🗂️ Deleted session directory for user: ${userId}`);
@@ -1607,7 +1607,7 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
       .eq('session_id', userId);
 
     // Delete session files completely
-    const sessionDir = path.join(__dirname, 'sessions', userId);
+    const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId);
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
       console.log(`🗂️ Deleted session directory for user: ${userId}`);
