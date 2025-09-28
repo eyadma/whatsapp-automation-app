@@ -33,6 +33,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppContext } from '../context/AppContext';
+import { formatDateWithArabicNumerals } from '../utils/numberFormatting';
 import { supabase } from '../services/supabase';
 import { whatsappAPI } from '../services/api';
 import { resolveApiBaseUrl } from '../services/apiBase';
@@ -625,7 +626,7 @@ const SessionManagementScreen = ({ navigation }) => {
               <View style={dynamicStyles.detailRow}>
                 <Ionicons name="time" size={16} color="#666" />
                 <Text style={dynamicStyles.detailText}>
-                  {t('created')}: {new Date(session.created_at).toLocaleDateString()}
+                  {t('created')}: {formatDateWithArabicNumerals(new Date(session.created_at))}
                 </Text>
               </View>
             </View>
@@ -1011,7 +1012,7 @@ const SessionManagementScreen = ({ navigation }) => {
                 <View style={dynamicStyles.detailRowModal}>
                   <Text style={dynamicStyles.detailLabel}>{t('created')}:</Text>
                   <Text style={dynamicStyles.detailValue}>
-                    {new Date(selectedSession.created_at).toLocaleDateString()}
+                    {formatDateWithArabicNumerals(new Date(selectedSession.created_at))}
                   </Text>
                 </View>
                 

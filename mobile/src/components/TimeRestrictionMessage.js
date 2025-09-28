@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Card, Button, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
+import { formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
 
 const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
   const { t } = useContext(AppContext);
@@ -94,7 +95,7 @@ const TimeRestrictionMessage = ({ timeRestrictionStatus, onRefresh }) => {
                 {(() => {
                   try {
                     const date = new Date(last_message_sent_during_window);
-                    return isNaN(date.getTime()) ? t('notSet') : date.toLocaleString();
+                    return isNaN(date.getTime()) ? t('notSet') : formatDateTimeWithArabicNumerals(date);
                   } catch (error) {
                     return t('notSet');
                   }

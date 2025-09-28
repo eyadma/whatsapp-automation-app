@@ -7,6 +7,7 @@ import { enhancedMessageAPI } from '../services/enhancedMessageAPI';
 import { areasAPI } from '../services/areasAPI';
 import { supabase } from '../services/supabase';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { formatTimeSimple } from '../utils/numberFormatting';
 
 const AddETAScreen = ({ navigation, route }) => {
   const { userId, t } = useContext(AppContext);
@@ -290,9 +291,7 @@ const AddETAScreen = ({ navigation, route }) => {
   };
 
   const formatTimeFromDate = (date) => {
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
+    return formatTimeSimple(date);
   };
 
   if (loading) {

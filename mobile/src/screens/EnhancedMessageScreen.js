@@ -12,6 +12,7 @@ import { enhancedMessageAPI } from '../services/enhancedMessageAPI';
 import { messagesAPI } from '../services/api';
 import { timeRestrictionsAPI } from '../services/timeRestrictionsAPI';
 import { supabase } from '../services/supabase';
+import { formatTimeWithArabicNumerals, formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
 
 const EnhancedMessageScreen = ({ navigation }) => {
   const { userId, t, language, activeSessionId } = useContext(AppContext);
@@ -233,9 +234,9 @@ const EnhancedMessageScreen = ({ navigation }) => {
       // Build ETA string based on format
       let etaString;
       if (etaFormat === 'single') {
-        etaString = etaTime.toLocaleTimeString();
+        etaString = formatTimeWithArabicNumerals(etaTime);
       } else {
-        etaString = `${etaTime.toLocaleTimeString()} - ${rangeEndTime.toLocaleTimeString()}`;
+        etaString = `${formatTimeWithArabicNumerals(etaTime)} - ${formatTimeWithArabicNumerals(rangeEndTime)}`;
       }
       
       await enhancedMessageAPI.setAreaETA(
@@ -1519,7 +1520,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
             <Text style={dynamicStyles.timeSelectionTitle}>Select Time:</Text>
             <TouchableOpacity onPress={() => setShowTimePicker(true)} style={dynamicStyles.timePickerButton}>
               <Text style={dynamicStyles.timePickerText}>
-                {etaTime.toLocaleTimeString()}
+                {formatTimeWithArabicNumerals(etaTime)}
               </Text>
               <Ionicons name="time" size={24} color="#007AFF" />
             </TouchableOpacity>
@@ -1531,7 +1532,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
               <Text style={dynamicStyles.rangeEndTitle}>End Time:</Text>
               <TouchableOpacity onPress={() => setShowRangeEndPicker(true)} style={dynamicStyles.timePickerButton}>
                 <Text style={dynamicStyles.timePickerText}>
-                  {rangeEndTime.toLocaleTimeString()}
+                  {formatTimeWithArabicNumerals(rangeEndTime)}
                 </Text>
                 <Ionicons name="time" size={24} color="#007AFF" />
               </TouchableOpacity>
@@ -1543,8 +1544,8 @@ const EnhancedMessageScreen = ({ navigation }) => {
             <Text style={dynamicStyles.etaPreviewTitle}>Preview:</Text>
             <Text style={dynamicStyles.etaPreviewText}>
               {etaFormat === 'single' 
-                ? `ETA: ${etaTime.toLocaleTimeString()}`
-                : `ETA: ${etaTime.toLocaleTimeString()} - ${rangeEndTime.toLocaleTimeString()}`
+                ? `ETA: ${formatTimeWithArabicNumerals(etaTime)}`
+                : `ETA: ${formatTimeWithArabicNumerals(etaTime)} - ${formatTimeWithArabicNumerals(rangeEndTime)}`
               }
             </Text>
           </View>

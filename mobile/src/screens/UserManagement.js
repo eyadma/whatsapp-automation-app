@@ -27,6 +27,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
+import { formatDateWithArabicNumerals } from '../utils/numberFormatting';
 
 const UserManagement = ({ navigation }) => {
   const { userId, t, language } = useContext(AppContext);
@@ -403,7 +404,7 @@ const UserManagement = ({ navigation }) => {
                         {user.role}
                       </Chip>
                       <Text style={dynamicStyles.userDate}>
-                        Joined: {new Date(user.created_at).toLocaleDateString()}
+                        Joined: {formatDateWithArabicNumerals(new Date(user.created_at))}
                       </Text>
                     </View>
                   </View>

@@ -12,6 +12,7 @@ import { Card, Title, Paragraph, Button, List, Divider, useTheme } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
+import { formatDateWithArabicNumerals } from '../utils/numberFormatting';
 
 const AdminDashboard = ({ navigation }) => {
   const { userId } = useContext(AppContext);
@@ -498,7 +499,7 @@ const AdminDashboard = ({ navigation }) => {
                 <View key={user.id}>
                   <List.Item
                     title={user.email}
-                    description={`Role: ${user.role || 'regular'} • Joined: ${new Date(user.created_at).toLocaleDateString()}`}
+                    description={`Role: ${user.role || 'regular'} • Joined: ${formatDateWithArabicNumerals(new Date(user.created_at))}`}
                     left={() => (
                       <List.Icon 
                         icon={user.role === 'admin' ? 'shield' : 'person'} 

@@ -25,6 +25,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppContext } from '../context/AppContext';
+import { formatDateWithArabicNumerals } from '../utils/numberFormatting';
 import { enhancedSessionAPI } from '../services/enhancedSessionAPI';
 
 const { width, height } = Dimensions.get('window');
@@ -520,7 +521,7 @@ const SessionAnalyticsScreen = ({ navigation }) => {
 
             {analytics.metrics.slice(0, 10).map((metric, index) => (
               <DataTable.Row key={index}>
-                <DataTable.Cell>{new Date(metric.date).toLocaleDateString()}</DataTable.Cell>
+                <DataTable.Cell>{formatDateWithArabicNumerals(new Date(metric.date))}</DataTable.Cell>
                 <DataTable.Cell numeric>{metric.messages_sent || 0}</DataTable.Cell>
                 <DataTable.Cell numeric>{metric.messages_received || 0}</DataTable.Cell>
                 <DataTable.Cell numeric>{Math.round((metric.connection_time_minutes || 0) / 60)}h</DataTable.Cell>

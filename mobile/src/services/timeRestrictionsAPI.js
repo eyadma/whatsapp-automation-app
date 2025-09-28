@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formatTimeWithArabicNumerals, formatDateWithArabicNumerals, formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
 
 export const timeRestrictionsAPI = {
   /**
@@ -132,9 +133,9 @@ export const timeRestrictionsAPI = {
       // Fallback to local time if timezone conversion fails
       const now = new Date();
       return {
-        time: now.toLocaleTimeString('en-US', { hour12: false }),
-        date: now.toLocaleDateString('en-US'),
-        fullDateTime: now.toLocaleString('en-US')
+        time: formatTimeWithArabicNumerals(now, { hour12: false }),
+        date: formatDateWithArabicNumerals(now),
+        fullDateTime: formatDateTimeWithArabicNumerals(now)
       };
     }
   },

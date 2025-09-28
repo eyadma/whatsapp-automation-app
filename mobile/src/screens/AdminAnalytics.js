@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
+import { formatDateWithArabicNumerals } from '../utils/numberFormatting';
 
 const { width } = Dimensions.get('window');
 
@@ -139,7 +140,7 @@ const AdminAnalytics = ({ navigation }) => {
       const growthData = Object.entries(dailyGrowth)
         .reverse()
         .map(([date, count]) => ({
-          date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          date: formatDateWithArabicNumerals(new Date(date), { month: 'short', day: 'numeric' }),
           count
         }));
 
@@ -271,14 +272,14 @@ const AdminAnalytics = ({ navigation }) => {
           type: 'user',
           title: `New ${user.role} user registered`,
           subtitle: user.email,
-          time: new Date(user.created_at).toLocaleDateString(),
+          time: formatDateWithArabicNumerals(new Date(user.created_at)),
           icon: 'person-add'
         })) || []),
         ...(recentMessages.data?.map(msg => ({
           type: 'message',
           title: `Message ${msg.status}`,
           subtitle: `${msg.profiles?.email || 'Unknown'} → ${msg.phone_number}`,
-          time: new Date(msg.sent_at).toLocaleDateString(),
+          time: formatDateWithArabicNumerals(new Date(msg.sent_at)),
           icon: msg.status === 'sent' ? 'checkmark-circle' : 'close-circle'
         })) || [])
       ].sort((a, b) => new Date(b.time) - new Date(a.time))
