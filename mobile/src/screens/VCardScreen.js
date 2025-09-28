@@ -276,7 +276,11 @@ const VCardScreen = ({ navigation, route }) => {
         </View>
       </View>
 
-      <ScrollView style={dynamicStyles.customerList}>
+      <ScrollView 
+        style={dynamicStyles.customerList}
+        contentContainerStyle={dynamicStyles.scrollContent}
+        showsVerticalScrollIndicator={true}
+      >
         {customers.length === 0 ? (
           <Text style={dynamicStyles.noDataText}>No customers found</Text>
         ) : (
@@ -284,13 +288,29 @@ const VCardScreen = ({ navigation, route }) => {
         )}
       </ScrollView>
 
-      <FAB
-        style={dynamicStyles.fab}
-        icon="contacts"
-        label={t('generateVCard')}
-        onPress={() => setShowModal(true)}
-        disabled={selectedCustomers.length === 0}
-      />
+      {/* Web-compatible import button */}
+      {Platform.OS === 'web' ? (
+        <View style={dynamicStyles.webButtonContainer}>
+          <Button
+            mode="contained"
+            icon="contacts"
+            onPress={() => setShowModal(true)}
+            disabled={selectedCustomers.length === 0}
+            style={dynamicStyles.webImportButton}
+            contentStyle={dynamicStyles.webButtonContent}
+          >
+            {t('generateVCard')} ({selectedCustomers.length})
+          </Button>
+        </View>
+      ) : (
+        <FAB
+          style={dynamicStyles.fab}
+          icon="contacts"
+          label={t('generateVCard')}
+          onPress={() => setShowModal(true)}
+          disabled={selectedCustomers.length === 0}
+        />
+      )}
 
       <Portal>
         <Modal
@@ -456,6 +476,9 @@ const createStyles = (theme) => StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  scrollContent: {
+    paddingBottom: Platform.OS === 'web' ? 100 : 16, // Extra padding for web button
+  },
   customerCard: {
     marginBottom: 12,
     backgroundColor: theme.colors.surface,
@@ -614,6 +637,30 @@ const createStyles = (theme) => StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: theme.colors.onPrimaryContainer,
+  },
+  // Web-specific styles
+  webButtonContainer: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: theme.colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  webImportButton: {
+    backgroundColor: '#25D366',
+  },
+  webButtonContent: {
+    paddingVertical: 8,
   },
 });
 
