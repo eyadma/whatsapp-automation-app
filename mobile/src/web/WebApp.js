@@ -69,6 +69,16 @@ const WebMainAppTabs = () => {
   // Simplified - no time restrictions for web to avoid loading issues
   const showMessagesTab = true;
 
+  // Temporarily return a simple screen to test
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121212' : '#fff' }}>
+      <Text style={{ fontSize: 24, marginBottom: 16, color: theme === 'dark' ? '#fff' : '#000' }}>WhatsApp Automation</Text>
+      <Text style={{ fontSize: 16, color: theme === 'dark' ? '#fff' : '#000' }}>Web app is loading successfully!</Text>
+      <Text style={{ fontSize: 14, color: '#666', marginTop: 8 }}>User ID: {userId}</Text>
+    </View>
+  );
+
+  /* Original Tab Navigator - temporarily disabled to find the issue
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -114,6 +124,7 @@ const WebMainAppTabs = () => {
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
     </Tab.Navigator>
   );
+  */
 };
 
 // Admin Stack Navigator - Web Compatible
