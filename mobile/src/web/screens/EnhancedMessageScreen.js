@@ -1665,7 +1665,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
         <Modal
           visible={showETAModal}
           onDismiss={() => setShowETAModal(false)}
-          contentContainerStyle={dynamicStyles.modal}
+          contentContainerStyle={{ backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 }}
         >
         <View style={dynamicStyles.modalContent}>
           <Text style={dynamicStyles.modalTitle}>
@@ -1822,7 +1822,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
             setShowCopyETAModal(false);
             setSelectedAreasToCopy([]);
           }}
-          contentContainerStyle={dynamicStyles.modal}
+          contentContainerStyle={{ backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 }}
         >
         <View style={dynamicStyles.modalContent}>
           <Text style={dynamicStyles.modalTitle}>Copy ETA to Other Areas</Text>
@@ -1886,7 +1886,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
         <Modal
           visible={showBulkETAModal}
           onDismiss={() => setShowBulkETAModal(false)}
-          contentContainerStyle={dynamicStyles.modal}
+          contentContainerStyle={{ backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 }}
         >
         <View style={dynamicStyles.modalContent}>
           <Text style={dynamicStyles.modalTitle}>
