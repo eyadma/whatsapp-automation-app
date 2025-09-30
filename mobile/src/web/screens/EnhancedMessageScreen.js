@@ -5,7 +5,8 @@ import { Card, TextInput, Divider, List, Chip, useTheme } from 'react-native-pap
 import WebCompatibleButton from '../components/WebCompatibleButton';
 import { Ionicons } from '@expo/vector-icons';
 import { Portal, Modal } from 'react-native-paper';
-import DateTimePicker from '@react-native-community/datetimepicker';
+// DateTimePicker not compatible with web - using TextInput instead
+// import DateTimePicker from '@react-native-community/datetimepicker';
 import { AppContext } from '../../context/AppContext';
 import { customersAPI, messageTemplatesAPI, whatsappAPI } from '../../services/api';
 import { areasAPI } from '../../services/areasAPI';
@@ -1753,36 +1754,64 @@ const EnhancedMessageScreen = ({ navigation }) => {
         </Modal>
       </Portal>
 
-      {/* Time Picker */}
+      {/* Time Picker - Web compatible */}
       {showTimePicker && (
-        <DateTimePicker
-          value={etaTime}
-          mode="time"
-          is24Hour={true}
-          display="default"
-          onChange={(event, selectedTime) => {
-            setShowTimePicker(false);
-            if (selectedTime) {
-              setEtaTime(selectedTime);
-            }
-          }}
-        />
+        <Modal
+          visible={showTimePicker}
+          onDismiss={() => setShowTimePicker(false)}
+          contentContainerStyle={{ backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 }}
+        >
+          <Text style={{ fontSize: 18, marginBottom: 16 }}>Select Start Time</Text>
+          <TextInput
+            mode="outlined"
+            label="Time (HH:MM)"
+            placeholder="12:00"
+            value={etaTime ? `${etaTime.getHours().toString().padStart(2, '0')}:${etaTime.getMinutes().toString().padStart(2, '0')}` : ''}
+            onChangeText={(text) => {
+              const [hours, minutes] = text.split(':');
+              if (hours && minutes) {
+                const newTime = new Date();
+                newTime.setHours(parseInt(hours) || 0);
+                newTime.setMinutes(parseInt(minutes) || 0);
+                setEtaTime(newTime);
+              }
+            }}
+            style={{ marginBottom: 16 }}
+          />
+          <WebCompatibleButton mode="contained" onPress={() => setShowTimePicker(false)}>
+            Done
+          </WebCompatibleButton>
+        </Modal>
       )}
 
-      {/* Range End Time Picker */}
+      {/* Range End Time Picker - Web compatible */}
       {showRangeEndPicker && (
-        <DateTimePicker
-          value={rangeEndTime}
-          mode="time"
-          is24Hour={true}
-          display="default"
-          onChange={(event, selectedTime) => {
-            setShowRangeEndPicker(false);
-            if (selectedTime) {
-              setRangeEndTime(selectedTime);
-            }
-          }}
-        />
+        <Modal
+          visible={showRangeEndPicker}
+          onDismiss={() => setShowRangeEndPicker(false)}
+          contentContainerStyle={{ backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 }}
+        >
+          <Text style={{ fontSize: 18, marginBottom: 16 }}>Select End Time</Text>
+          <TextInput
+            mode="outlined"
+            label="Time (HH:MM)"
+            placeholder="13:00"
+            value={rangeEndTime ? `${rangeEndTime.getHours().toString().padStart(2, '0')}:${rangeEndTime.getMinutes().toString().padStart(2, '0')}` : ''}
+            onChangeText={(text) => {
+              const [hours, minutes] = text.split(':');
+              if (hours && minutes) {
+                const newTime = new Date();
+                newTime.setHours(parseInt(hours) || 0);
+                newTime.setMinutes(parseInt(minutes) || 0);
+                setRangeEndTime(newTime);
+              }
+            }}
+            style={{ marginBottom: 16 }}
+          />
+          <WebCompatibleButton mode="contained" onPress={() => setShowRangeEndPicker(false)}>
+            Done
+          </WebCompatibleButton>
+        </Modal>
       )}
 
       {/* Copy ETA Modal */}

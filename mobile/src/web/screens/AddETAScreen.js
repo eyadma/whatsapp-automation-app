@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
-import { TextInput, Button, Text, Card, ActivityIndicator, Divider, useTheme } from 'react-native-paper';
+import { TextInput, Button, Text, Card, ActivityIndicator, Divider, useTheme, Modal } from 'react-native-paper';
 import WebCompatiblePicker from '../../web/components/WebCompatiblePicker';
 import { AppContext } from '../../context/AppContext';
 import { enhancedMessageAPI } from '../../services/enhancedMessageAPI';
 import { areasAPI } from '../../services/areasAPI';
 import { supabase } from '../../services/supabase';
-import DateTimePicker from '@react-native-community/datetimepicker';
+// DateTimePicker not compatible with web - using TextInput instead
+// import DateTimePicker from '@react-native-community/datetimepicker';
 import { formatTimeSimple } from '../../utils/numberFormatting';
 
 const AddETAScreen = ({ navigation, route }) => {
@@ -453,14 +454,42 @@ const AddETAScreen = ({ navigation, route }) => {
           </Card.Content>
         </Card>
 
+        {/* Web-compatible time picker */}
         {pickerTarget && (
-          <DateTimePicker
-            value={pickerTarget === 'single' ? singleTime : pickerTarget === 'start' ? startTime : endTime}
-            mode="time"
-            is24Hour
-            display="default"
-            onChange={handleTimePicked}
-          />
+          <Modal
+            visible={!!pickerTarget}
+            onDismiss={() => setPickerTarget(null)}
+            contentContainerStyle={{ backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8 }}
+          >
+            <Text style={{ fontSize: 18, marginBottom: 16 }}>
+              Select {pickerTarget === 'single' ? 'Time' : pickerTarget === 'start' ? 'Start Time' : 'End Time'}
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Time (HH:MM)"
+              placeholder="12:00"
+              value={
+                pickerTarget === 'single'
+                  ? `${singleTime.getHours().toString().padStart(2, '0')}:${singleTime.getMinutes().toString().padStart(2, '0')}`
+                  : pickerTarget === 'start'
+                  ? `${startTime.getHours().toString().padStart(2, '0')}:${startTime.getMinutes().toString().padStart(2, '0')}`
+                  : `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`
+              }
+              onChangeText={(text) => {
+                const [hours, minutes] = text.split(':');
+                if (hours && minutes) {
+                  const newTime = new Date();
+                  newTime.setHours(parseInt(hours) || 0);
+                  newTime.setMinutes(parseInt(minutes) || 0);
+                  handleTimePicked({ type: 'set' }, newTime);
+                }
+              }}
+              style={{ marginBottom: 16 }}
+            />
+            <Button mode="contained" onPress={() => setPickerTarget(null)}>
+              Done
+            </Button>
+          </Modal>
         )}
 
         {/* Copy ETA Modal */}
