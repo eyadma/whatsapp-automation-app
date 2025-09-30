@@ -19,7 +19,7 @@ import { supabase, sessionAPI } from '../../services/supabase';
 import { loginPersistenceAPI } from '../../services/loginPersistenceAPI';
 
 const SettingsScreen = ({ navigation }) => {
-  const { user, userId, setUser, setUserId, language, setLanguage, theme, setTheme, t } = useContext(AppContext);
+  const { user, userId, setUser, setUserId, language, setLanguage, theme, setTheme, t, isAdmin } = useContext(AppContext);
   const paperTheme = useTheme();
   const [loading, setLoading] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -91,53 +91,35 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleClearSavedLogin = async () => {
-    Alert.alert(
-      'Clear Saved Login',
-      'This will remove your saved email and password. You will need to enter them again next time you log in.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await loginPersistenceAPI.clearSavedCredentials();
-              if (result.success) {
-                Alert.alert('Success', 'Saved login credentials have been cleared.');
-              } else {
-                Alert.alert('Error', 'Failed to clear saved credentials: ' + result.error);
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to clear saved credentials: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
+    // Web-compatible confirmation
+    const confirmed = window.confirm('This will remove your saved email and password. You will need to enter them again next time you log in.');
+    if (confirmed) {
+      try {
+        const result = await loginPersistenceAPI.clearSavedCredentials();
+        if (result.success) {
+          alert('Success: Saved login credentials have been cleared.');
+        } else {
+          alert('Error: Failed to clear saved credentials: ' + result.error);
+        }
+      } catch (error) {
+        alert('Error: Failed to clear saved credentials: ' + error.message);
+      }
+    }
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      t('logout'),
-      t('sureToLogout'),
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('logout'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await supabase.auth.signOut();
-              setUser(null);
-              setUserId(null);
-              // Navigation will be handled by App.js based on auth state
-            } catch (error) {
-              Alert.alert(t('error'), 'Failed to logout: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
+    // Web-compatible confirmation
+    const confirmed = window.confirm(t('sureToLogout') || 'Are you sure you want to logout?');
+    if (confirmed) {
+      try {
+        await supabase.auth.signOut();
+        setUser(null);
+        setUserId(null);
+        // Navigation will be handled by App.js based on auth state
+      } catch (error) {
+        alert('Failed to logout: ' + error.message);
+      }
+    }
   };
 
   const savePreferences = async () => {
@@ -388,37 +370,39 @@ const SettingsScreen = ({ navigation }) => {
         </Card.Content>
       </Card>
 
-      {/* WhatsApp Sessions */}
-      <Card style={dynamicStyles.card}>
-        <Card.Content>
-          <Text style={dynamicStyles.sectionTitle}>{t('whatsAppSessions')}</Text>
-          <Divider style={dynamicStyles.divider} />
-          <List.Item
-            title={t('manageSessions')}
-            description={t('manageSessionsDescription')}
-            left={(props) => (
-              <Ionicons name="chatbubbles" size={24} color="#667eea" />
-            )}
-            right={(props) => (
-              <Ionicons name="chevron-forward" size={20} color="#666" />
-            )}
-            onPress={() => navigation.navigate('Sessions')}
-            style={dynamicStyles.listItem}
-          />
-          <List.Item
-            title={t('sessionAnalytics')}
-            description={t('sessionAnalyticsDescription')}
-            left={(props) => (
-              <Ionicons name="analytics" size={24} color="#764ba2" />
-            )}
-            right={(props) => (
-              <Ionicons name="chevron-forward" size={20} color="#666" />
-            )}
-            onPress={() => navigation.navigate('SessionAnalytics')}
-            style={dynamicStyles.listItem}
-          />
-        </Card.Content>
-      </Card>
+      {/* WhatsApp Sessions - Only for admins */}
+      {isAdmin && (
+        <Card style={dynamicStyles.card}>
+          <Card.Content>
+            <Text style={dynamicStyles.sectionTitle}>{t('whatsAppSessions')}</Text>
+            <Divider style={dynamicStyles.divider} />
+            <List.Item
+              title={t('manageSessions')}
+              description={t('manageSessionsDescription')}
+              left={(props) => (
+                <Ionicons name="chatbubbles" size={24} color="#667eea" />
+              )}
+              right={(props) => (
+                <Ionicons name="chevron-forward" size={20} color="#666" />
+              )}
+              onPress={() => navigation.navigate('Sessions')}
+              style={dynamicStyles.listItem}
+            />
+            <List.Item
+              title={t('sessionAnalytics')}
+              description={t('sessionAnalyticsDescription')}
+              left={(props) => (
+                <Ionicons name="analytics" size={24} color="#764ba2" />
+              )}
+              right={(props) => (
+                <Ionicons name="chevron-forward" size={20} color="#666" />
+              )}
+              onPress={() => navigation.navigate('SessionAnalytics')}
+              style={dynamicStyles.listItem}
+            />
+          </Card.Content>
+        </Card>
+      )}
 
       {/* Password Change */}
       <Card style={dynamicStyles.card}>
