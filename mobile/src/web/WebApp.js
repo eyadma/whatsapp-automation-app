@@ -34,34 +34,9 @@ const Tab = createBottomTabNavigator();
 // Main App Tab Navigator (for regular users) - Web Compatible
 const WebMainAppTabs = () => {
   const { t, theme, userId } = useContext(AppContext);
-  const [timeRestrictionStatus, setTimeRestrictionStatus] = useState({ canSendMessages: true });
-
-  useEffect(() => {
-    const checkTimeRestrictions = async () => {
-      if (!userId) return;
-      
-      try {
-        const { timeRestrictionsAPI } = await import('../services/timeRestrictionsAPI');
-        const result = await timeRestrictionsAPI.getTimeRestrictionStatus(userId);
-        
-        if (result.success) {
-          setTimeRestrictionStatus(result.data);
-        } else {
-          console.error('Error checking time restrictions:', result.error);
-          setTimeRestrictionStatus({ canSendMessages: true });
-        }
-      } catch (error) {
-        console.error('Error loading time restrictions:', error);
-        setTimeRestrictionStatus({ canSendMessages: true });
-      }
-    };
-
-    checkTimeRestrictions();
-    const interval = setInterval(checkTimeRestrictions, 600000);
-    return () => clearInterval(interval);
-  }, [userId]);
-
-  const showMessagesTab = timeRestrictionStatus?.canSendMessages !== false;
+  
+  // Simplified - no time restrictions for web to avoid loading issues
+  const showMessagesTab = true;
 
   return (
     <Tab.Navigator
@@ -164,6 +139,16 @@ export default function WebApp() {
 
   useEffect(() => {
     checkAuth();
+    
+    // Safety timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("⚠️ Loading timeout reached, forcing loading to false");
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   const checkAuth = async () => {
@@ -179,15 +164,25 @@ export default function WebApp() {
         setUserId(user.id);
         console.log("🆔 User ID set:", user.id);
         // Check if user is admin
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', user.id)
-          .single();
-        
-        const isAdminUser = profile?.is_admin || false;
-        console.log("👑 Is admin:", isAdminUser);
-        setIsAdmin(isAdminUser);
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', user.id)
+            .single();
+          
+          if (profileError) {
+            console.warn("⚠️ Profile query error:", profileError);
+            setIsAdmin(false);
+          } else {
+            const isAdminUser = profile?.is_admin || false;
+            console.log("👑 Is admin:", isAdminUser);
+            setIsAdmin(isAdminUser);
+          }
+        } catch (profileError) {
+          console.warn("⚠️ Profile query exception:", profileError);
+          setIsAdmin(false);
+        }
       }
     } catch (error) {
       console.error("❌ Auth check error:", error);
@@ -209,15 +204,25 @@ export default function WebApp() {
         setUserId(session.user.id);
         console.log("🆔 Auth state change - User ID set:", session.user.id);
         // Check if user is admin
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('is_admin')
-          .eq('id', session.user.id)
-          .single();
-        
-        const isAdminUser = profile?.is_admin || false;
-        console.log("👑 Auth state change - Is admin:", isAdminUser);
-        setIsAdmin(isAdminUser);
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profileError) {
+            console.warn("⚠️ Auth state change - Profile query error:", profileError);
+            setIsAdmin(false);
+          } else {
+            const isAdminUser = profile?.is_admin || false;
+            console.log("👑 Auth state change - Is admin:", isAdminUser);
+            setIsAdmin(isAdminUser);
+          }
+        } catch (profileError) {
+          console.warn("⚠️ Auth state change - Profile query exception:", profileError);
+          setIsAdmin(false);
+        }
       } else {
         setUserId(null);
         setIsAdmin(false);
@@ -263,11 +268,14 @@ export default function WebApp() {
   };
 
   if (loading) {
-    console.log("⏳ App is loading...");
+    console.log("⏳ App is loading...", "User:", user ? "exists" : "null", "Loading state:", loading);
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === "dark" ? "#121212" : "#ffffff" }}>
         <ActivityIndicator size="large" color="#25D366" />
         <Text style={{ marginTop: 10, color: theme === "dark" ? "#fff" : "#000" }}>Loading...</Text>
+        <Text style={{ marginTop: 5, color: theme === "dark" ? "#fff" : "#000", fontSize: 12 }}>
+          {user ? "User authenticated, loading app..." : "Checking authentication..."}
+        </Text>
       </View>
     );
   }
