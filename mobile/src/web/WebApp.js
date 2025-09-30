@@ -103,9 +103,9 @@ const WebMainAppTabs = () => {
       })}
     >
       <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") || "WhatsApp" }} />
-      <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") || "Customers" }} />
+      {/* Customers tab temporarily disabled to test */}
       {/* Messages tab temporarily disabled to test */}
-      <Tab.Screen name="VCard" component={VCardScreen} options={{ title: t("vCard") || "VCard" }} />
+      {/* VCard tab temporarily disabled to test */}
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
     </Tab.Navigator>
   );
