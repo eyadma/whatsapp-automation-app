@@ -24,6 +24,7 @@ import * as Contacts from 'expo-contacts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
+import WebCompatibleButton from '../components/WebCompatibleButton';
 
 const VCardScreen = ({ navigation, route }) => {
   const { t } = useContext(AppContext);
@@ -293,16 +294,16 @@ const VCardScreen = ({ navigation, route }) => {
       {/* Web-compatible import button */}
       {Platform.OS === 'web' ? (
         <View style={dynamicStyles.webButtonContainer}>
-          <Button
+          <WebCompatibleButton
             mode="contained"
-            icon="contacts"
+            icon={<Ionicons name="contacts" size={20} color="#FFFFFF" />}
             onPress={() => setShowModal(true)}
             disabled={selectedCustomers.length === 0}
             style={dynamicStyles.webImportButton}
             contentStyle={dynamicStyles.webButtonContent}
           >
             {t('generateVCard')} ({selectedCustomers.length})
-          </Button>
+          </WebCompatibleButton>
         </View>
       ) : (
         <FAB
@@ -402,7 +403,7 @@ const VCardScreen = ({ navigation, route }) => {
             >
               {t('cancel')}
             </Button>
-            <Button
+            <WebCompatibleButton
               mode="contained"
               onPress={generateVCard}
               loading={generating}
@@ -410,7 +411,7 @@ const VCardScreen = ({ navigation, route }) => {
               style={dynamicStyles.modalButton}
             >
               {generating ? t('generating') : t('generateVCard')}
-            </Button>
+            </WebCompatibleButton>
           </View>
         </Modal>
       </Portal>

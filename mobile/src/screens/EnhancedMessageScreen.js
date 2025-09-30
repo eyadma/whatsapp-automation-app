@@ -13,6 +13,7 @@ import { messagesAPI } from '../services/api';
 import { timeRestrictionsAPI } from '../services/timeRestrictionsAPI';
 import { supabase } from '../services/supabase';
 import { formatTimeWithArabicNumerals, formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
+import WebCompatibleButton from '../components/WebCompatibleButton';
 
 const EnhancedMessageScreen = ({ navigation }) => {
   const { userId, t, language, activeSessionId } = useContext(AppContext);
@@ -31,9 +32,17 @@ const EnhancedMessageScreen = ({ navigation }) => {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [showETAModal, setShowETAModal] = useState(false);
   const [selectedArea, setSelectedArea] = useState(null);
-  const [etaTime, setEtaTime] = useState(new Date());
-  const [rangeEndTime, setRangeEndTime] = useState(new Date());
-  const [etaFormat, setEtaFormat] = useState('single'); // 'single' | 'range'
+  const [etaTime, setEtaTime] = useState(() => {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0); // Set to 12:00 PM
+    return date;
+  });
+  const [rangeEndTime, setRangeEndTime] = useState(() => {
+    const date = new Date();
+    date.setHours(13, 0, 0, 0); // Set to 1:00 PM
+    return date;
+  });
+  const [etaFormat, setEtaFormat] = useState('range'); // 'single' | 'range'
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showRangeEndPicker, setShowRangeEndPicker] = useState(false);
   const [previewMessages, setPreviewMessages] = useState([]);
@@ -50,6 +59,13 @@ const EnhancedMessageScreen = ({ navigation }) => {
   const [whatsappStatusLoading, setWhatsappStatusLoading] = useState(false);
   const [availableSessions, setAvailableSessions] = useState([]);
   const [selectedSessionForSending, setSelectedSessionForSending] = useState(null);
+  
+  // Enhanced ETA Management states
+  const [showCopyETAModal, setShowCopyETAModal] = useState(false);
+  const [selectedAreasToCopy, setSelectedAreasToCopy] = useState([]);
+  const [showBulkETAModal, setShowBulkETAModal] = useState(false);
+  const [bulkETAAction, setBulkETAAction] = useState('add'); // 'add' | 'deduct'
+  const [etaSaving, setEtaSaving] = useState(false);
 
   useEffect(() => { 
     if (userId) loadData(); 
@@ -221,9 +237,17 @@ const EnhancedMessageScreen = ({ navigation }) => {
 
   const handleSetETA = (area) => {
     setSelectedArea(area);
-    setEtaTime(new Date());
-    setRangeEndTime(new Date());
-    setEtaFormat('single');
+    
+    // Set default times to 12:00 and 13:00
+    const defaultStartTime = new Date();
+    defaultStartTime.setHours(12, 0, 0, 0);
+    
+    const defaultEndTime = new Date();
+    defaultEndTime.setHours(13, 0, 0, 0);
+    
+    setEtaTime(defaultStartTime);
+    setRangeEndTime(defaultEndTime);
+    setEtaFormat('range'); // Default to range format
     setShowETAModal(true);
   };
 
@@ -285,6 +309,134 @@ const EnhancedMessageScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error deleting ETA:', error);
       Alert.alert(t('error'), 'Failed to delete ETA: ' + error.message);
+    }
+  };
+
+  // Helper functions for time manipulation
+  const parseTimeString = (timeStr) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date;
+  };
+
+  const addHourToTime = (date) => {
+    const newDate = new Date(date);
+    newDate.setHours(newDate.getHours() + 1);
+    return newDate;
+  };
+
+  const deductHourFromTime = (date) => {
+    const newDate = new Date(date);
+    newDate.setHours(newDate.getHours() - 1);
+    return newDate;
+  };
+
+  const formatTimeFromDate = (date) => {
+    return formatTimeWithArabicNumerals(date);
+  };
+
+  // Copy ETA to multiple areas
+  const handleCopyETA = (sourceArea) => {
+    if (!areaETAs[sourceArea.areaId]) {
+      Alert.alert(t('error'), 'Please select an area with an existing ETA to copy');
+      return;
+    }
+    setSelectedArea(sourceArea);
+    setShowCopyETAModal(true);
+  };
+
+  const handleCopyToSelectedAreas = async () => {
+    if (!selectedArea || selectedAreasToCopy.length === 0) return;
+    
+    setEtaSaving(true);
+    try {
+      const sourceETA = areaETAs[selectedArea.areaId];
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const areaId of selectedAreasToCopy) {
+        try {
+          await enhancedMessageAPI.setAreaETA(areaId, sourceETA, userId);
+          setAreaETAs(prev => ({ ...prev, [areaId]: sourceETA }));
+          successCount++;
+        } catch (error) {
+          console.error(`Error copying ETA to area ${areaId}:`, error);
+          errorCount++;
+        }
+      }
+
+      Alert.alert(
+        t('success'), 
+        `ETA copied successfully!\n\n✅ Copied to: ${successCount} areas\n❌ Failed: ${errorCount} areas`
+      );
+      setShowCopyETAModal(false);
+      setSelectedAreasToCopy([]);
+    } catch (error) {
+      console.error('Error copying ETA:', error);
+      Alert.alert(t('error'), 'Failed to copy ETA to selected areas');
+    } finally {
+      setEtaSaving(false);
+    }
+  };
+
+  // Bulk ETA operations (add/deduct hour)
+  const handleBulkETAOperation = (action) => {
+    if (Object.keys(areaETAs).length === 0) {
+      Alert.alert(t('error'), 'No ETAs found to modify');
+      return;
+    }
+    setBulkETAAction(action);
+    setShowBulkETAModal(true);
+  };
+
+  const handleConfirmBulkETA = async () => {
+    setEtaSaving(true);
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const [areaId, etaString] of Object.entries(areaETAs)) {
+        try {
+          let newETA;
+          
+          // Parse and modify the ETA
+          if (etaString.includes('-')) {
+            // Range format: "12:00-13:00"
+            const [startStr, endStr] = etaString.split('-');
+            const startTime = parseTimeString(startStr.trim());
+            const endTime = parseTimeString(endStr.trim());
+            
+            const newStart = bulkETAAction === 'add' ? addHourToTime(startTime) : deductHourFromTime(startTime);
+            const newEnd = bulkETAAction === 'add' ? addHourToTime(endTime) : deductHourFromTime(endTime);
+            
+            newETA = `${formatTimeFromDate(newStart)}-${formatTimeFromDate(newEnd)}`;
+          } else {
+            // Single time format: "12:00"
+            const time = parseTimeString(etaString.trim());
+            const newTime = bulkETAAction === 'add' ? addHourToTime(time) : deductHourFromTime(time);
+            newETA = formatTimeFromDate(newTime);
+          }
+
+          await enhancedMessageAPI.setAreaETA(Number(areaId), newETA, userId);
+          setAreaETAs(prev => ({ ...prev, [areaId]: newETA }));
+          successCount++;
+        } catch (error) {
+          console.error(`Error updating ETA for area ${areaId}:`, error);
+          errorCount++;
+        }
+      }
+
+      Alert.alert(
+        t('success'), 
+        `ETAs updated successfully!\n\n✅ Updated: ${successCount} areas\n❌ Failed: ${errorCount} areas`
+      );
+      setShowBulkETAModal(false);
+    } catch (error) {
+      console.error('Error updating ETAs:', error);
+      Alert.alert(t('error'), 'Failed to update ETAs');
+    } finally {
+      setEtaSaving(false);
     }
   };
 
@@ -1165,7 +1317,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
         </Card.Content>
       </Card>
 
-      {/* ETA Management Section */}
+      {/* Enhanced ETA Management Section */}
       <Card style={dynamicStyles.card}>
         <Card.Content>
           <View style={dynamicStyles.sectionHeader}>
@@ -1182,6 +1334,39 @@ const EnhancedMessageScreen = ({ navigation }) => {
               </Button>
             </View>
           </View>
+          
+          {/* Bulk Operations */}
+          {Object.keys(areaETAs).length > 0 && (
+            <>
+              <Divider style={dynamicStyles.divider} />
+              <View style={dynamicStyles.bulkOperationsContainer}>
+                <Text style={dynamicStyles.bulkOperationsTitle}>Bulk Operations:</Text>
+                <View style={dynamicStyles.bulkButtonsRow}>
+                  <Button 
+                    mode="outlined" 
+                    onPress={() => handleBulkETAOperation('add')}
+                    style={[dynamicStyles.bulkButton, dynamicStyles.addHourButton]}
+                    icon="clock-plus"
+                    compact
+                    disabled={etaSaving}
+                  >
+                    +1 Hour All
+                  </Button>
+                  <Button 
+                    mode="outlined" 
+                    onPress={() => handleBulkETAOperation('deduct')}
+                    style={[dynamicStyles.bulkButton, dynamicStyles.deductHourButton]}
+                    icon="clock-minus"
+                    compact
+                    disabled={etaSaving}
+                  >
+                    -1 Hour All
+                  </Button>
+                </View>
+              </View>
+            </>
+          )}
+          
           <Divider style={dynamicStyles.divider} />
           {userAreas.length === 0 ? (
             <Text style={dynamicStyles.noDataText}>No areas found for your customers</Text>
@@ -1203,9 +1388,14 @@ const EnhancedMessageScreen = ({ navigation }) => {
                       </TouchableOpacity>
                       
                       {hasETA && (
-                        <TouchableOpacity onPress={() => handleDeleteETA(area.areaId)} style={dynamicStyles.deleteButton}>
-                          <Ionicons name="trash" size={20} color="#FF3B30" />
-                        </TouchableOpacity>
+                        <>
+                          <TouchableOpacity onPress={() => handleCopyETA(area)} style={dynamicStyles.copyButton}>
+                            <Ionicons name="copy" size={20} color="#007AFF" />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteETA(area.areaId)} style={dynamicStyles.deleteButton}>
+                            <Ionicons name="trash" size={20} color="#FF3B30" />
+                          </TouchableOpacity>
+                        </>
                       )}
                     </View>
                   )}
@@ -1401,32 +1591,32 @@ const EnhancedMessageScreen = ({ navigation }) => {
           </View>
 
           <View style={dynamicStyles.messageActions}>
-            <Button 
+            <WebCompatibleButton 
               mode="outlined" 
               onPress={generatePreviewMessages}
               loading={loading}
               style={dynamicStyles.actionButton}
             >
               Generate Preview
-            </Button>
+            </WebCompatibleButton>
             {!sending ? (
-              <Button 
+              <WebCompatibleButton 
                 mode="contained" 
                 onPress={sendMessages}
                 loading={loading}
                 style={dynamicStyles.actionButton}
               >
                 {t('sendMessages')} ({customers.length})
-              </Button>
+              </WebCompatibleButton>
             ) : (
-              <Button 
+              <WebCompatibleButton 
                 mode="contained" 
                 onPress={stopSending}
                 style={[dynamicStyles.actionButton, dynamicStyles.stopButton]}
-                icon="stop"
+                icon={<Ionicons name="stop" size={20} color="#FFFFFF" />}
               >
                 Stop Sending
-              </Button>
+              </WebCompatibleButton>
             )}
           </View>
           
@@ -1592,6 +1782,133 @@ const EnhancedMessageScreen = ({ navigation }) => {
           }}
         />
       )}
+
+      {/* Copy ETA Modal */}
+      <Modal
+        isVisible={showCopyETAModal}
+        onBackdropPress={() => {
+          setShowCopyETAModal(false);
+          setSelectedAreasToCopy([]);
+        }}
+        style={dynamicStyles.modal}
+      >
+        <View style={dynamicStyles.modalContent}>
+          <Text style={dynamicStyles.modalTitle}>Copy ETA to Other Areas</Text>
+          <Text style={dynamicStyles.modalSubtitle}>
+            Select areas to copy "{selectedArea ? areaETAs[selectedArea.areaId] : ''}" to:
+          </Text>
+          
+          <ScrollView style={dynamicStyles.areaButtonsContainer} showsVerticalScrollIndicator={false}>
+            {userAreas
+              .filter(area => area.areaId !== selectedArea?.areaId)
+              .map(area => (
+                <Button
+                  key={area.areaId}
+                  mode={selectedAreasToCopy.includes(area.areaId) ? 'contained' : 'outlined'}
+                  onPress={() => {
+                    setSelectedAreasToCopy(prev => 
+                      prev.includes(area.areaId)
+                        ? prev.filter(id => id !== area.areaId)
+                        : [...prev, area.areaId]
+                    );
+                  }}
+                  style={[
+                    dynamicStyles.areaButton,
+                    selectedAreasToCopy.includes(area.areaId) && dynamicStyles.selectedAreaButton
+                  ]}
+                  labelStyle={dynamicStyles.areaButtonLabel}
+                >
+                  {areasAPI.getAreaName(area, 'ar')}
+                  {areaETAs[area.areaId] && ` (${areaETAs[area.areaId]})`}
+                </Button>
+              ))}
+          </ScrollView>
+
+          <View style={dynamicStyles.modalActions}>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                setShowCopyETAModal(false);
+                setSelectedAreasToCopy([]);
+              }}
+              style={dynamicStyles.modalButton}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleCopyToSelectedAreas}
+              loading={etaSaving}
+              disabled={etaSaving || selectedAreasToCopy.length === 0}
+              style={dynamicStyles.modalButton}
+            >
+              Copy to {selectedAreasToCopy.length} Areas
+            </Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bulk ETA Operations Modal */}
+      <Modal
+        isVisible={showBulkETAModal}
+        onBackdropPress={() => setShowBulkETAModal(false)}
+        style={dynamicStyles.modal}
+      >
+        <View style={dynamicStyles.modalContent}>
+          <Text style={dynamicStyles.modalTitle}>
+            {bulkETAAction === 'add' ? 'Add 1 Hour to All ETAs' : 'Deduct 1 Hour from All ETAs'}
+          </Text>
+          <Text style={dynamicStyles.modalSubtitle}>
+            This will {bulkETAAction === 'add' ? 'add' : 'deduct'} 1 hour to all existing ETAs. Are you sure?
+          </Text>
+          
+          <ScrollView style={dynamicStyles.etaPreview} showsVerticalScrollIndicator={false}>
+            <Text style={dynamicStyles.previewTitle}>Preview of changes:</Text>
+            {Object.entries(areaETAs).map(([areaId, etaString]) => {
+              const area = userAreas.find(a => a.areaId === Number(areaId));
+              let newETA;
+              
+              if (etaString.includes('-')) {
+                const [startStr, endStr] = etaString.split('-');
+                const startTime = parseTimeString(startStr.trim());
+                const endTime = parseTimeString(endStr.trim());
+                const newStart = bulkETAAction === 'add' ? addHourToTime(startTime) : deductHourFromTime(startTime);
+                const newEnd = bulkETAAction === 'add' ? addHourToTime(endTime) : deductHourFromTime(endTime);
+                newETA = `${formatTimeFromDate(newStart)}-${formatTimeFromDate(newEnd)}`;
+              } else {
+                const time = parseTimeString(etaString.trim());
+                const newTime = bulkETAAction === 'add' ? addHourToTime(time) : deductHourFromTime(time);
+                newETA = formatTimeFromDate(newTime);
+              }
+              
+              return (
+                <Text key={areaId} style={dynamicStyles.previewItem}>
+                  {area ? areasAPI.getAreaName(area, 'ar') : `Area ${areaId}`}: {etaString} → {newETA}
+                </Text>
+              );
+            })}
+          </ScrollView>
+
+          <View style={dynamicStyles.modalActions}>
+            <Button
+              mode="outlined"
+              onPress={() => setShowBulkETAModal(false)}
+              style={dynamicStyles.modalButton}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleConfirmBulkETA}
+              loading={etaSaving}
+              disabled={etaSaving}
+              style={[dynamicStyles.modalButton, dynamicStyles.confirmButton]}
+            >
+              {bulkETAAction === 'add' ? 'Add Hour to All' : 'Deduct Hour from All'}
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1688,6 +2005,106 @@ const createStyles = (theme) => StyleSheet.create({
     minWidth: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  copyButton: {
+    padding: 8,
+    minWidth: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Bulk Operations Styles
+  bulkOperationsContainer: {
+    marginVertical: 12,
+  },
+  bulkOperationsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.onSurface,
+    marginBottom: 8,
+  },
+  bulkButtonsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  bulkButton: {
+    flex: 1,
+    minWidth: 120,
+  },
+  addHourButton: {
+    borderColor: '#25D366',
+  },
+  deductHourButton: {
+    borderColor: '#FF3B30',
+  },
+  // Modal Styles
+  modal: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 12,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.onSurface,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  confirmButton: {
+    backgroundColor: '#FF3B30',
+  },
+  // Area Selection Styles
+  areaButtonsContainer: {
+    maxHeight: 200,
+    marginVertical: 12,
+  },
+  areaButton: {
+    marginVertical: 4,
+    borderColor: theme.colors.outline,
+  },
+  selectedAreaButton: {
+    backgroundColor: theme.colors.primary,
+  },
+  areaButtonLabel: {
+    fontSize: 12,
+  },
+  // ETA Preview Styles
+  etaPreview: {
+    maxHeight: 200,
+    marginVertical: 12,
+  },
+  previewTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: theme.colors.onSurface,
+    marginBottom: 8,
+  },
+  previewItem: {
+    fontSize: 12,
+    color: theme.colors.onSurfaceVariant,
+    marginVertical: 2,
+    paddingHorizontal: 8,
   },
   // WhatsApp Session Selector Styles
   refreshButton: {

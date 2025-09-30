@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
 import { customersAPI } from '../services/api';
 import { getApiBaseUrl, resolveApiBaseUrl } from '../services/apiBase';
+import WebCompatibleButton from '../components/WebCompatibleButton';
 
 const CustomersScreen = ({ navigation }) => {
   const { userId, t, language } = useContext(AppContext);
@@ -292,12 +293,14 @@ const CustomersScreen = ({ navigation }) => {
             </View>
             <View style={dynamicStyles.customerActions}>
              
-              <TouchableOpacity
+              <WebCompatibleButton
+                mode="outlined"
                 onPress={() => deleteCustomer(customer.id)}
                 style={dynamicStyles.deleteCustomerButton}
+                icon={<Ionicons name="trash" size={16} color="#FF3B30" />}
               >
-                <Ionicons name="trash" size={16} color="#FF3B30" />
-              </TouchableOpacity>
+                {t('delete')}
+              </WebCompatibleButton>
             </View>
           </View>
           
@@ -378,13 +381,14 @@ const CustomersScreen = ({ navigation }) => {
             <Text style={dynamicStyles.actionText}>{t('refresh')}</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
+          <WebCompatibleButton
+            mode="outlined"
             onPress={testConnection}
             style={[dynamicStyles.actionButton, dynamicStyles.testButton]}
+            icon={<Ionicons name="wifi" size={16} color="#FF9500" />}
           >
-            <Ionicons name="wifi" size={16} color="#FF9500" />
-            <Text style={dynamicStyles.actionText}>{t('test')}</Text>
-          </TouchableOpacity>
+            {t('test')}
+          </WebCompatibleButton>
         </View>
         
         <View style={dynamicStyles.actionButtonsRow}>
@@ -397,13 +401,14 @@ const CustomersScreen = ({ navigation }) => {
           </TouchableOpacity>
           
           {selectedCustomers.length > 0 && (
-            <TouchableOpacity
+            <WebCompatibleButton
+              mode="outlined"
               onPress={deleteSelectedCustomers}
               style={[dynamicStyles.actionButton, dynamicStyles.deleteButton]}
+              icon={<Ionicons name="trash" size={16} color="#FF3B30" />}
             >
-              <Ionicons name="trash" size={16} color="#FF3B30" />
-              <Text style={dynamicStyles.actionText}>{t('deleteSelected')}</Text>
-            </TouchableOpacity>
+              {t('deleteSelected')}
+            </WebCompatibleButton>
           )}
           
           <TouchableOpacity

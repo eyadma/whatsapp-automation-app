@@ -22,7 +22,7 @@ import VCardScreen from "./src/screens/VCardScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import EnhancedMessageScreen from "./src/screens/EnhancedMessageScreen";
 import AddETAScreen from "./src/screens/AddETAScreen";
-import SessionManagementScreen from "./src/screens/SessionManagementScreen";
+import SimpleSessionManagementScreen from "./src/screens/SimpleSessionManagementScreen";
 import SessionAnalyticsScreen from "./src/screens/SessionAnalyticsScreen";
 
 // Import context and utilities
@@ -197,7 +197,7 @@ const AdminStack = () => {
       <Stack.Screen name="AdminTemplateManagement" component={AdminTemplateManagement} options={{ title: "Template Management" }} />
       <Stack.Screen name="AdminAnalytics" component={AdminAnalytics} options={{ title: "Analytics" }} />
       <Stack.Screen name="AdminSettings" component={AdminSettings} options={{ title: "Settings" }} />
-      <Stack.Screen name="Sessions" component={SessionManagementScreen} options={{ title: "WhatsApp Sessions" }} />
+      <Stack.Screen name="Sessions" component={SimpleSessionManagementScreen} options={{ title: "WhatsApp Sessions" }} />
       <Stack.Screen name="SessionAnalytics" component={SessionAnalyticsScreen} options={{ title: "Session Analytics" }} />
     </Stack.Navigator>
   );
@@ -384,7 +384,7 @@ export default function App() {
                     />
                     <Stack.Screen 
                       name="Sessions" 
-                      component={SessionManagementScreen} 
+                      component={SimpleSessionManagementScreen} 
                       options={{ 
                         headerShown: true, 
                         title: "WhatsApp Sessions",

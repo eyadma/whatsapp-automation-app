@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
 import { supabase, sessionAPI } from '../services/supabase';
 import { loginPersistenceAPI } from '../services/loginPersistenceAPI';
+import WebCompatibleButton from '../components/WebCompatibleButton';
 
 const SettingsScreen = ({ navigation }) => {
   const { user, userId, setUser, setUserId, language, setLanguage, theme, setTheme, t } = useContext(AppContext);
@@ -479,14 +480,14 @@ const SettingsScreen = ({ navigation }) => {
 
 
       {/* Save Preferences */}
-      <Button
+      <WebCompatibleButton
         mode="contained"
         onPress={savePreferences}
         style={dynamicStyles.saveButton}
-        icon="content-save"
+        icon={<Ionicons name="save" size={20} color="#FFFFFF" />}
       >
         {t('savePreferences')}
-      </Button>
+      </WebCompatibleButton>
 
       {/* Clear Saved Login */}
       <Button
@@ -500,15 +501,14 @@ const SettingsScreen = ({ navigation }) => {
       </Button>
 
       {/* Logout */}
-      <Button
+      <WebCompatibleButton
         mode="outlined"
         onPress={handleLogout}
         style={dynamicStyles.logoutButton}
-        icon="logout"
-        textColor="#FF3B30"
+        icon={<Ionicons name="log-out" size={20} color="#FF3B30" />}
       >
         {t('logout')}
-      </Button>
+      </WebCompatibleButton>
     </ScrollView>
   );
 };

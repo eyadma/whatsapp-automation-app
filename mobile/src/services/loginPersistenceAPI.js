@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import CryptoJS from 'crypto-js';
 
 /**
  * Login Persistence API
@@ -18,8 +17,44 @@ export const loginPersistenceAPI = {
     LAST_LOGIN_EMAIL: 'last_login_email',
   },
 
-  // Encryption key (in production, this should be more secure)
-  ENCRYPTION_KEY: 'whatsapp_manager_2024_secure_key',
+  // Simple encoding key (in production, this should be more secure)
+  ENCODING_KEY: 'whatsapp_manager_2024_secure_key',
+
+  /**
+   * Simple encoding function (base64 + key)
+   */
+  _encode: (text, key) => {
+    try {
+      // Simple encoding: base64 + key rotation
+      let encoded = btoa(text);
+      let result = '';
+      for (let i = 0; i < encoded.length; i++) {
+        result += String.fromCharCode(encoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+      }
+      return btoa(result);
+    } catch (error) {
+      console.error('Encoding error:', error);
+      return text; // Fallback to plain text
+    }
+  },
+
+  /**
+   * Simple decoding function
+   */
+  _decode: (encodedText, key) => {
+    try {
+      // Simple decoding: reverse the encoding process
+      let decoded = atob(encodedText);
+      let result = '';
+      for (let i = 0; i < decoded.length; i++) {
+        result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+      }
+      return atob(result);
+    } catch (error) {
+      console.error('Decoding error:', error);
+      return encodedText; // Fallback to encoded text
+    }
+  },
 
   /**
    * Save login credentials
@@ -50,11 +85,11 @@ export const loginPersistenceAPI = {
       );
       
       if (rememberLogin && password) {
-        // Encrypt and save password
-        const encryptedPassword = CryptoJS.AES.encrypt(password, loginPersistenceAPI.ENCRYPTION_KEY).toString();
+        // Encode and save password
+        const encodedPassword = loginPersistenceAPI._encode(password, loginPersistenceAPI.ENCODING_KEY);
         await AsyncStorage.setItem(
           loginPersistenceAPI.STORAGE_KEYS.SAVED_PASSWORD, 
-          encryptedPassword
+          encodedPassword
         );
         console.log('✅ Login credentials saved securely');
       } else {
@@ -85,12 +120,11 @@ export const loginPersistenceAPI = {
       let password = null;
       if (rememberLogin === 'true' && encryptedPassword) {
         try {
-          // Decrypt password
-          const bytes = CryptoJS.AES.decrypt(encryptedPassword, loginPersistenceAPI.ENCRYPTION_KEY);
-          password = bytes.toString(CryptoJS.enc.Utf8);
-        } catch (decryptError) {
-          console.error('❌ Error decrypting password:', decryptError);
-          // Clear corrupted encrypted password
+          // Decode password
+          password = loginPersistenceAPI._decode(encryptedPassword, loginPersistenceAPI.ENCODING_KEY);
+        } catch (decodeError) {
+          console.error('❌ Error decoding password:', decodeError);
+          // Clear corrupted encoded password
           await AsyncStorage.removeItem(loginPersistenceAPI.STORAGE_KEYS.SAVED_PASSWORD);
         }
       }

@@ -2,14 +2,14 @@
   "expo": {
     "name": "WhatsApp Automation",
     "slug": "whatsapp-automation",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#25D366"
+      "backgroundColor": "#4CAF50"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -27,10 +27,10 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#25D366"
+        "backgroundColor": "#4CAF50"
       },
       "package": "com.eyadma.whatsappautomation",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
