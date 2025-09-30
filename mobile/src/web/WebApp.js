@@ -34,15 +34,13 @@ const Tab = createBottomTabNavigator();
 // Main App Tab Navigator (for regular users) - Web Compatible
 const WebMainAppTabs = () => {
   const { t, theme, userId } = useContext(AppContext);
-  const [timeRestrictionStatus, setTimeRestrictionStatus] = useState(null);
-  const [loadingRestrictions, setLoadingRestrictions] = useState(true);
+  const [timeRestrictionStatus, setTimeRestrictionStatus] = useState({ canSendMessages: true });
 
   useEffect(() => {
     const checkTimeRestrictions = async () => {
       if (!userId) return;
       
       try {
-        setLoadingRestrictions(true);
         const { timeRestrictionsAPI } = await import('../services/timeRestrictionsAPI');
         const result = await timeRestrictionsAPI.getTimeRestrictionStatus(userId);
         
@@ -55,8 +53,6 @@ const WebMainAppTabs = () => {
       } catch (error) {
         console.error('Error loading time restrictions:', error);
         setTimeRestrictionStatus({ canSendMessages: true });
-      } finally {
-        setLoadingRestrictions(false);
       }
     };
 
@@ -64,15 +60,6 @@ const WebMainAppTabs = () => {
     const interval = setInterval(checkTimeRestrictions, 600000);
     return () => clearInterval(interval);
   }, [userId]);
-
-  if (loadingRestrictions) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === "dark" ? "#121212" : "#ffffff" }}>
-        <ActivityIndicator size="large" color="#25D366" />
-        <Text style={{ marginTop: 10, color: theme === "dark" ? "#fff" : "#000" }}>Loading...</Text>
-      </View>
-    );
-  }
 
   const showMessagesTab = timeRestrictionStatus?.canSendMessages !== false;
 
@@ -108,17 +95,17 @@ const WebMainAppTabs = () => {
         headerTintColor: theme === 'dark' ? '#fff' : '#000',
       })}
     >
-      <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") }} />
-      <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") }} />
+      <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") || "WhatsApp" }} />
+      <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") || "Customers" }} />
       <Tab.Screen 
         name="Messages" 
         component={EnhancedMessageScreen} 
         options={{ 
-          title: showMessagesTab ? t("sendMessages") : "Messages (Restricted)"
+          title: showMessagesTab ? (t("sendMessages") || "Messages") : "Messages (Restricted)"
         }}
       />
-      <Tab.Screen name="VCard" component={VCardScreen} options={{ title: t("vCard") }} />
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") }} />
+      <Tab.Screen name="VCard" component={VCardScreen} options={{ title: t("vCard") || "VCard" }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
     </Tab.Navigator>
   );
 };
@@ -137,10 +124,10 @@ const WebAdminStack = () => {
       }}
     >
       <Stack.Screen name="AdminDashboard" component={AdminDashboard} options={{ title: "Admin Dashboard" }} />
-      <Stack.Screen name="UserManagement" component={UserManagement} options={{ title: t("userManagement") }} />
+      <Stack.Screen name="UserManagement" component={UserManagement} options={{ title: t("userManagement") || "User Management" }} />
       <Stack.Screen name="TemplateManagement" component={AdminTemplateManagement} options={{ title: "Template Management" }} />
       <Stack.Screen name="Analytics" component={AdminAnalytics} options={{ title: "Analytics" }} />
-      <Stack.Screen name="AdminSettings" component={AdminSettings} options={{ title: t("settings") }} />
+      <Stack.Screen name="AdminSettings" component={AdminSettings} options={{ title: t("settings") || "Settings" }} />
       <Stack.Screen name="Sessions" component={SimpleSessionManagementScreen} options={{ title: "Session Management" }} />
       <Stack.Screen name="SessionAnalytics" component={SessionAnalyticsScreen} options={{ title: "Session Analytics" }} />
     </Stack.Navigator>
@@ -181,13 +168,16 @@ export default function WebApp() {
 
   const checkAuth = async () => {
     try {
+      console.log("🔍 Checking authentication...");
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      console.log("👤 User found:", user ? "Yes" : "No");
       setUser(user);
 
       if (user) {
         setUserId(user.id);
+        console.log("🆔 User ID set:", user.id);
         // Check if user is admin
         const { data: profile } = await supabase
           .from('profiles')
@@ -195,11 +185,14 @@ export default function WebApp() {
           .eq('id', user.id)
           .single();
         
-        setIsAdmin(profile?.is_admin || false);
+        const isAdminUser = profile?.is_admin || false;
+        console.log("👑 Is admin:", isAdminUser);
+        setIsAdmin(isAdminUser);
       }
     } catch (error) {
-      console.error("Auth check error:", error);
+      console.error("❌ Auth check error:", error);
     } finally {
+      console.log("✅ Auth check complete, setting loading to false");
       setLoading(false);
     }
   };
@@ -209,10 +202,12 @@ export default function WebApp() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("🔄 Auth state change:", event, session ? "Session exists" : "No session");
       setUser(session?.user ?? null);
 
       if (session?.user) {
         setUserId(session.user.id);
+        console.log("🆔 Auth state change - User ID set:", session.user.id);
         // Check if user is admin
         const { data: profile } = await supabase
           .from('profiles')
@@ -220,12 +215,16 @@ export default function WebApp() {
           .eq('id', session.user.id)
           .single();
         
-        setIsAdmin(profile?.is_admin || false);
+        const isAdminUser = profile?.is_admin || false;
+        console.log("👑 Auth state change - Is admin:", isAdminUser);
+        setIsAdmin(isAdminUser);
       } else {
         setUserId(null);
         setIsAdmin(false);
+        console.log("🚪 User logged out");
       }
 
+      console.log("✅ Auth state change complete, setting loading to false");
       setLoading(false);
     });
 
@@ -264,6 +263,7 @@ export default function WebApp() {
   };
 
   if (loading) {
+    console.log("⏳ App is loading...");
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === "dark" ? "#121212" : "#ffffff" }}>
         <ActivityIndicator size="large" color="#25D366" />
@@ -273,6 +273,7 @@ export default function WebApp() {
   }
 
   const cleanUserId = getCleanUserId(userId);
+  console.log("🎯 App render - User:", user ? "Logged in" : "Not logged in", "Admin:", isAdmin, "Clean User ID:", cleanUserId);
 
   return (
     <PaperProvider theme={getTheme()}>
