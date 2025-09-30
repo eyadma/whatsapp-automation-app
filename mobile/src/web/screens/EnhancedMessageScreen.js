@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import { Card, Button, TextInput, Divider, List, Chip, useTheme } from 'react-native-paper';
+import { Card, TextInput, Divider, List, Chip, useTheme } from 'react-native-paper';
+import WebCompatibleButton from '../components/WebCompatibleButton';
 import { Ionicons } from '@expo/vector-icons';
 import { Portal, Modal } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';

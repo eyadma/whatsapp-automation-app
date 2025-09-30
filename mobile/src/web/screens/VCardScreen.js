@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import {
   Card,
-  Button,
   Chip,
   FAB,
   Portal,
@@ -19,6 +18,7 @@ import {
   TextInput,
   useTheme,
 } from 'react-native-paper';
+import WebCompatibleButton from '../components/WebCompatibleButton';
 import { Ionicons } from '@expo/vector-icons';
 // Web-compatible contacts - placeholder
 const Contacts = {
@@ -404,7 +404,7 @@ const VCardScreen = ({ navigation, route }) => {
       {/* Web-compatible import button */}
       {Platform.OS === 'web' ? (
         <View style={dynamicStyles.webButtonContainer}>
-          <Button
+          <WebCompatibleButton
             mode="contained"
             icon="contacts"
             onPress={() => setShowModal(true)}
@@ -413,7 +413,7 @@ const VCardScreen = ({ navigation, route }) => {
             contentStyle={dynamicStyles.webButtonContent}
           >
             {t('generateVCard')} ({selectedCustomers.length})
-          </Button>
+          </WebCompatibleButton>
         </View>
       ) : (
         <FAB
@@ -506,14 +506,14 @@ const VCardScreen = ({ navigation, route }) => {
           </View>
 
           <View style={dynamicStyles.modalActions}>
-            <Button
+            <WebCompatibleButton
               mode="outlined"
               onPress={() => setShowModal(false)}
               style={dynamicStyles.modalButton}
             >
               {t('cancel')}
-            </Button>
-            <Button
+            </WebCompatibleButton>
+            <WebCompatibleButton
               mode="outlined"
               onPress={copyVCardToClipboard}
               loading={generating}
@@ -522,8 +522,8 @@ const VCardScreen = ({ navigation, route }) => {
               icon="content-copy"
             >
               Copy VCF
-            </Button>
-            <Button
+            </WebCompatibleButton>
+            <WebCompatibleButton
               mode="contained"
               onPress={generateVCard}
               loading={generating}
@@ -532,7 +532,7 @@ const VCardScreen = ({ navigation, route }) => {
               icon="download"
             >
               {generating ? t('generating') : 'Download VCF'}
-            </Button>
+            </WebCompatibleButton>
           </View>
         </Modal>
       </Portal>
