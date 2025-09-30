@@ -69,13 +69,18 @@ const WebMainAppTabs = () => {
   // Simplified - no time restrictions for web to avoid loading issues
   const showMessagesTab = true;
 
-  // Temporarily return a simple screen to test
+  // Test with Stack Navigator to isolate which screen causes the error
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === 'dark' ? '#121212' : '#fff' }}>
-      <Text style={{ fontSize: 24, marginBottom: 16, color: theme === 'dark' ? '#fff' : '#000' }}>WhatsApp Automation</Text>
-      <Text style={{ fontSize: 16, color: theme === 'dark' ? '#fff' : '#000' }}>Web app is loading successfully!</Text>
-      <Text style={{ fontSize: 14, color: '#666', marginTop: 8 }}>User ID: {userId}</Text>
-    </View>
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: theme === 'dark' ? '#1e1e1e' : '#fff',
+        },
+        headerTintColor: theme === 'dark' ? '#fff' : '#000',
+      }}
+    >
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
+    </Stack.Navigator>
   );
 
   /* Original Tab Navigator - temporarily disabled to find the issue
