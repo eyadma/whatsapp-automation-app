@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import QRCodeLib from 'qrcode';
 
 const WebQRCode = ({ value, size = 200, color = 'black', backgroundColor = 'white', ...props }) => {
@@ -37,43 +37,37 @@ const WebQRCode = ({ value, size = 200, color = 'black', backgroundColor = 'whit
 
   if (!value) {
     return (
-      <View style={[styles.container, { width: size, height: size }]}>
-        <Text style={styles.errorText}>No QR Data</Text>
+      <View style={{
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 8,
+        width: size,
+        height: size,
+      }}>
+        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center' }}>No QR Data</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}>
-      <canvas
-        ref={canvasRef}
-        width={size}
-        height={size}
-        style={styles.canvas}
-        {...props}
-      />
+    <View style={{
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#fff',
+      borderWidth: 1,
+      borderColor: '#ccc',
+      borderRadius: 8,
+      width: size,
+      height: size,
+      overflow: 'hidden',
+    }}>
+      {/** Avoid passing RN StyleSheet styles to DOM canvas; only width/height attributes */}
+      <canvas ref={canvasRef} width={size} height={size} {...props} />
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-  },
-  canvas: {
-    maxWidth: '100%',
-    maxHeight: '100%',
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-});
 
 export default WebQRCode;
