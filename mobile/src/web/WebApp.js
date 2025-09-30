@@ -17,6 +17,7 @@ import WhatsAppScreen from "./screens/WhatsAppScreen";
 import CustomersScreen from "./screens/CustomersScreen";
 import VCardScreen from "./screens/VCardScreen";
 import SettingsScreen from "./screens/SettingsScreen";
+import MinimalSettingsScreen from "./screens/MinimalSettingsScreen";
 import EnhancedMessageScreen from "./screens/EnhancedMessageScreen";
 import AddCustomerScreen from "./screens/AddCustomerScreen";
 import AddETAScreen from "./screens/AddETAScreen";
@@ -102,11 +103,11 @@ const WebMainAppTabs = () => {
         headerTintColor: theme === 'dark' ? '#fff' : '#000',
       })}
     >
-      <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") || "WhatsApp" }} />
+      {/* WhatsApp tab temporarily disabled to test */}
       {/* Customers tab temporarily disabled to test */}
       {/* Messages tab temporarily disabled to test */}
       {/* VCard tab temporarily disabled to test */}
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
+      <Tab.Screen name="Settings" component={MinimalSettingsScreen} options={{ title: t("settings") || "Settings" }} />
     </Tab.Navigator>
   );
 };
