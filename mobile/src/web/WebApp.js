@@ -5,26 +5,23 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Provider as PaperProvider, MD3LightTheme, MD3DarkTheme } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Contacts from 'expo-contacts';
-import ContactsPermission from "../components/ContactsPermission";
 
-// Import web-compatible screens
-import LoginScreen from "../screens/LoginScreen";
-import AdminDashboard from "../screens/AdminDashboard";
-import UserManagement from "../screens/UserManagement";
-import AdminTemplateManagement from '../screens/AdminTemplateManagement';
-import AdminAnalytics from '../screens/AdminAnalytics';
-import AdminSettings from '../screens/AdminSettings';
-import WebWhatsAppScreen from "./screens/WebWhatsAppScreen";
-import WebCustomersScreen from "./screens/WebCustomersScreen";
-import WebVCardScreen from "./screens/WebVCardScreen";
-import WebSettingsScreen from "./screens/WebSettingsScreen";
-import WebEnhancedMessageScreen from "./screens/WebEnhancedMessageScreen";
-import AddCustomerScreen from "../screens/AddCustomerScreen";
-import AddETAScreen from "../screens/AddETAScreen";
-import SimpleSessionManagementScreen from "../screens/SimpleSessionManagementScreen";
-import SessionAnalyticsScreen from "../screens/SessionAnalyticsScreen";
+// Import web-compatible screens (copied from mobile)
+import LoginScreen from "./screens/LoginScreen";
+import AdminDashboard from "./screens/AdminDashboard";
+import UserManagement from "./screens/UserManagement";
+import AdminTemplateManagement from './screens/AdminTemplateManagement';
+import AdminAnalytics from './screens/AdminAnalytics';
+import AdminSettings from './screens/AdminSettings';
+import WhatsAppScreen from "./screens/WhatsAppScreen";
+import CustomersScreen from "./screens/CustomersScreen";
+import VCardScreen from "./screens/VCardScreen";
+import SettingsScreen from "./screens/SettingsScreen";
+import EnhancedMessageScreen from "./screens/EnhancedMessageScreen";
+import AddCustomerScreen from "./screens/AddCustomerScreen";
+import AddETAScreen from "./screens/AddETAScreen";
+import SimpleSessionManagementScreen from "./screens/SimpleSessionManagementScreen";
+import SessionAnalyticsScreen from "./screens/SessionAnalyticsScreen";
 
 // Import context and utilities
 import { AppContext } from "../context/AppContext";
@@ -111,17 +108,17 @@ const WebMainAppTabs = () => {
         headerTintColor: theme === 'dark' ? '#fff' : '#000',
       })}
     >
-      <Tab.Screen name="WhatsApp" component={WebWhatsAppScreen} options={{ title: t("whatsappConnection") }} />
-      <Tab.Screen name="Customers" component={WebCustomersScreen} options={{ title: t("manageCustomers") }} />
+      <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") }} />
+      <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") }} />
       <Tab.Screen 
         name="Messages" 
-        component={WebEnhancedMessageScreen} 
+        component={EnhancedMessageScreen} 
         options={{ 
           title: showMessagesTab ? t("sendMessages") : "Messages (Restricted)"
         }}
       />
-      <Tab.Screen name="VCard" component={WebVCardScreen} options={{ title: t("vCard") }} />
-      <Tab.Screen name="Settings" component={WebSettingsScreen} options={{ title: t("settings") }} />
+      <Tab.Screen name="VCard" component={VCardScreen} options={{ title: t("vCard") }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") }} />
     </Tab.Navigator>
   );
 };
@@ -162,15 +159,9 @@ export default function WebApp() {
   // Load user preferences function
   const loadUserPreferences = async () => {
     try {
-      let savedLanguage, savedTheme;
-      
-      if (Platform.OS === 'web') {
-        savedLanguage = localStorage.getItem("userLanguage");
-        savedTheme = localStorage.getItem("userTheme");
-      } else {
-        savedLanguage = await AsyncStorage.getItem("userLanguage");
-        savedTheme = await AsyncStorage.getItem("userTheme");
-      }
+      // For web, use localStorage directly
+      const savedLanguage = localStorage.getItem("userLanguage");
+      const savedTheme = localStorage.getItem("userTheme");
 
       if (savedLanguage) setLanguage(savedLanguage);
       if (savedTheme) setTheme(savedTheme);
