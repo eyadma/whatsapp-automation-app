@@ -38,14 +38,7 @@ import { supabase } from '../../services/supabase';
 import { whatsappAPI } from '../../services/api';
 import { resolveApiBaseUrl } from '../../services/apiBase';
 
-// QRCode component for web - placeholder implementation
-const QRCode = ({ value, size = 200, ...props }) => (
-  <View style={{ width: size, height: size, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#ccc' }}>
-    <Text style={{ fontSize: 12, textAlign: 'center', color: '#000' }}>
-      QR Code: {value ? value.substring(0, 20) + '...' : 'No data'}
-    </Text>
-  </View>
-);
+import WebQRCode from '../components/WebQRCode';
 
 // Web-compatible Share implementation
 const Share = {
@@ -694,41 +687,12 @@ const SessionManagementScreen = ({ navigation }) => {
                       onPress={() => showQRCode(session.session_id, qrCodeData[session.session_id])}
                       activeOpacity={0.7}
                     >
-                      {(() => {
-                        if (!QRCode) {
-                          return (
-                            <View style={dynamicStyles.qrCodeErrorContainer}>
-                              <Ionicons name="alert-circle" size={48} color="#FF3B30" />
-                              <Text style={dynamicStyles.qrCodeErrorText}>QR Library Unavailable</Text>
-                            </View>
-                          );
-                        }
-                        
-                        try {
-                          return (
-                            <QRCode
-                              value={qrCodeData[session.session_id] || ''}
-                              size={120}
-                              color="black"
-                              backgroundColor="white"
-                              onError={(error) => {
-                                console.log('❌ QR Code Error:', error);
-                              }}
-                              onLoad={() => {
-                                console.log('✅ QR Code loaded successfully');
-                              }}
-                            />
-                          );
-                        } catch (error) {
-                          console.error('Error rendering QR code:', error);
-                          return (
-                            <View style={dynamicStyles.qrCodeErrorContainer}>
-                              <Ionicons name="alert-circle" size={48} color="#FF3B30" />
-                              <Text style={dynamicStyles.qrCodeErrorText}>QR Code Error</Text>
-                            </View>
-                          );
-                        }
-                      })()}
+                      <WebQRCode
+                        value={qrCodeData[session.session_id] || ''}
+                        size={120}
+                        color="black"
+                        backgroundColor="white"
+                      />
                       <View style={[dynamicStyles.qrCodeOverlay, { opacity: 0.3 }]}>
                         <Ionicons name="expand" size={24} color="#666" />
                         <Text style={dynamicStyles.qrCodeTapText}>{t('tapToZoom')}</Text>
@@ -1158,43 +1122,12 @@ const SessionManagementScreen = ({ navigation }) => {
                 </Text>
                 
                 <View style={dynamicStyles.qrModalQRContainer}>
-                  {(() => {
-                    if (!QRCode) {
-                      return (
-                        <View style={dynamicStyles.qrModalErrorContainer}>
-                          <Ionicons name="alert-circle" size={64} color="#FF3B30" />
-                          <Text style={dynamicStyles.qrModalErrorText}>QR Library Unavailable</Text>
-                          <Text style={dynamicStyles.qrModalErrorSubtext}>Please install react-native-qrcode-svg</Text>
-                        </View>
-                      );
-                    }
-                    
-                    try {
-                      return (
-                        <QRCode
-                          value={selectedQRCode.qrCode || ''}
-                          size={250}
-                          color="black"
-                          backgroundColor="white"
-                          onError={(error) => {
-                            console.log('❌ QR Code Error:', error);
-                          }}
-                          onLoad={() => {
-                            console.log('✅ QR Code loaded successfully');
-                          }}
-                        />
-                      );
-                    } catch (error) {
-                      console.error('Error rendering modal QR code:', error);
-                      return (
-                        <View style={dynamicStyles.qrModalErrorContainer}>
-                          <Ionicons name="alert-circle" size={64} color="#FF3B30" />
-                          <Text style={dynamicStyles.qrModalErrorText}>QR Code Error</Text>
-                          <Text style={dynamicStyles.qrModalErrorSubtext}>Unable to display QR code</Text>
-                        </View>
-                      );
-                    }
-                  })()}
+                  <WebQRCode
+                    value={selectedQRCode.qrCode || ''}
+                    size={250}
+                    color="black"
+                    backgroundColor="white"
+                  />
                 </View>
                 
                 <Text style={dynamicStyles.qrModalInstructions}>

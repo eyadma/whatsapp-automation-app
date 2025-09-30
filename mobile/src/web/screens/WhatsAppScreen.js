@@ -11,14 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Card, Button, TextInput, Divider, Chip, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-// QRCode component for web - placeholder implementation
-const QRCode = ({ value, size = 200, ...props }) => (
-  <View style={{ width: size, height: size, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#ccc' }}>
-    <Text style={{ fontSize: 12, textAlign: 'center', color: '#000' }}>
-      QR Code: {value ? value.substring(0, 20) + '...' : 'No data'}
-    </Text>
-  </View>
-);
+import WebQRCode from '../components/WebQRCode';
 import { AppContext } from '../../context/AppContext';
 import { whatsappAPI } from '../../services/api';
 import { supabase } from '../../services/supabase';
@@ -535,17 +528,11 @@ const WhatsAppScreen = ({ navigation }) => {
             <View style={dynamicStyles.qrContainer}>
               <Text style={dynamicStyles.qrTitle}>Scan QR Code to Connect</Text>
               <View style={dynamicStyles.qrWrapper}>
-                <QRCode
+                <WebQRCode
                   value={connectionStatus.qrCode}
                   size={250}
                   color="black"
                   backgroundColor="white"
-                  onError={(error) => {
-                    console.log('❌ QR Code Error:', error);
-                  }}
-                  onLoad={() => {
-                    console.log('✅ QR Code loaded successfully');
-                  }}
                 />
               </View>
               <Text style={dynamicStyles.qrInstructions}>
