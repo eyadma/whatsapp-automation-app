@@ -10,6 +10,7 @@
     "build:web": "expo export --platform web",
     "serve:web": "npx serve dist -s -l ${PORT:-3000}",
     "start:web": "npm run build:web && npm run serve:web",
+    "start:railway": "npm run build:web && node server.js",
     "increment-version": "node increment-version.js",
     "build:production": "node build-production.js"
   },
@@ -28,6 +29,7 @@
     "crypto-js": "^4.2.0",
     "expo": "~54.0.0",
     "expo-contacts": "~15.0.8",
+    "express": "^4.18.2",
     "expo-dev-client": "~6.0.12",
     "expo-font": "~14.0.0",
     "expo-linear-gradient": "~15.0.7",
