@@ -3,6 +3,8 @@ import { View, Text } from 'react-native';
 import QRCodeLib from 'qrcode';
 
 const WebQRCode = ({ value, size = 200, color = 'black', backgroundColor = 'white', ...props }) => {
+  // Prevent passing RN style or any props to the raw canvas element
+  const { style: _ignoredStyle, ...restProps } = props;
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -64,8 +66,8 @@ const WebQRCode = ({ value, size = 200, color = 'black', backgroundColor = 'whit
       height: size,
       overflow: 'hidden',
     }}>
-      {/** Avoid passing RN StyleSheet styles to DOM canvas; only width/height attributes */}
-      <canvas ref={canvasRef} width={size} height={size} {...props} />
+      {/** Avoid passing RN StyleSheet styles or any props to DOM canvas; only width/height attributes */}
+      <canvas ref={canvasRef} width={size} height={size} />
     </View>
   );
 };
