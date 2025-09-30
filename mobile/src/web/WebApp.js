@@ -69,21 +69,7 @@ const WebMainAppTabs = () => {
   // Simplified - no time restrictions for web to avoid loading issues
   const showMessagesTab = true;
 
-  // Test with Stack Navigator to isolate which screen causes the error
-  return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: {
-          backgroundColor: theme === 'dark' ? '#1e1e1e' : '#fff',
-        },
-        headerTintColor: theme === 'dark' ? '#fff' : '#000',
-      }}
-    >
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
-    </Stack.Navigator>
-  );
-
-  /* Original Tab Navigator - temporarily disabled to find the issue
+  // Full Tab Navigator - all screens enabled
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -129,7 +115,6 @@ const WebMainAppTabs = () => {
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
     </Tab.Navigator>
   );
-  */
 };
 
 // Admin Stack Navigator - Web Compatible
