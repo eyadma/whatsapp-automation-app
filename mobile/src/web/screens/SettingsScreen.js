@@ -112,11 +112,16 @@ const SettingsScreen = ({ navigation }) => {
     const confirmed = window.confirm(t('sureToLogout') || 'Are you sure you want to logout?');
     if (confirmed) {
       try {
+        console.log('🚪 Starting logout process...');
         await supabase.auth.signOut();
+        console.log('✅ Supabase signOut completed');
         setUser(null);
         setUserId(null);
-        // Navigation will be handled by App.js based on auth state
+        console.log('✅ User state cleared');
+        // Force page reload to ensure clean state
+        window.location.reload();
       } catch (error) {
+        console.error('❌ Logout error:', error);
         alert('Failed to logout: ' + error.message);
       }
     }
@@ -367,6 +372,22 @@ const SettingsScreen = ({ navigation }) => {
               Check Status
             </Button>
           </View>
+        </Card.Content>
+      </Card>
+
+      {/* Debug Info */}
+      <Card style={dynamicStyles.card}>
+        <Card.Content>
+          <Text style={dynamicStyles.sectionTitle}>Debug Info</Text>
+          <Text style={{ color: theme === 'dark' ? '#fff' : '#000', marginBottom: 8 }}>
+            User ID: {userId || 'None'}
+          </Text>
+          <Text style={{ color: theme === 'dark' ? '#fff' : '#000', marginBottom: 8 }}>
+            Is Admin: {isAdmin ? 'Yes' : 'No'}
+          </Text>
+          <Text style={{ color: theme === 'dark' ? '#fff' : '#000', marginBottom: 8 }}>
+            User Email: {user?.email || 'None'}
+          </Text>
         </Card.Content>
       </Card>
 
