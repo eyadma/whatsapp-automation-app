@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Text, Card, ActivityIndicator, Divider, useTheme } from 'react-native-paper';
-import WebCompatiblePicker from '../components/WebCompatiblePicker';
+import WebCompatiblePicker from '../web/components/WebCompatiblePicker';
 import { AppContext } from '../context/AppContext';
 import { enhancedMessageAPI } from '../services/enhancedMessageAPI';
 import { areasAPI } from '../services/areasAPI';

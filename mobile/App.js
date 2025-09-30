@@ -30,6 +30,9 @@ import { AppContext } from "./src/context/AppContext";
 import { supabase } from "./src/services/supabase";
 import { getTranslation } from "./src/utils/translations";
 
+// Import web-compatible app for web platform
+import WebApp from "./src/web/WebApp";
+
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -204,21 +207,16 @@ const AdminStack = () => {
 };
 
 export default function App() {
+  // Use web-compatible app for web platform
+  if (Platform.OS === 'web') {
+    return <WebApp />;
+  }
+
   const [userId, setUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [language, setLanguage] = useState("en");
   const [theme, setTheme] = useState("light");
-
-  // Debug logging for web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      console.log('🌐 Web App: App component mounted');
-      console.log('🌐 Web App: Loading state:', loading);
-      console.log('🌐 Web App: User state:', user);
-      console.log('🌐 Web App: UserId state:', userId);
-    }
-  }, [loading, user, userId]);
 
   // Load user preferences function
   const loadUserPreferences = async () => {
@@ -245,25 +243,10 @@ export default function App() {
   }, []);
 
   const checkAuth = async () => {
-    if (Platform.OS === 'web') {
-      console.log('🌐 Web App: Starting auth check...');
-    }
-    
     try {
-      // Add timeout for web to prevent infinite loading
-      const authPromise = supabase.auth.getUser();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Auth timeout')), 5000)
-      );
-      
       const {
         data: { user },
-      } = await Promise.race([authPromise, timeoutPromise]);
-      
-      if (Platform.OS === 'web') {
-        console.log('🌐 Web App: Auth check completed, user:', user);
-      }
-      
+      } = await supabase.auth.getUser();
       setUser(user);
 
       if (user) {
@@ -272,14 +255,7 @@ export default function App() {
       }
     } catch (error) {
       console.error("Auth check error:", error);
-      // For web, if auth fails, still show the app (user can login later)
-      if (Platform.OS === 'web') {
-        console.log("Web: Continuing without auth, user can login later");
-      }
     } finally {
-      if (Platform.OS === 'web') {
-        console.log('🌐 Web App: Setting loading to false');
-      }
       setLoading(false);
     }
   };
@@ -336,14 +312,7 @@ export default function App() {
   };
 
   if (loading) {
-    return (
-      <PaperProvider theme={getTheme()}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === "dark" ? "#121212" : "#ffffff" }}>
-          <ActivityIndicator size="large" color="#25D366" />
-          <Text style={{ marginTop: 10, color: theme === "dark" ? "#fff" : "#000" }}>Loading...</Text>
-        </View>
-      </PaperProvider>
-    );
+    return null; // Or a loading screen
   }
 
   const cleanUserId = getCleanUserId(userId);

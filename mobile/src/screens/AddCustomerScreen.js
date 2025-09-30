@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { TextInput, Button, Text, Switch, HelperText, ActivityIndicator, Divider, useTheme } from 'react-native-paper';
 import { customersAPI } from '../services/api';
 import { AppContext } from '../context/AppContext';
-import WebCompatiblePicker from '../components/WebCompatiblePicker';
+import WebCompatiblePicker from '../web/components/WebCompatiblePicker';
 
 const AddCustomerScreen = ({ navigation }) => {
   const { userId, t } = useContext(AppContext);

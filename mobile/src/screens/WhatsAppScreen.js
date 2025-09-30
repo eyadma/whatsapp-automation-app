@@ -15,7 +15,6 @@ import QRCode from 'react-native-qrcode-svg';
 import { AppContext } from '../context/AppContext';
 import { whatsappAPI } from '../services/api';
 import { supabase } from '../services/supabase';
-import WebCompatibleButton from '../components/WebCompatibleButton';
 
 const WhatsAppScreen = ({ navigation }) => {
   const { userId, theme, t } = useContext(AppContext);
@@ -554,7 +553,7 @@ const WhatsAppScreen = ({ navigation }) => {
           {/* Action Buttons */}
           <View style={dynamicStyles.buttonContainer}>
             {!connectionStatus.connected && !connectionStatus.isConnecting ? (
-              <WebCompatibleButton
+              <Button
                 mode="contained"
                 onPress={handleConnect}
                 loading={loading}
@@ -563,9 +562,9 @@ const WhatsAppScreen = ({ navigation }) => {
                 labelStyle={dynamicStyles.buttonLabel}
               >
                 {selectedSession ? t('connectWhatsApp') : t('selectSessionFirst')}
-              </WebCompatibleButton>
+              </Button>
             ) : (
-              <WebCompatibleButton
+              <Button
                 mode="contained"
                 onPress={handleDisconnect}
                 loading={loading}
@@ -574,41 +573,65 @@ const WhatsAppScreen = ({ navigation }) => {
                 labelStyle={dynamicStyles.buttonLabel}
               >
                 {t('disconnectWhatsApp')}
-              </WebCompatibleButton>
+              </Button>
             )}
           </View>
 
           {/* Utility Buttons */}
           <View style={dynamicStyles.utilityButtonsContainer}>
-            <WebCompatibleButton
-              mode="outlined"
+            <TouchableOpacity
               onPress={() => checkConnectionStatus(true)}
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.refreshButton]}
-              icon={<Ionicons name="refresh" size={14} color="#007AFF" />}
             >
-              {t('refreshStatus')}
-            </WebCompatibleButton>
+              <Ionicons name="refresh" size={14} color="#007AFF" style={{ marginRight: 4 }} />
+              <View style={dynamicStyles.textContainer}>
+                <Text
+                  style={[
+                    dynamicStyles.customButtonText,
+                    { writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr' }
+                  ]}
+                >
+                  {t('refreshStatus')}
+                </Text>
+              </View>
+            </TouchableOpacity>
             
-            <WebCompatibleButton
-              mode="outlined"
+            <TouchableOpacity
               onPress={handleCleanSession}
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.cleanSessionButton]}
-              icon={<Ionicons name="refresh-circle" size={14} color="#FF6B35" />}
             >
-              {t('cleanSession')}
-            </WebCompatibleButton>
+              <Ionicons name="refresh-circle" size={14} color="#FF6B35" style={{ marginRight: 4 }} />
+              <View style={dynamicStyles.textContainer}>
+                <Text
+                  style={[
+                    dynamicStyles.customButtonText,
+                    { writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr' }
+                  ]}
+                >
+                  {t('cleanSession')}
+                </Text>
+              </View>
+            </TouchableOpacity>
             
-            <WebCompatibleButton
-              mode="outlined"
+            <TouchableOpacity
               onPress={handleDeleteSession}
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.deleteButton]}
-              icon={<Ionicons name="trash" size={14} color="#FF3B30" />}
             >
-              {t('deleteSession')}
-            </WebCompatibleButton>
+              <Ionicons name="trash" size={14} color="#FF3B30" style={{ marginRight: 4 }} />
+              <View style={dynamicStyles.textContainer}>
+                <Text
+                  style={[
+                    dynamicStyles.customButtonText,
+                    { writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr' }
+                  ]}
+                >
+                  {t('deleteSession')}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
 

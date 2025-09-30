@@ -13,7 +13,6 @@ import { messagesAPI } from '../services/api';
 import { timeRestrictionsAPI } from '../services/timeRestrictionsAPI';
 import { supabase } from '../services/supabase';
 import { formatTimeWithArabicNumerals, formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
-import WebCompatibleButton from '../components/WebCompatibleButton';
 
 const EnhancedMessageScreen = ({ navigation }) => {
   const { userId, t, language, activeSessionId } = useContext(AppContext);
@@ -1591,32 +1590,32 @@ const EnhancedMessageScreen = ({ navigation }) => {
           </View>
 
           <View style={dynamicStyles.messageActions}>
-            <WebCompatibleButton 
+            <Button 
               mode="outlined" 
               onPress={generatePreviewMessages}
               loading={loading}
               style={dynamicStyles.actionButton}
             >
               Generate Preview
-            </WebCompatibleButton>
+            </Button>
             {!sending ? (
-              <WebCompatibleButton 
+              <Button 
                 mode="contained" 
                 onPress={sendMessages}
                 loading={loading}
                 style={dynamicStyles.actionButton}
               >
                 {t('sendMessages')} ({customers.length})
-              </WebCompatibleButton>
+              </Button>
             ) : (
-              <WebCompatibleButton 
+              <Button 
                 mode="contained" 
                 onPress={stopSending}
                 style={[dynamicStyles.actionButton, dynamicStyles.stopButton]}
-                icon={<Ionicons name="stop" size={20} color="#FFFFFF" />}
+                icon="stop"
               >
                 Stop Sending
-              </WebCompatibleButton>
+              </Button>
             )}
           </View>
           
