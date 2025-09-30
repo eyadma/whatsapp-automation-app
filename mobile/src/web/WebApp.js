@@ -31,6 +31,37 @@ import { getTranslation } from "../utils/translations";
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Simple Error Boundary to catch runtime render errors (prevents blank screen)
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("❌ Unhandled render error:", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Text style={{ fontSize: 18, marginBottom: 8 }}>Something went wrong</Text>
+          <Text style={{ color: '#666', marginBottom: 16 }}>
+            {String(this.state.error?.message || this.state.error || 'Unknown error')}
+          </Text>
+          <Text style={{ color: '#25D366' }} onPress={() => window.location.reload()}>Reload</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Main App Tab Navigator (for regular users) - Web Compatible
 const WebMainAppTabs = () => {
   const { t, theme, userId } = useContext(AppContext);
@@ -304,23 +335,25 @@ export default function WebApp() {
           getActiveSession: () => null,
         }}
       >
-        <NavigationContainer>
-          {user ? (
-            isAdmin ? (
-              <WebAdminStack />
+        <ErrorBoundary>
+          <NavigationContainer>
+            {user ? (
+              isAdmin ? (
+                <WebAdminStack />
+              ) : (
+                <WebMainAppTabs />
+              )
             ) : (
-              <WebMainAppTabs />
-            )
-          ) : (
-            <Stack.Navigator>
-              <Stack.Screen 
-                name="Login" 
-                component={LoginScreen} 
-                options={{ headerShown: false }} 
-              />
-            </Stack.Navigator>
-          )}
-        </NavigationContainer>
+              <Stack.Navigator>
+                <Stack.Screen 
+                  name="Login" 
+                  component={LoginScreen} 
+                  options={{ headerShown: false }} 
+                />
+              </Stack.Navigator>
+            )}
+          </NavigationContainer>
+        </ErrorBoundary>
       </AppContext.Provider>
     </PaperProvider>
   );
