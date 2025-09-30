@@ -69,14 +69,16 @@ const WebMainAppTabs = () => {
   // Simplified - no time restrictions for web to avoid loading issues
   const showMessagesTab = true;
 
-  // Testing screens one by one - currently testing: Customers, Messages, VCard, Settings (WhatsApp removed)
+  // Full Tab Navigator - all 5 screens enabled
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
 
-          if (route.name === 'Customers') {
+          if (route.name === 'WhatsApp') {
+            iconName = focused ? 'logo-whatsapp' : 'logo-whatsapp-outline';
+          } else if (route.name === 'Customers') {
             iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Messages') {
             iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
@@ -100,7 +102,7 @@ const WebMainAppTabs = () => {
         headerTintColor: theme === 'dark' ? '#fff' : '#000',
       })}
     >
-      {/* WhatsApp tab temporarily removed to test if it's causing the error */}
+      <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") || "WhatsApp" }} />
       <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") || "Customers" }} />
       <Tab.Screen 
         name="Messages" 
