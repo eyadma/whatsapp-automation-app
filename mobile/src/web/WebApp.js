@@ -107,7 +107,7 @@ const WebMainAppTabs = () => {
       {/* Customers tab temporarily disabled to test */}
       {/* Messages tab temporarily disabled to test */}
       {/* VCard tab temporarily disabled to test */}
-      <Tab.Screen name="Settings" component={MinimalSettingsScreen} options={{ title: t("settings") || "Settings" }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: t("settings") || "Settings" }} />
     </Tab.Navigator>
   );
 };

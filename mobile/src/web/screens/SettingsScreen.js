@@ -2,7 +2,6 @@ import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   Alert,
   Switch,
@@ -518,7 +517,7 @@ const SettingsScreen = ({ navigation }) => {
   );
 };
 
-const createStyles = (theme) => StyleSheet.create({
+const createStyles = (theme) => ({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
