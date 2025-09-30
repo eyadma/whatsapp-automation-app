@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Platform } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -210,6 +210,16 @@ export default function App() {
   const [language, setLanguage] = useState("en");
   const [theme, setTheme] = useState("light");
 
+  // Debug logging for web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      console.log('🌐 Web App: App component mounted');
+      console.log('🌐 Web App: Loading state:', loading);
+      console.log('🌐 Web App: User state:', user);
+      console.log('🌐 Web App: UserId state:', userId);
+    }
+  }, [loading, user, userId]);
+
   // Load user preferences function
   const loadUserPreferences = async () => {
     try {
@@ -235,10 +245,25 @@ export default function App() {
   }, []);
 
   const checkAuth = async () => {
+    if (Platform.OS === 'web') {
+      console.log('🌐 Web App: Starting auth check...');
+    }
+    
     try {
+      // Add timeout for web to prevent infinite loading
+      const authPromise = supabase.auth.getUser();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Auth timeout')), 5000)
+      );
+      
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } = await Promise.race([authPromise, timeoutPromise]);
+      
+      if (Platform.OS === 'web') {
+        console.log('🌐 Web App: Auth check completed, user:', user);
+      }
+      
       setUser(user);
 
       if (user) {
@@ -247,7 +272,14 @@ export default function App() {
       }
     } catch (error) {
       console.error("Auth check error:", error);
+      // For web, if auth fails, still show the app (user can login later)
+      if (Platform.OS === 'web') {
+        console.log("Web: Continuing without auth, user can login later");
+      }
     } finally {
+      if (Platform.OS === 'web') {
+        console.log('🌐 Web App: Setting loading to false');
+      }
       setLoading(false);
     }
   };
@@ -304,7 +336,14 @@ export default function App() {
   };
 
   if (loading) {
-    return null; // Or a loading screen
+    return (
+      <PaperProvider theme={getTheme()}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme === "dark" ? "#121212" : "#ffffff" }}>
+          <ActivityIndicator size="large" color="#25D366" />
+          <Text style={{ marginTop: 10, color: theme === "dark" ? "#fff" : "#000" }}>Loading...</Text>
+        </View>
+      </PaperProvider>
+    );
   }
 
   const cleanUserId = getCleanUserId(userId);
