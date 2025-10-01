@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { View, Text, ActivityIndicator, Platform } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -29,9 +29,6 @@ import SessionAnalyticsScreen from "./src/screens/SessionAnalyticsScreen";
 import { AppContext } from "./src/context/AppContext";
 import { supabase } from "./src/services/supabase";
 import { getTranslation } from "./src/utils/translations";
-
-// Import web-compatible app for web platform
-import WebApp from "./src/web/WebApp";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -207,11 +204,6 @@ const AdminStack = () => {
 };
 
 export default function App() {
-  // Use web-compatible app for web platform
-  if (Platform.OS === 'web') {
-    return <WebApp />;
-  }
-
   const [userId, setUserId] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);

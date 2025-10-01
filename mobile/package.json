@@ -10,7 +10,6 @@
     "build:web": "expo export --platform web",
     "serve:web": "npx serve dist -s -l ${PORT:-3000}",
     "start:web": "npm run build:web && npm run serve:web",
-    "start:railway": "npm run build:web && node server.js",
     "increment-version": "node increment-version.js",
     "build:production": "node build-production.js"
   },
@@ -34,8 +33,6 @@
     "expo-linear-gradient": "~15.0.7",
     "expo-sharing": "~14.0.0",
     "expo-status-bar": "~3.0.8",
-    "express": "^4.18.2",
-    "qrcode": "^1.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",

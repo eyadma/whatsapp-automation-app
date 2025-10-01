@@ -14,10 +14,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
 import { customersAPI } from '../services/api';
 import { getApiBaseUrl, resolveApiBaseUrl } from '../services/apiBase';
+import WebCompatibleButton from '../web/components/WebCompatibleButton';
 
 const CustomersScreen = ({ navigation }) => {
   const { userId, t, language } = useContext(AppContext);
   const paperTheme = useTheme();
+  
+  // Use web-compatible button on web, regular button on mobile
+  const CompatibleButton = Platform.OS === 'web' ? WebCompatibleButton : Button;
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCustomers, setSelectedCustomers] = useState([]);
@@ -481,20 +485,20 @@ const CustomersScreen = ({ navigation }) => {
             </ScrollView>
             
             <View style={dynamicStyles.modalActions}>
-              <Button
+              <CompatibleButton
                 mode="outlined"
                 onPress={() => setShowAreaSelector(false)}
                 style={dynamicStyles.modalButton}
               >
                 {t('cancel')}
-              </Button>
-              <Button
+              </CompatibleButton>
+              <CompatibleButton
                 mode="contained"
                 onPress={selectCustomersByArea}
                 style={dynamicStyles.modalButton}
               >
                 {t('select')}
-              </Button>
+              </CompatibleButton>
             </View>
           </View>
         </View>

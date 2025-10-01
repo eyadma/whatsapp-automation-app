@@ -15,7 +15,7 @@ const WebCompatibleButton = ({
   icon,
   ...props 
 }) => {
-  // If we're on web, use a custom TouchableOpacity implementation
+  // If we're on web, use a custom HTML button implementation
   if (Platform.OS === 'web') {
     const isContained = mode === 'contained';
     const isOutlined = mode === 'outlined';
@@ -29,17 +29,18 @@ const WebCompatibleButton = ({
       flexDirection: 'row',
       minHeight: 48,
       opacity: disabled ? 0.6 : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      border: 'none',
+      outline: 'none',
+      transition: 'all 0.2s ease',
       ...(isContained && {
         backgroundColor: '#25D366',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
       }),
       ...(isOutlined && {
         backgroundColor: 'transparent',
         borderWidth: 1,
+        borderStyle: 'solid',
         borderColor: '#25D366',
       }),
       ...style,
@@ -52,22 +53,54 @@ const WebCompatibleButton = ({
       ...labelStyle,
     };
 
+    const handleClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!disabled && !loading && onPress) {
+        onPress();
+      }
+    };
+
+    const handleMouseEnter = (e) => {
+      if (!disabled && !loading) {
+        e.target.style.opacity = '0.8';
+        if (isContained) {
+          e.target.style.backgroundColor = '#1ea952';
+        } else {
+          e.target.style.backgroundColor = '#f0f0f0';
+        }
+      }
+    };
+
+    const handleMouseLeave = (e) => {
+      if (!disabled && !loading) {
+        e.target.style.opacity = '1';
+        if (isContained) {
+          e.target.style.backgroundColor = '#25D366';
+        } else {
+          e.target.style.backgroundColor = 'transparent';
+        }
+      }
+    };
+
     return (
-      <TouchableOpacity
-        onPress={disabled || loading ? undefined : onPress}
-        style={webButtonStyle}
+      <button
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         disabled={disabled || loading}
+        style={webButtonStyle}
         {...props}
       >
         {icon && (
-          <View style={{ marginRight: 8 }}>
+          <span style={{ marginRight: 8, display: 'flex', alignItems: 'center' }}>
             {icon}
-          </View>
+          </span>
         )}
-        <Text style={webTextStyle}>
+        <span style={webTextStyle}>
           {loading ? 'Loading...' : children}
-        </Text>
-      </TouchableOpacity>
+        </span>
+      </button>
     );
   }
 

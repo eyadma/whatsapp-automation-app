@@ -7,6 +7,7 @@ import {
   Alert,
   ScrollView,
   I18nManager,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Card, Button, TextInput, Divider, Chip, useTheme } from 'react-native-paper';
@@ -15,10 +16,14 @@ import QRCode from 'react-native-qrcode-svg';
 import { AppContext } from '../context/AppContext';
 import { whatsappAPI } from '../services/api';
 import { supabase } from '../services/supabase';
+import WebCompatibleButton from '../web/components/WebCompatibleButton';
 
 const WhatsAppScreen = ({ navigation }) => {
   const { userId, theme, t } = useContext(AppContext);
   const paperTheme = useTheme();
+  
+  // Use web-compatible button on web, regular button on mobile
+  const CompatibleButton = Platform.OS === 'web' ? WebCompatibleButton : Button;
   const [sessions, setSessions] = useState([]);
   const [selectedSession, setSelectedSession] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState({
@@ -480,7 +485,7 @@ const WhatsAppScreen = ({ navigation }) => {
               <Text style={dynamicStyles.noSessionsSubtext}>
                 {t('createSessionToGetStarted')}
               </Text>
-              <Button
+              <CompatibleButton
                 mode="contained"
                 onPress={() => navigation.navigate('Sessions')}
                 style={dynamicStyles.createSessionButton}
@@ -488,7 +493,7 @@ const WhatsAppScreen = ({ navigation }) => {
                 icon="plus"
               >
                 Create Session
-              </Button>
+              </CompatibleButton>
             </View>
           )}
           
@@ -553,7 +558,7 @@ const WhatsAppScreen = ({ navigation }) => {
           {/* Action Buttons */}
           <View style={dynamicStyles.buttonContainer}>
             {!connectionStatus.connected && !connectionStatus.isConnecting ? (
-              <Button
+              <CompatibleButton
                 mode="contained"
                 onPress={handleConnect}
                 loading={loading}
@@ -562,9 +567,9 @@ const WhatsAppScreen = ({ navigation }) => {
                 labelStyle={dynamicStyles.buttonLabel}
               >
                 {selectedSession ? t('connectWhatsApp') : t('selectSessionFirst')}
-              </Button>
+              </CompatibleButton>
             ) : (
-              <Button
+              <CompatibleButton
                 mode="contained"
                 onPress={handleDisconnect}
                 loading={loading}
@@ -573,7 +578,7 @@ const WhatsAppScreen = ({ navigation }) => {
                 labelStyle={dynamicStyles.buttonLabel}
               >
                 {t('disconnectWhatsApp')}
-              </Button>
+              </CompatibleButton>
             )}
           </View>
 
@@ -640,7 +645,7 @@ const WhatsAppScreen = ({ navigation }) => {
           {/* Generate QR Button */}
           {!connectionStatus.connected && !connectionStatus.isConnecting && (
             <View style={dynamicStyles.generateQRContainer}>
-              <Button
+              <CompatibleButton
                 mode="contained"
                 onPress={handleGenerateQR}
                 loading={loading}
@@ -650,7 +655,7 @@ const WhatsAppScreen = ({ navigation }) => {
               >
                 <Ionicons name="qr-code" size={20} color="white" style={{ marginRight: 8 }} />
                 {t('generateQRCode')}
-              </Button>
+              </CompatibleButton>
             </View>
           )}
 

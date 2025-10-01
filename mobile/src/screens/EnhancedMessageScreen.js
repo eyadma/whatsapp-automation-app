@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { Card, Button, TextInput, Divider, List, Chip, useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,11 +13,15 @@ import { messagesAPI } from '../services/api';
 import { timeRestrictionsAPI } from '../services/timeRestrictionsAPI';
 import { supabase } from '../services/supabase';
 import { formatTimeWithArabicNumerals, formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
+import WebCompatibleButton from '../web/components/WebCompatibleButton';
 
 const EnhancedMessageScreen = ({ navigation }) => {
   const { userId, t, language, activeSessionId } = useContext(AppContext);
   const paperTheme = useTheme();
   const isFocused = useIsFocused();
+  
+  // Use web-compatible button on web, regular button on mobile
+  const CompatibleButton = Platform.OS === 'web' ? WebCompatibleButton : Button;
   const [customers, setCustomers] = useState([]);
   const [userAreas, setUserAreas] = useState([]); // Changed from 'areas'
   const [areaETAs, setAreaETAs] = useState({});
@@ -1240,7 +1244,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
           <View style={dynamicStyles.sectionHeader}>
             <Text style={dynamicStyles.sectionTitle}>{t('chooseWhatsAppSession')}</Text>
             <View style={dynamicStyles.sectionActions}>
-              <Button 
+              <CompatibleButton 
                 mode="outlined" 
                 onPress={loadAvailableSessions}
                 style={dynamicStyles.refreshButton}
@@ -1248,7 +1252,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
                 compact
               >
                 Refresh
-              </Button>
+              </CompatibleButton>
             </View>
           </View>
           <Divider style={dynamicStyles.divider} />
@@ -1322,7 +1326,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
           <View style={dynamicStyles.sectionHeader}>
             <Text style={dynamicStyles.sectionTitle}>{t('yourAreaETAs')}</Text>
             <View style={dynamicStyles.sectionActions}>
-              <Button 
+              <CompatibleButton 
                 mode="contained" 
                 onPress={() => navigation.navigate('AddETA')}
                 style={dynamicStyles.addButton}
@@ -1330,7 +1334,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
                 compact
               >
                 {t('Add ETA')}
-              </Button>
+              </CompatibleButton>
             </View>
           </View>
           
@@ -1341,7 +1345,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
               <View style={dynamicStyles.bulkOperationsContainer}>
                 <Text style={dynamicStyles.bulkOperationsTitle}>Bulk Operations:</Text>
                 <View style={dynamicStyles.bulkButtonsRow}>
-                  <Button 
+                  <CompatibleButton 
                     mode="outlined" 
                     onPress={() => handleBulkETAOperation('add')}
                     style={[dynamicStyles.bulkButton, dynamicStyles.addHourButton]}
@@ -1350,8 +1354,8 @@ const EnhancedMessageScreen = ({ navigation }) => {
                     disabled={etaSaving}
                   >
                     +1 Hour All
-                  </Button>
-                  <Button 
+                  </CompatibleButton>
+                  <CompatibleButton 
                     mode="outlined" 
                     onPress={() => handleBulkETAOperation('deduct')}
                     style={[dynamicStyles.bulkButton, dynamicStyles.deductHourButton]}
@@ -1360,7 +1364,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
                     disabled={etaSaving}
                   >
                     -1 Hour All
-                  </Button>
+                  </CompatibleButton>
                 </View>
               </View>
             </>
@@ -1590,32 +1594,32 @@ const EnhancedMessageScreen = ({ navigation }) => {
           </View>
 
           <View style={dynamicStyles.messageActions}>
-            <Button 
+            <CompatibleButton 
               mode="outlined" 
               onPress={generatePreviewMessages}
               loading={loading}
               style={dynamicStyles.actionButton}
             >
               Generate Preview
-            </Button>
+            </CompatibleButton>
             {!sending ? (
-              <Button 
+              <CompatibleButton 
                 mode="contained" 
                 onPress={sendMessages}
                 loading={loading}
                 style={dynamicStyles.actionButton}
               >
                 {t('sendMessages')} ({customers.length})
-              </Button>
+              </CompatibleButton>
             ) : (
-              <Button 
+              <CompatibleButton 
                 mode="contained" 
                 onPress={stopSending}
                 style={[dynamicStyles.actionButton, dynamicStyles.stopButton]}
                 icon="stop"
               >
                 Stop Sending
-              </Button>
+              </CompatibleButton>
             )}
           </View>
           
@@ -1740,12 +1744,12 @@ const EnhancedMessageScreen = ({ navigation }) => {
           </View>
 
           <View style={dynamicStyles.modalActions}>
-            <Button mode="outlined" onPress={() => setShowETAModal(false)} style={dynamicStyles.modalButton}>
+            <CompatibleButton mode="outlined" onPress={() => setShowETAModal(false)} style={dynamicStyles.modalButton}>
               {t('cancel')}
-            </Button>
-            <Button mode="contained" onPress={handleSaveETA} style={dynamicStyles.modalButton}>
+            </CompatibleButton>
+            <CompatibleButton mode="contained" onPress={handleSaveETA} style={dynamicStyles.modalButton}>
               {t('saveETA')}
-            </Button>
+            </CompatibleButton>
           </View>
         </View>
       </Modal>
@@ -1824,7 +1828,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
           </ScrollView>
 
           <View style={dynamicStyles.modalActions}>
-            <Button
+            <CompatibleButton
               mode="outlined"
               onPress={() => {
                 setShowCopyETAModal(false);
@@ -1833,8 +1837,8 @@ const EnhancedMessageScreen = ({ navigation }) => {
               style={dynamicStyles.modalButton}
             >
               Cancel
-            </Button>
-            <Button
+            </CompatibleButton>
+            <CompatibleButton
               mode="contained"
               onPress={handleCopyToSelectedAreas}
               loading={etaSaving}
@@ -1842,7 +1846,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
               style={dynamicStyles.modalButton}
             >
               Copy to {selectedAreasToCopy.length} Areas
-            </Button>
+            </CompatibleButton>
           </View>
         </View>
       </Modal>
@@ -1889,14 +1893,14 @@ const EnhancedMessageScreen = ({ navigation }) => {
           </ScrollView>
 
           <View style={dynamicStyles.modalActions}>
-            <Button
+            <CompatibleButton
               mode="outlined"
               onPress={() => setShowBulkETAModal(false)}
               style={dynamicStyles.modalButton}
             >
               Cancel
-            </Button>
-            <Button
+            </CompatibleButton>
+            <CompatibleButton
               mode="contained"
               onPress={handleConfirmBulkETA}
               loading={etaSaving}
@@ -1904,7 +1908,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
               style={[dynamicStyles.modalButton, dynamicStyles.confirmButton]}
             >
               {bulkETAAction === 'add' ? 'Add Hour to All' : 'Deduct Hour from All'}
-            </Button>
+            </CompatibleButton>
           </View>
         </View>
       </Modal>

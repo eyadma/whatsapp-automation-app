@@ -8,40 +8,39 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const supabase = require('./config/supabase');
-const { logger } = require('./optimized-logger');
-
-// Environment-based logging control
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Override logger methods for production
-if (isProduction) {
-  const originalInfo = logger.info.bind(logger);
-  const originalWarn = logger.warn.bind(logger);
-  
-  logger.info = (message, data) => {
-    if (LOG_LEVEL === 'error' || LOG_LEVEL === 'warn') return;
-    originalInfo(message, data);
-  };
-  
-  logger.warn = (message, data) => {
-    if (LOG_LEVEL === 'error') return;
-    originalWarn(message, data);
-  };
-}
-
-
-// Batch logging for high-frequency events
-function logBatchMessages(messages, customerName) {
-  if (messages.length > 5) {
-    logger.batchLog('info', messages.map((msg, idx) => `Message ${idx + 1} to ${customerName}`));
-  } else {
-    messages.forEach((msg, idx) => logger.info(`Message ${idx + 1} to ${customerName}`));
-  }
-}
 
 
 require('dotenv').config();
+
+// Retry utility function for database operations
+async function retryOperation(operation, maxRetries = 3, delay = 1000) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await operation();
+      if (attempt > 1) {
+        console.log(`✅ Operation succeeded on attempt ${attempt}`);
+      }
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.log(`❌ Attempt ${attempt}/${maxRetries} failed:`, error.message);
+      
+      if (attempt < maxRetries) {
+        const waitTime = delay * Math.pow(2, attempt - 1); // Exponential backoff
+        console.log(`⏳ Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  
+  console.error(`❌ Operation failed after ${maxRetries} attempts:`, lastError);
+  throw lastError;
+}
+
+// Export for testing
+module.exports = { retryOperation };
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -560,46 +559,99 @@ function updateConnectionStates() {
 setInterval(updateConnectionStates, 5000); // Check every 5 seconds
 
 async function connectWhatsApp(userId, sessionId = null) {
+  const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const startTime = Date.now();
+  
   try {
-    console.log(`🚀 Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
+    console.log(`🚀 [${connectionId}] Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
+    console.log(`📊 [${connectionId}] Connection parameters:`, {
+      userId,
+      sessionId: sessionId || 'default',
+      timestamp: new Date().toISOString(),
+      connectionId
+    });
     
     // Validate inputs
     if (!userId) {
+      console.error(`❌ [${connectionId}] Validation failed: userId is required`);
       throw new Error('userId is required');
     }
     
     const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
-    console.log(`📁 Session directory: ${sessionDir}`);
+    console.log(`📁 [${connectionId}] Session directory: ${sessionDir}`);
+    console.log(`📁 [${connectionId}] Environment check:`, {
+      RAILWAY_VOLUME_MOUNT_PATH: process.env.RAILWAY_VOLUME_MOUNT_PATH,
+      __dirname: __dirname,
+      finalPath: sessionDir
+    });
     
     try {
-      if (!fs.existsSync(sessionDir)) {
-        console.log(`📁 Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
+      const dirExists = fs.existsSync(sessionDir);
+      console.log(`🔍 [${connectionId}] Session directory exists: ${dirExists}`);
+      
+      if (!dirExists) {
+        console.log(`📁 [${connectionId}] Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
+        const mkdirStart = Date.now();
         fs.mkdirSync(sessionDir, { recursive: true });
+        console.log(`✅ [${connectionId}] Session directory created in ${Date.now() - mkdirStart}ms`);
       }
       
-      console.log(`🔍 Session directory exists: ${fs.existsSync(sessionDir)}`);
-      console.log(`🔍 Session directory contents:`, fs.readdirSync(sessionDir));
+      const dirContents = fs.readdirSync(sessionDir);
+      console.log(`🔍 [${connectionId}] Session directory contents:`, {
+        fileCount: dirContents.length,
+        files: dirContents,
+        totalSize: dirContents.reduce((total, file) => {
+          try {
+            const filePath = path.join(sessionDir, file);
+            const stats = fs.statSync(filePath);
+            return total + (stats.isFile() ? stats.size : 0);
+          } catch (e) {
+            return total;
+          }
+        }, 0)
+      });
     } catch (fsError) {
-      console.error(`❌ File system error for user ${userId}:`, fsError);
+      console.error(`❌ [${connectionId}] File system error for user ${userId}:`, {
+        error: fsError.message,
+        stack: fsError.stack,
+        sessionDir,
+        timestamp: new Date().toISOString()
+      });
       throw new Error(`Failed to create session directory: ${fsError.message}`);
     }
 
-    console.log(`🔐 Loading auth state for user: ${userId}`);
+    console.log(`🔐 [${connectionId}] Loading auth state for user: ${userId}`);
     let state, saveCreds;
     try {
+      const authStart = Date.now();
+      console.log(`⏳ [${connectionId}] Starting auth state loading...`);
+      
       const authResult = await useMultiFileAuthState(sessionDir);
       state = authResult.state;
       saveCreds = authResult.saveCreds;
-      console.log(`✅ Auth state loaded for user: ${userId}`);
+      
+      const authDuration = Date.now() - authStart;
+      console.log(`✅ [${connectionId}] Auth state loaded for user: ${userId} in ${authDuration}ms`);
+      console.log(`🔐 [${connectionId}] Auth state details:`, {
+        hasState: !!state,
+        hasSaveCreds: !!saveCreds,
+        stateKeys: state ? Object.keys(state) : [],
+        duration: authDuration
+      });
     } catch (authError) {
-      console.error(`❌ Auth state error for user ${userId}:`, authError);
+      console.error(`❌ [${connectionId}] Auth state error for user ${userId}:`, {
+        error: authError.message,
+        stack: authError.stack,
+        sessionDir,
+        timestamp: new Date().toISOString()
+      });
       throw new Error(`Failed to load auth state: ${authError.message}`);
     }
 
-    console.log(`🔗 Creating WhatsApp socket for user: ${userId}`);
+    console.log(`🔗 [${connectionId}] Creating WhatsApp socket for user: ${userId}`);
     let sock;
     try {
-      sock = makeWASocket({
+      const socketConfig = {
         auth: state,
         browser: ['WhatsApp Long Session', 'Chrome', '1.0.0'],
         // Extended timeout settings for 10+ hour sessions
@@ -620,10 +672,34 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Implement message retrieval logic for session persistence
           return null;
         }
+      };
+      
+      console.log(`⚙️ [${connectionId}] Socket configuration:`, {
+        connectTimeoutMs: socketConfig.connectTimeoutMs,
+        keepAliveIntervalMs: socketConfig.keepAliveIntervalMs,
+        retryRequestDelayMs: socketConfig.retryRequestDelayMs,
+        maxRetries: socketConfig.maxRetries,
+        defaultQueryTimeoutMs: socketConfig.defaultQueryTimeoutMs,
+        emitOwnEvents: socketConfig.emitOwnEvents,
+        markOnlineOnConnect: socketConfig.markOnlineOnConnect
       });
-      console.log(`✅ WhatsApp socket created for user: ${userId}`);
+      
+      const socketStart = Date.now();
+      sock = makeWASocket(socketConfig);
+      const socketDuration = Date.now() - socketStart;
+      
+      console.log(`✅ [${connectionId}] WhatsApp socket created for user: ${userId} in ${socketDuration}ms`);
+      console.log(`🔗 [${connectionId}] Socket details:`, {
+        socketId: sock.id,
+        duration: socketDuration,
+        timestamp: new Date().toISOString()
+      });
     } catch (socketError) {
-      console.error(`❌ Socket creation error for user ${userId}:`, socketError);
+      console.error(`❌ [${connectionId}] Socket creation error for user ${userId}:`, {
+        error: socketError.message,
+        stack: socketError.stack,
+        timestamp: new Date().toISOString()
+      });
       throw new Error(`Failed to create WhatsApp socket: ${socketError.message}`);
     }
 
@@ -634,30 +710,69 @@ async function connectWhatsApp(userId, sessionId = null) {
       const hoursAlive = Math.floor(sessionDuration / (1000 * 60 * 60));
       const minutesAlive = Math.floor((sessionDuration % (1000 * 60 * 60)) / (1000 * 60));
       
-      console.log(`💚 Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive`);
+      console.log(`💚 [${connectionId}] Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive`);
       
       // Log session milestone every hour
       if (minutesAlive === 0 && hoursAlive > 0) {
-        console.log(`🎉 Session milestone: ${hoursAlive} hours alive for user ${userId}`);
+        console.log(`🎉 [${connectionId}] Session milestone: ${hoursAlive} hours alive for user ${userId}`);
       }
       
       // Check if socket is still healthy
-      if (sock && sock.ws && sock.ws.readyState === 1) {
-        console.log(`✅ Socket healthy for user ${userId} - ReadyState: ${sock.ws.readyState}`);
+      const socketState = sock?.ws?.readyState;
+      const socketHealthy = socketState === 1;
+      
+      console.log(`🔍 [${connectionId}] Socket health details:`, {
+        userId,
+        connectionId,
+        socketHealthy,
+        readyState: socketState,
+        readyStateText: socketState === 0 ? 'CONNECTING' : 
+                       socketState === 1 ? 'OPEN' : 
+                       socketState === 2 ? 'CLOSING' : 
+                       socketState === 3 ? 'CLOSED' : 'UNKNOWN',
+        sessionDuration: `${hoursAlive}h ${minutesAlive}m`,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (socketHealthy) {
+        console.log(`✅ [${connectionId}] Socket healthy for user ${userId} - ReadyState: ${socketState}`);
       } else {
-        console.log(`⚠️ Socket health warning for user ${userId} - ReadyState: ${sock?.ws?.readyState}`);
+        console.log(`⚠️ [${connectionId}] Socket health warning for user ${userId} - ReadyState: ${socketState}`);
       }
     }, 300000); // Check every 5 minutes
 
     // Handle connection updates
     sock.ev.on('connection.update', async (update) => {
-      console.log(`📱 Connection update for user ${userId}:`, update);
+      console.log(`📱 [${connectionId}] Connection update for user ${userId}:`, {
+        connectionId,
+        userId,
+        sessionId: sessionId || 'default',
+        update,
+        timestamp: new Date().toISOString()
+      });
       
       const { connection, lastDisconnect, qr } = update;
       
+      console.log(`🔍 [${connectionId}] Connection update details:`, {
+        connection,
+        hasLastDisconnect: !!lastDisconnect,
+        hasQR: !!qr,
+        lastDisconnectReason: lastDisconnect?.error?.message,
+        lastDisconnectCode: lastDisconnect?.error?.output?.statusCode
+      });
+      
       // Handle QR code generation
       if (qr) {
-        console.log(`📱 QR Code received for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        console.log(`📱 [${connectionId}] QR Code received for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        console.log(`🔍 [${connectionId}] QR Code details:`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          qrLength: qr.length,
+          qrPrefix: qr.substring(0, 20) + '...',
+          timestamp: new Date().toISOString()
+        });
+        
         const connectionData = {
           sock,
           connected: false,
@@ -668,40 +783,58 @@ async function connectWhatsApp(userId, sessionId = null) {
           isDefault: !sessionId || sessionId === 'default',
           connectionType: 'qr_required' // Indicates QR code is needed
         };
-        console.log(`🔗 Setting connection data:`, {
+        
+        console.log(`🔗 [${connectionId}] Setting connection data:`, {
+          connectionId,
           userId,
           sessionId: sessionId || 'default',
           connected: false,
           connecting: true,
           hasSocket: !!sock,
           socketReady: sock?.ws?.readyState === 1,
-          connectionType: 'qr_required'
+          connectionType: 'qr_required',
+          timestamp: new Date().toISOString()
         });
+        
         setConnection(userId, sessionId || 'default', connectionData);
-        console.log(`🔍 Connection set for user ${userId}`);
+        console.log(`🔍 [${connectionId}] Connection set for user ${userId}`);
       }
       
       // Handle connection close
       if (connection === 'close') {
-        console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        console.log(`❌ [${connectionId}] Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        console.log(`🔍 [${connectionId}] Connection close details:`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          lastDisconnect,
+          disconnectReason: lastDisconnect?.error?.output?.statusCode,
+          disconnectMessage: lastDisconnect?.error?.message,
+          timestamp: new Date().toISOString()
+        });
         
         // Clear the health check interval
         if (sessionHealthCheck) {
           clearInterval(sessionHealthCheck);
-          console.log(`🧹 Cleared health check interval for user: ${userId}`);
+          console.log(`🧹 [${connectionId}] Cleared health check interval for user: ${userId}`);
         }
         
         // Clear the keep-alive interval
         const connection = getConnection(userId, sessionId || 'default');
         if (connection && connection.keepAliveInterval) {
           clearInterval(connection.keepAliveInterval);
-          console.log(`🧹 Cleared keep-alive interval for user: ${userId}`);
+          console.log(`🧹 [${connectionId}] Cleared keep-alive interval for user: ${userId}`);
         }
         
         const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+        console.log(`🔍 [${connectionId}] Reconnection decision:`, {
+          shouldReconnect,
+          disconnectCode: lastDisconnect?.error?.output?.statusCode,
+          loggedOutCode: DisconnectReason.loggedOut
+        });
         
         if (shouldReconnect) {
-          console.log(`🔄 Attempting to reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+          console.log(`🔄 [${connectionId}] Attempting to reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
           // Progressive reconnection delay: 3s, 10s, 30s, 60s, then every 2 minutes
           const reconnectDelays = [3000, 10000, 30000, 60000, 120000];
           let reconnectAttempts = 0;
@@ -710,15 +843,33 @@ async function connectWhatsApp(userId, sessionId = null) {
             reconnectAttempts++;
             const delay = reconnectDelays[Math.min(reconnectAttempts - 1, reconnectDelays.length - 1)];
             
-            console.log(`🔄 Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`);
+            console.log(`🔄 [${connectionId}] Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`);
+            console.log(`🔍 [${connectionId}] Reconnection details:`, {
+              connectionId,
+              userId,
+              sessionId: sessionId || 'default',
+              attempt: reconnectAttempts,
+              delay: delay,
+              maxAttempts: 10,
+              timestamp: new Date().toISOString()
+            });
             
             setTimeout(() => {
               connectWhatsApp(userId, sessionId).catch(error => {
-                console.error(`❌ Reconnection attempt ${reconnectAttempts} failed for user ${userId}:`, error);
+                console.error(`❌ [${connectionId}] Reconnection attempt ${reconnectAttempts} failed for user ${userId}:`, {
+                  connectionId,
+                  userId,
+                  sessionId: sessionId || 'default',
+                  attempt: reconnectAttempts,
+                  error: error.message,
+                  stack: error.stack,
+                  timestamp: new Date().toISOString()
+                });
+                
                 if (reconnectAttempts < 10) { // Max 10 reconnection attempts
                   attemptReconnect();
                 } else {
-                  console.log(`❌ Max reconnection attempts reached for user ${userId}`);
+                  console.log(`❌ [${connectionId}] Max reconnection attempts reached for user ${userId}`);
                   removeConnection(userId, sessionId || 'default');
                 }
               });
@@ -727,14 +878,21 @@ async function connectWhatsApp(userId, sessionId = null) {
           
           attemptReconnect();
         } else {
-          console.log(`❌ Connection closed permanently for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+          console.log(`🚪 [${connectionId}] User ${userId} logged out, removing connection`);
           removeConnection(userId, sessionId || 'default');
         }
       } 
       
       // Handle connection open
       else if (connection === 'open') {
-        console.log(`✅ Connection opened for user: ${userId}`);
+        console.log(`✅ [${connectionId}] Connection opened for user: ${userId}`);
+        console.log(`🔍 [${connectionId}] Connection open details:`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          timestamp: new Date().toISOString(),
+          totalConnectionTime: Date.now() - startTime
+        });
         
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
@@ -742,12 +900,18 @@ async function connectWhatsApp(userId, sessionId = null) {
             if (sock && sock.ws && sock.ws.readyState === 1) {
               // Send a ping to keep the connection alive
               await sock.ping();
-              console.log(`💓 Keep-alive ping sent for user: ${userId}`);
+              console.log(`💓 [${connectionId}] Keep-alive ping sent for user: ${userId}`);
             } else {
-              console.log(`⚠️ Cannot send keep-alive ping for user ${userId} - socket not ready`);
+              console.log(`⚠️ [${connectionId}] Cannot send keep-alive ping for user ${userId} - socket not ready`);
             }
           } catch (error) {
-            console.error(`❌ Keep-alive ping failed for user ${userId}:`, error);
+            console.error(`❌ [${connectionId}] Keep-alive ping failed for user ${userId}:`, {
+              connectionId,
+              userId,
+              error: error.message,
+              stack: error.stack,
+              timestamp: new Date().toISOString()
+            });
           }
         }, 300000); // Send ping every 5 minutes
         
@@ -864,20 +1028,51 @@ async function connectWhatsApp(userId, sessionId = null) {
     
     // Add error handling for the socket
     sock.ev.on('error', (error) => {
-      console.error(`❌ WhatsApp socket error for user ${userId}:`, error);
+      console.error(`❌ [${connectionId}] WhatsApp socket error for user ${userId}:`, {
+        connectionId,
+        userId,
+        sessionId: sessionId || 'default',
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
     });
 
     // Add message listener for location handling
     sock.ev.on('messages.upsert', async (event) => {
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const messageStartTime = Date.now();
+      
       try {
+        console.log(`📱 [${connectionId}] [${messageId}] Message event received for user ${userId}:`, {
+          connectionId,
+          messageId,
+          userId,
+          sessionId: sessionId || 'default',
+          messageCount: event.messages?.length || 0,
+          eventType: event.type,
+          timestamp: new Date().toISOString()
+        });
+        
         for (const message of event.messages) {
-          // Skip if message is from self
-          if (message.key.fromMe) continue;
+          const individualMessageId = `${messageId}_${event.messages.indexOf(message)}`;
           
-          console.log(`📱 Received message for user ${userId}:`, {
-            type: message.message?.conversation ? 'text' : Object.keys(message.message || {}).join(', '),
+          // // Skip if message is from self
+          // if (message.key.fromMe) continue;
+          
+          console.log(`📱 [${connectionId}] [${individualMessageId}] Processing message for user ${userId}:`, {
+            connectionId,
+            messageId: individualMessageId,
+            userId,
+            sessionId: sessionId || 'default',
+            messageType: message.message?.conversation ? 'text' : Object.keys(message.message || {}).join(', '),
             from: message.key.remoteJid,
-            timestamp: message.messageTimestamp
+            fromMe: message.key.fromMe,
+            timestamp: message.messageTimestamp,
+            messageTimestamp: new Date(message.messageTimestamp * 1000).toISOString(),
+            hasLocation: !!(message.message?.locationMessage || message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage),
+            messageKeys: Object.keys(message.message || {}),
+            processingStartTime: new Date().toISOString()
           });
 
           // Check if message is a location or has quoted location
@@ -886,27 +1081,48 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Check direct location message
           if (message.message?.locationMessage) {
             locationData = message.message.locationMessage;
-            console.log(`📍 Direct location received for user ${userId}:`, {
+            console.log(`📍 [${connectionId}] [${individualMessageId}] Direct location received for user ${userId}:`, {
+              connectionId,
+              messageId: individualMessageId,
+              userId,
+              sessionId: sessionId || 'default',
               latitude: locationData.degreesLatitude,
               longitude: locationData.degreesLongitude,
               name: locationData.name,
-              address: locationData.address
+              address: locationData.address,
+              accuracy: locationData.accuracyInMeters,
+              speed: locationData.speedInMps,
+              degreesClockwiseFromMagneticNorth: locationData.degreesClockwiseFromMagneticNorth,
+              timestamp: new Date().toISOString()
             });
           }
           // Check quoted message for location
           else if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage) {
             locationData = message.message.extendedTextMessage.contextInfo.quotedMessage.locationMessage;
-            console.log(`📍 Quoted location received for user ${userId}:`, {
+            console.log(`📍 [${connectionId}] [${individualMessageId}] Quoted location received for user ${userId}:`, {
+              connectionId,
+              messageId: individualMessageId,
+              userId,
+              sessionId: sessionId || 'default',
               latitude: locationData.degreesLatitude,
               longitude: locationData.degreesLongitude,
               name: locationData.name,
-              address: locationData.address
+              address: locationData.address,
+              accuracy: locationData.accuracyInMeters,
+              speed: locationData.speedInMps,
+              degreesClockwiseFromMagneticNorth: locationData.degreesClockwiseFromMagneticNorth,
+              timestamp: new Date().toISOString()
             });
           }
 
           // If we have location data, process it
           if (locationData) {
+            const locationProcessingId = `${individualMessageId}_loc`;
+            const locationStartTime = Date.now();
+            
             try {
+              console.log(`📍 [${connectionId}] [${locationProcessingId}] Starting location processing for user ${userId}`);
+              
               // Get contact information
               const contactJid = message.key.remoteJid;
               const whatsappPhoneNumber = contactJid.replace('@s.whatsapp.net', '');
@@ -922,48 +1138,104 @@ async function connectWhatsApp(userId, sessionId = null) {
                 contactName = locationData.name;
               }
 
-              console.log(`📞 Processing location for contact: ${contactName}`);
-              console.log(`📱 WhatsApp phone: ${whatsappPhoneNumber} -> Converted: ${phoneNumber}`);
-              console.log(`🔍 Searching for customer with phone: ${phoneNumber} or original: ${whatsappPhoneNumber}`);
+              console.log(`📞 [${connectionId}] [${locationProcessingId}] Processing location for contact: ${contactName}`);
+              console.log(`📱 [${connectionId}] [${locationProcessingId}] Phone number conversion:`, {
+                connectionId,
+                messageId: locationProcessingId,
+                userId,
+                sessionId: sessionId || 'default',
+                whatsappPhoneNumber,
+                convertedPhoneNumber: phoneNumber,
+                contactName,
+                timestamp: new Date().toISOString()
+              });
 
               // Check if customer exists by phone number (try both formats)
-              console.log(`🔍 Searching for customer with phone numbers: ${phoneNumber}, ${whatsappPhoneNumber}`);
+              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Searching for customer with phone numbers: ${phoneNumber}, ${whatsappPhoneNumber}`);
               
               // Normalize phone numbers for comparison
               const normalizedWhatsAppPhone = normalizePhoneNumber(whatsappPhoneNumber);
               const normalizedLocalPhone = normalizePhoneNumber(phoneNumber);
               
-              console.log(`🔍 Normalized phone numbers: WhatsApp=${normalizedWhatsAppPhone}, Local=${normalizedLocalPhone}`);
+              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Normalized phone numbers:`, {
+                connectionId,
+                messageId: locationProcessingId,
+                userId,
+                sessionId: sessionId || 'default',
+                normalizedWhatsAppPhone,
+                normalizedLocalPhone,
+                timestamp: new Date().toISOString()
+              });
               
               // First, let's get all locations for this user to debug
-              const { data: allLocations, error: allLocationsError } = await supabase
-                .from('locations')
-                .select('id, name, phone, phone2')
-                .eq('user_id', userId);
+              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Fetching all locations for user ${userId}`);
+              const { data: allLocations, error: allLocationsError } = await retryOperation(async () => {
+                const { data, error } = await supabase
+                  .from('locations')
+                  .select('id, name, phone, phone2')
+                  .eq('user_id', userId);
+
+                if (error) {
+                  throw new Error(`Database query error: ${error.message}`);
+                }
+                
+                return { data, error };
+              }, 3, 1000);
 
               if (allLocationsError) {
-                console.error(`❌ Error fetching all locations:`, allLocationsError);
+                console.error(`❌ [${connectionId}] [${locationProcessingId}] Error fetching all locations:`, {
+                  connectionId,
+                  messageId: locationProcessingId,
+                  userId,
+                  sessionId: sessionId || 'default',
+                  error: allLocationsError.message,
+                  stack: allLocationsError.stack,
+                  timestamp: new Date().toISOString()
+                });
                 continue;
               }
 
-              console.log(`🔍 Total locations for user ${userId}: ${allLocations?.length || 0}`);
+              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Total locations for user ${userId}: ${allLocations?.length || 0}`);
+              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Location fetch details:`, {
+                connectionId,
+                messageId: locationProcessingId,
+                userId,
+                sessionId: sessionId || 'default',
+                locationCount: allLocations?.length || 0,
+                processingTime: Date.now() - locationStartTime,
+                timestamp: new Date().toISOString()
+              });
               
               // Check for exact matches - find ALL matching locations
               let matchingLocations = [];
               if (allLocations && allLocations.length > 0) {
+                console.log(`🔍 [${connectionId}] [${locationProcessingId}] Checking ${allLocations.length} locations for phone matches`);
+                
                 for (const location of allLocations) {
                   const locationPhoneNormalized = normalizePhoneNumber(location.phone);
                   const locationPhone2Normalized = normalizePhoneNumber(location.phone2);
                   
-                  console.log(`   Checking location: ${location.name}`);
-                  console.log(`     Phone: ${location.phone} -> Normalized: ${locationPhoneNormalized}`);
-                  console.log(`     Phone2: ${location.phone2} -> Normalized: ${locationPhone2Normalized}`);
+                  console.log(`🔍 [${connectionId}] [${locationProcessingId}] Checking location: ${location.name}`, {
+                    connectionId,
+                    messageId: locationProcessingId,
+                    userId,
+                    sessionId: sessionId || 'default',
+                    locationId: location.id,
+                    locationName: location.name,
+                    phone: location.phone,
+                    phoneNormalized: locationPhoneNormalized,
+                    phone2: location.phone2,
+                    phone2Normalized: locationPhone2Normalized,
+                    timestamp: new Date().toISOString()
+                  });
                   
-                  if (locationPhoneNormalized === normalizedWhatsAppPhone || 
-                      locationPhoneNormalized === normalizedLocalPhone ||
-                      locationPhone2Normalized === normalizedWhatsAppPhone || 
-                      locationPhone2Normalized === normalizedLocalPhone) {
-                    console.log(`✅ Found matching location: ${location.name} (ID: ${location.id})`);
+                  const isMatch = locationPhoneNormalized === normalizedWhatsAppPhone || 
+                                 locationPhoneNormalized === normalizedLocalPhone ||
+                                 locationPhone2Normalized === normalizedWhatsAppPhone || 
+                                 locationPhone2Normalized === normalizedLocalPhone;
+                  
+                  if (isMatch) {
+                    console.log(`✅ [${connectionId}] [${locationProcessingId}] Found matching location: ${location.name} (ID: ${location.id})`);
                     matchingLocations.push(location);
                   }
                 }
@@ -1010,20 +1282,23 @@ async function connectWhatsApp(userId, sessionId = null) {
                 for (const location of matchingLocations) {
                   try {
                     console.log(`   Updating location: ${location.name} (ID: ${location.id})`);
-                    const { error: updateError } = await supabase
-                      .from('locations')
-                      .update(locationUpdateData)
-                      .eq('id', location.id);
+                    
+                    await retryOperation(async () => {
+                      const { error: updateError } = await supabase
+                        .from('locations')
+                        .update(locationUpdateData)
+                        .eq('id', location.id);
 
-                    if (updateError) {
-                      console.error(`❌ Error updating location ${location.name}:`, updateError);
-                      errorCount++;
-                    } else {
+                      if (updateError) {
+                        throw new Error(`Database update error: ${updateError.message}`);
+                      }
+                      
                       console.log(`✅ Successfully updated location: ${location.name}`);
                       updatedCount++;
-                    }
+                    }, 3, 1000);
+                    
                   } catch (updateError) {
-                    console.error(`❌ Exception updating location ${location.name}:`, updateError);
+                    console.error(`❌ Failed to update location ${location.name} after retries:`, updateError.message);
                     errorCount++;
                   }
                 }
@@ -1040,15 +1315,17 @@ async function connectWhatsApp(userId, sessionId = null) {
                   created_at: new Date()
                 };
 
-                const { error: insertError } = await supabase
-                  .from('locations')
-                  .insert([newLocationData]);
+                await retryOperation(async () => {
+                  const { error: insertError } = await supabase
+                    .from('locations')
+                    .insert([newLocationData]);
 
-                if (insertError) {
-                  console.error(`❌ Error creating new location:`, insertError);
-                } else {
+                  if (insertError) {
+                    throw new Error(`Database insert error: ${insertError.message}`);
+                  }
+                  
                   console.log(`✅ Successfully created new location entry: ${contactName}`);
-                }
+                }, 3, 1000);
               }
 
               // Log the location message to message history for each updated location
@@ -1100,14 +1377,39 @@ async function connectWhatsApp(userId, sessionId = null) {
           }
         }
       } catch (error) {
-        console.error(`❌ Error in message listener for user ${userId}:`, error);
+        console.error(`❌ [${connectionId}] [${messageId}] Error in message listener for user ${userId}:`, {
+          connectionId,
+          messageId,
+          userId,
+          sessionId: sessionId || 'default',
+          error: error.message,
+          stack: error.stack,
+          processingTime: Date.now() - messageStartTime,
+          timestamp: new Date().toISOString()
+        });
       }
     });
 
-    console.log(`✅ WhatsApp connection setup completed for user: ${userId}`);
+    const totalConnectionTime = Date.now() - startTime;
+    console.log(`✅ [${connectionId}] WhatsApp connection setup completed for user: ${userId}`, {
+      connectionId,
+      userId,
+      sessionId: sessionId || 'default',
+      totalConnectionTime,
+      timestamp: new Date().toISOString()
+    });
     return sock;
   } catch (error) {
-    console.error(`❌ Error connecting WhatsApp for user: ${userId}`, error);
+    const totalConnectionTime = Date.now() - startTime;
+    console.error(`❌ [${connectionId}] Error connecting WhatsApp for user: ${userId}`, {
+      connectionId,
+      userId,
+      sessionId: sessionId || 'default',
+      error: error.message,
+      stack: error.stack,
+      totalConnectionTime,
+      timestamp: new Date().toISOString()
+    });
     throw error;
   }
 }
@@ -2853,12 +3155,20 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
           console.log(`📍 Processing location for shipment ${shipment.id}, customer: ${customerData.name}`);
           
           // Check if location already exists (by shipment_id)
-          const { data: existingLocation, error: checkLocationError } = await supabase
-            .from('locations')
-            .select('id')
-            .eq('shipment_id', shipment.id)
-            .eq('user_id', userId)
-            .single();
+          const { data: existingLocation, error: checkLocationError } = await retryOperation(async () => {
+            const { data, error } = await supabase
+              .from('locations')
+              .select('id')
+              .eq('shipment_id', shipment.id)
+              .eq('user_id', userId)
+              .single();
+            
+            if (error && error.code !== 'PGRST116') {
+              throw new Error(`Database check error: ${error.message}`);
+            }
+            
+            return { data, error };
+          }, 3, 1000);
           
           if (checkLocationError && checkLocationError.code !== 'PGRST116') {
             console.error(`❌ Error checking existing location:`, checkLocationError);
@@ -2867,33 +3177,36 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
           if (existingLocation) {
             // Update existing location
             console.log(`📍 Updating existing location for ${customerData.name}`);
-            const { error: updateLocationError } = await supabase
-              .from('locations')
-              .update(customerData)
-              .eq('id', existingLocation.id);
             
-            if (!updateLocationError) {
+            await retryOperation(async () => {
+              const { error: updateLocationError } = await supabase
+                .from('locations')
+                .update(customerData)
+                .eq('id', existingLocation.id);
+              
+              if (updateLocationError) {
+                throw new Error(`Database update error: ${updateLocationError.message}`);
+              }
+              
               console.log(`✅ Updated location: ${customerData.name}`);
-            } else {
-              console.error(`❌ Error updating location ${customerData.name}:`, updateLocationError);
-              console.error(`❌ Location update data:`, JSON.stringify(customerData, null, 2));
-            }
+            }, 3, 1000);
           } else {
             // Create new location
             console.log(`📍 Creating new location for ${customerData.name}`);
             console.log(`📍 Location data:`, JSON.stringify(customerData, null, 2));
             
-            const { data: insertedLocation, error: createLocationError } = await supabase
-              .from('locations')
-              .insert([customerData])
-              .select();
-            
-            if (!createLocationError) {
+            await retryOperation(async () => {
+              const { data: insertedLocation, error: createLocationError } = await supabase
+                .from('locations')
+                .insert([customerData])
+                .select();
+              
+              if (createLocationError) {
+                throw new Error(`Database insert error: ${createLocationError.message}`);
+              }
+              
               console.log(`✅ Created location: ${customerData.name}`, insertedLocation);
-            } else {
-              console.error(`❌ Error creating location ${customerData.name}:`, createLocationError);
-              console.error(`❌ Location creation data:`, JSON.stringify(customerData, null, 2));
-            }
+            }, 3, 1000);
           }
         } catch (locationError) {
           console.error(`❌ Error processing location for shipment ${shipment.id}:`, locationError);

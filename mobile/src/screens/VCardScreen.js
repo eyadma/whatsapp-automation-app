@@ -24,11 +24,15 @@ import * as Contacts from 'expo-contacts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import { AppContext } from '../context/AppContext';
+import WebCompatibleButton from '../web/components/WebCompatibleButton';
 
 const VCardScreen = ({ navigation, route }) => {
   const { t } = useContext(AppContext);
   const paperTheme = useTheme();
   const dynamicStyles = createStyles(paperTheme);
+  
+  // Use web-compatible button on web, regular button on mobile
+  const CompatibleButton = Platform.OS === 'web' ? WebCompatibleButton : Button;
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -293,7 +297,7 @@ const VCardScreen = ({ navigation, route }) => {
       {/* Web-compatible import button */}
       {Platform.OS === 'web' ? (
         <View style={dynamicStyles.webButtonContainer}>
-          <Button
+          <CompatibleButton
             mode="contained"
             icon="contacts"
             onPress={() => setShowModal(true)}
@@ -302,7 +306,7 @@ const VCardScreen = ({ navigation, route }) => {
             contentStyle={dynamicStyles.webButtonContent}
           >
             {t('generateVCard')} ({selectedCustomers.length})
-          </Button>
+          </CompatibleButton>
         </View>
       ) : (
         <FAB
@@ -395,14 +399,14 @@ const VCardScreen = ({ navigation, route }) => {
           </View>
 
           <View style={dynamicStyles.modalActions}>
-            <Button
+            <CompatibleButton
               mode="outlined"
               onPress={() => setShowModal(false)}
               style={dynamicStyles.modalButton}
             >
               {t('cancel')}
-            </Button>
-            <Button
+            </CompatibleButton>
+            <CompatibleButton
               mode="contained"
               onPress={generateVCard}
               loading={generating}
@@ -410,7 +414,7 @@ const VCardScreen = ({ navigation, route }) => {
               style={dynamicStyles.modalButton}
             >
               {generating ? t('generating') : t('generateVCard')}
-            </Button>
+            </CompatibleButton>
           </View>
         </Modal>
       </Portal>
