@@ -1,11 +1,11 @@
--- Create logs table for database logging
+-- Create logs table for database logging (Simple version without RLS)
 CREATE TABLE IF NOT EXISTS logs (
     id BIGSERIAL PRIMARY KEY,
     level VARCHAR(10) NOT NULL CHECK (level IN ('error', 'warn', 'info', 'debug', 'trace')),
     category VARCHAR(50) NOT NULL,
     message TEXT NOT NULL,
     data JSONB,
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID,
     session_id VARCHAR(255),
     timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -28,26 +28,6 @@ CREATE INDEX IF NOT EXISTS idx_logs_category_timestamp ON logs(category, timesta
 -- Create partial indexes for error logs (most important)
 CREATE INDEX IF NOT EXISTS idx_logs_errors ON logs(timestamp) WHERE level = 'error';
 CREATE INDEX IF NOT EXISTS idx_logs_connection_errors ON logs(timestamp) WHERE level = 'error' AND category = 'connection';
-
--- Enable Row Level Security (RLS)
-ALTER TABLE logs ENABLE ROW LEVEL SECURITY;
-
--- Create RLS policies
--- Users can only see their own logs
-CREATE POLICY "Users can view their own logs" ON logs
-    FOR SELECT USING (auth.uid() = user_id);
-
--- Users can insert their own logs
-CREATE POLICY "Users can insert their own logs" ON logs
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Service role can do everything (for server-side logging)
-CREATE POLICY "Service role can do everything" ON logs
-    FOR ALL USING (auth.role() = 'service_role');
-
--- Allow server-side logging without user context
-CREATE POLICY "Server logging without user context" ON logs
-    FOR INSERT WITH CHECK (user_id IS NULL OR auth.role() = 'service_role');
 
 -- Create a function to clean up old logs (retention policy)
 CREATE OR REPLACE FUNCTION cleanup_old_logs(retention_days INTEGER DEFAULT 30)
@@ -125,19 +105,3 @@ ORDER BY created_at DESC;
 GRANT SELECT ON recent_logs TO authenticated;
 GRANT EXECUTE ON FUNCTION cleanup_old_logs(INTEGER) TO service_role;
 GRANT EXECUTE ON FUNCTION get_log_stats() TO authenticated, service_role;
-
--- Create a trigger to automatically clean up old logs (optional)
--- This will run daily and clean up logs older than 30 days
--- Uncomment if you want automatic cleanup
-/*
-CREATE OR REPLACE FUNCTION auto_cleanup_logs()
-RETURNS void AS $$
-BEGIN
-    PERFORM cleanup_old_logs(30);
-END;
-$$ LANGUAGE plpgsql;
-
--- You would need to set up a cron job or scheduled task to call this function
--- For example, using pg_cron extension if available:
--- SELECT cron.schedule('cleanup-logs', '0 2 * * *', 'SELECT auto_cleanup_logs();');
-*/

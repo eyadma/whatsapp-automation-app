@@ -12,8 +12,8 @@ async function setupDatabaseLogging() {
   try {
     console.log('🚀 Setting up database logging...');
     
-    // Read the SQL file
-    const sqlPath = path.join(__dirname, 'create-logs-table.sql');
+    // Read the SQL file (use simple version without RLS for easier setup)
+    const sqlPath = path.join(__dirname, 'create-logs-table-simple.sql');
     const sqlContent = fs.readFileSync(sqlPath, 'utf8');
     
     console.log('📄 SQL content loaded, executing...');
