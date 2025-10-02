@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const supabase = require('./config/supabase');
+const { dbLogger } = require('./database-logger');
 
 
 require('dotenv').config();
@@ -563,92 +564,97 @@ async function connectWhatsApp(userId, sessionId = null) {
   const startTime = Date.now();
   
   try {
-    console.log(`🚀 [${connectionId}] Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`);
-    console.log(`📊 [${connectionId}] Connection parameters:`, {
+    dbLogger.info('connection', `Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`, {
       userId,
       sessionId: sessionId || 'default',
-      timestamp: new Date().toISOString(),
-      connectionId
-    });
+      connectionId,
+      timestamp: new Date().toISOString()
+    }, userId, sessionId);
     
     // Validate inputs
     if (!userId) {
-      console.error(`❌ [${connectionId}] Validation failed: userId is required`);
+      dbLogger.error('connection', 'Validation failed: userId is required', { connectionId }, userId, sessionId);
       throw new Error('userId is required');
     }
     
     const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
-    console.log(`📁 [${connectionId}] Session directory: ${sessionDir}`);
-    console.log(`📁 [${connectionId}] Environment check:`, {
+    dbLogger.debug('connection', `Session directory: ${sessionDir}`, {
       RAILWAY_VOLUME_MOUNT_PATH: process.env.RAILWAY_VOLUME_MOUNT_PATH,
       __dirname: __dirname,
-      finalPath: sessionDir
-    });
+      finalPath: sessionDir,
+      connectionId
+    }, userId, sessionId);
     
     try {
       const dirExists = fs.existsSync(sessionDir);
-      console.log(`🔍 [${connectionId}] Session directory exists: ${dirExists}`);
+      dbLogger.debug('connection', `Session directory exists: ${dirExists}`, { connectionId, dirExists }, userId, sessionId);
       
       if (!dirExists) {
-        console.log(`📁 [${connectionId}] Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`);
+        dbLogger.info('connection', `Creating session directory for user: ${userId}, session: ${sessionId || 'default'}`, { connectionId }, userId, sessionId);
         const mkdirStart = Date.now();
         fs.mkdirSync(sessionDir, { recursive: true });
-        console.log(`✅ [${connectionId}] Session directory created in ${Date.now() - mkdirStart}ms`);
+        const mkdirDuration = Date.now() - mkdirStart;
+        dbLogger.info('connection', `Session directory created in ${mkdirDuration}ms`, { connectionId, mkdirDuration }, userId, sessionId);
       }
       
       const dirContents = fs.readdirSync(sessionDir);
-      console.log(`🔍 [${connectionId}] Session directory contents:`, {
+      const totalSize = dirContents.reduce((total, file) => {
+        try {
+          const filePath = path.join(sessionDir, file);
+          const stats = fs.statSync(filePath);
+          return total + (stats.isFile() ? stats.size : 0);
+        } catch (e) {
+          return total;
+        }
+      }, 0);
+      
+      dbLogger.debug('connection', `Session directory contents: ${dirContents.length} files, ${totalSize} bytes`, {
+        connectionId,
         fileCount: dirContents.length,
         files: dirContents,
-        totalSize: dirContents.reduce((total, file) => {
-          try {
-            const filePath = path.join(sessionDir, file);
-            const stats = fs.statSync(filePath);
-            return total + (stats.isFile() ? stats.size : 0);
-          } catch (e) {
-            return total;
-          }
-        }, 0)
-      });
+        totalSize
+      }, userId, sessionId);
     } catch (fsError) {
-      console.error(`❌ [${connectionId}] File system error for user ${userId}:`, {
+      dbLogger.error('connection', `File system error for user ${userId}: ${fsError.message}`, {
+        connectionId,
         error: fsError.message,
         stack: fsError.stack,
         sessionDir,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
       throw new Error(`Failed to create session directory: ${fsError.message}`);
     }
 
-    console.log(`🔐 [${connectionId}] Loading auth state for user: ${userId}`);
+    dbLogger.info('auth', `Loading auth state for user: ${userId}`, { connectionId }, userId, sessionId);
     let state, saveCreds;
     try {
       const authStart = Date.now();
-      console.log(`⏳ [${connectionId}] Starting auth state loading...`);
+      dbLogger.debug('auth', 'Starting auth state loading...', { connectionId }, userId, sessionId);
       
       const authResult = await useMultiFileAuthState(sessionDir);
       state = authResult.state;
       saveCreds = authResult.saveCreds;
       
       const authDuration = Date.now() - authStart;
-      console.log(`✅ [${connectionId}] Auth state loaded for user: ${userId} in ${authDuration}ms`);
-      console.log(`🔐 [${connectionId}] Auth state details:`, {
+      dbLogger.info('auth', `Auth state loaded for user: ${userId} in ${authDuration}ms`, {
+        connectionId,
         hasState: !!state,
         hasSaveCreds: !!saveCreds,
         stateKeys: state ? Object.keys(state) : [],
         duration: authDuration
-      });
+      }, userId, sessionId);
     } catch (authError) {
-      console.error(`❌ [${connectionId}] Auth state error for user ${userId}:`, {
+      dbLogger.error('auth', `Auth state error for user ${userId}: ${authError.message}`, {
+        connectionId,
         error: authError.message,
         stack: authError.stack,
         sessionDir,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
       throw new Error(`Failed to load auth state: ${authError.message}`);
     }
 
-    console.log(`🔗 [${connectionId}] Creating WhatsApp socket for user: ${userId}`);
+    dbLogger.info('socket', `Creating WhatsApp socket for user: ${userId}`, { connectionId }, userId, sessionId);
     let sock;
     try {
       const socketConfig = {
@@ -674,7 +680,8 @@ async function connectWhatsApp(userId, sessionId = null) {
         }
       };
       
-      console.log(`⚙️ [${connectionId}] Socket configuration:`, {
+      dbLogger.debug('socket', 'Socket configuration', {
+        connectionId,
         connectTimeoutMs: socketConfig.connectTimeoutMs,
         keepAliveIntervalMs: socketConfig.keepAliveIntervalMs,
         retryRequestDelayMs: socketConfig.retryRequestDelayMs,
@@ -682,24 +689,25 @@ async function connectWhatsApp(userId, sessionId = null) {
         defaultQueryTimeoutMs: socketConfig.defaultQueryTimeoutMs,
         emitOwnEvents: socketConfig.emitOwnEvents,
         markOnlineOnConnect: socketConfig.markOnlineOnConnect
-      });
+      }, userId, sessionId);
       
       const socketStart = Date.now();
       sock = makeWASocket(socketConfig);
       const socketDuration = Date.now() - socketStart;
       
-      console.log(`✅ [${connectionId}] WhatsApp socket created for user: ${userId} in ${socketDuration}ms`);
-      console.log(`🔗 [${connectionId}] Socket details:`, {
+      dbLogger.info('socket', `WhatsApp socket created for user: ${userId} in ${socketDuration}ms`, {
+        connectionId,
         socketId: sock.id,
         duration: socketDuration,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
     } catch (socketError) {
-      console.error(`❌ [${connectionId}] Socket creation error for user ${userId}:`, {
+      dbLogger.error('socket', `Socket creation error for user ${userId}: ${socketError.message}`, {
+        connectionId,
         error: socketError.message,
         stack: socketError.stack,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
       throw new Error(`Failed to create WhatsApp socket: ${socketError.message}`);
     }
 
@@ -710,68 +718,80 @@ async function connectWhatsApp(userId, sessionId = null) {
       const hoursAlive = Math.floor(sessionDuration / (1000 * 60 * 60));
       const minutesAlive = Math.floor((sessionDuration % (1000 * 60 * 60)) / (1000 * 60));
       
-      console.log(`💚 [${connectionId}] Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive`);
+      dbLogger.debug('connection', `Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive`, {
+        connectionId,
+        hoursAlive,
+        minutesAlive,
+        sessionDuration: `${hoursAlive}h ${minutesAlive}m`
+      }, userId, sessionId);
       
       // Log session milestone every hour
       if (minutesAlive === 0 && hoursAlive > 0) {
-        console.log(`🎉 [${connectionId}] Session milestone: ${hoursAlive} hours alive for user ${userId}`);
+        dbLogger.info('connection', `Session milestone: ${hoursAlive} hours alive for user ${userId}`, {
+          connectionId,
+          hoursAlive,
+          milestone: true
+        }, userId, sessionId);
       }
       
       // Check if socket is still healthy
       const socketState = sock?.ws?.readyState;
       const socketHealthy = socketState === 1;
       
-      console.log(`🔍 [${connectionId}] Socket health details:`, {
-        userId,
+      const readyStateText = socketState === 0 ? 'CONNECTING' : 
+                             socketState === 1 ? 'OPEN' : 
+                             socketState === 2 ? 'CLOSING' : 
+                             socketState === 3 ? 'CLOSED' : 'UNKNOWN';
+      
+      dbLogger.debug('socket', `Socket health details: ${socketHealthy ? 'HEALTHY' : 'WARNING'} - ${readyStateText}`, {
         connectionId,
         socketHealthy,
         readyState: socketState,
-        readyStateText: socketState === 0 ? 'CONNECTING' : 
-                       socketState === 1 ? 'OPEN' : 
-                       socketState === 2 ? 'CLOSING' : 
-                       socketState === 3 ? 'CLOSED' : 'UNKNOWN',
+        readyStateText,
         sessionDuration: `${hoursAlive}h ${minutesAlive}m`,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
       
-      if (socketHealthy) {
-        console.log(`✅ [${connectionId}] Socket healthy for user ${userId} - ReadyState: ${socketState}`);
-      } else {
-        console.log(`⚠️ [${connectionId}] Socket health warning for user ${userId} - ReadyState: ${socketState}`);
+      if (!socketHealthy) {
+        dbLogger.warn('socket', `Socket health warning for user ${userId} - ReadyState: ${socketState} (${readyStateText})`, {
+          connectionId,
+          readyState: socketState,
+          readyStateText
+        }, userId, sessionId);
       }
     }, 300000); // Check every 5 minutes
 
     // Handle connection updates
     sock.ev.on('connection.update', async (update) => {
-      console.log(`📱 [${connectionId}] Connection update for user ${userId}:`, {
+      dbLogger.info('connection', `Connection update for user ${userId}`, {
         connectionId,
         userId,
         sessionId: sessionId || 'default',
         update,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
       
       const { connection, lastDisconnect, qr } = update;
       
-      console.log(`🔍 [${connectionId}] Connection update details:`, {
+      dbLogger.debug('connection', 'Connection update details', {
+        connectionId,
         connection,
         hasLastDisconnect: !!lastDisconnect,
         hasQR: !!qr,
         lastDisconnectReason: lastDisconnect?.error?.message,
         lastDisconnectCode: lastDisconnect?.error?.output?.statusCode
-      });
+      }, userId, sessionId);
       
       // Handle QR code generation
       if (qr) {
-        console.log(`📱 [${connectionId}] QR Code received for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
-        console.log(`🔍 [${connectionId}] QR Code details:`, {
+        dbLogger.info('connection', `QR Code received for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
           connectionId,
           userId,
           sessionId: sessionId || 'default',
           qrLength: qr.length,
           qrPrefix: qr.substring(0, 20) + '...',
           timestamp: new Date().toISOString()
-        });
+        }, userId, sessionId);
         
         const connectionData = {
           sock,
@@ -784,7 +804,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           connectionType: 'qr_required' // Indicates QR code is needed
         };
         
-        console.log(`🔗 [${connectionId}] Setting connection data:`, {
+        dbLogger.debug('connection', 'Setting connection data for QR required', {
           connectionId,
           userId,
           sessionId: sessionId || 'default',
@@ -794,16 +814,15 @@ async function connectWhatsApp(userId, sessionId = null) {
           socketReady: sock?.ws?.readyState === 1,
           connectionType: 'qr_required',
           timestamp: new Date().toISOString()
-        });
+        }, userId, sessionId);
         
         setConnection(userId, sessionId || 'default', connectionData);
-        console.log(`🔍 [${connectionId}] Connection set for user ${userId}`);
+        dbLogger.debug('connection', `Connection set for user ${userId}`, { connectionId }, userId, sessionId);
       }
       
       // Handle connection close
       if (connection === 'close') {
-        console.log(`❌ [${connectionId}] Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
-        console.log(`🔍 [${connectionId}] Connection close details:`, {
+        dbLogger.warn('connection', `Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
           connectionId,
           userId,
           sessionId: sessionId || 'default',
@@ -811,30 +830,31 @@ async function connectWhatsApp(userId, sessionId = null) {
           disconnectReason: lastDisconnect?.error?.output?.statusCode,
           disconnectMessage: lastDisconnect?.error?.message,
           timestamp: new Date().toISOString()
-        });
+        }, userId, sessionId);
         
         // Clear the health check interval
         if (sessionHealthCheck) {
           clearInterval(sessionHealthCheck);
-          console.log(`🧹 [${connectionId}] Cleared health check interval for user: ${userId}`);
+          dbLogger.debug('connection', `Cleared health check interval for user: ${userId}`, { connectionId }, userId, sessionId);
         }
         
         // Clear the keep-alive interval
         const connection = getConnection(userId, sessionId || 'default');
         if (connection && connection.keepAliveInterval) {
           clearInterval(connection.keepAliveInterval);
-          console.log(`🧹 [${connectionId}] Cleared keep-alive interval for user: ${userId}`);
+          dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
         }
         
         const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-        console.log(`🔍 [${connectionId}] Reconnection decision:`, {
+        dbLogger.debug('connection', `Reconnection decision: ${shouldReconnect ? 'WILL_RECONNECT' : 'WILL_NOT_RECONNECT'}`, {
+          connectionId,
           shouldReconnect,
           disconnectCode: lastDisconnect?.error?.output?.statusCode,
           loggedOutCode: DisconnectReason.loggedOut
-        });
+        }, userId, sessionId);
         
         if (shouldReconnect) {
-          console.log(`🔄 [${connectionId}] Attempting to reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+          dbLogger.info('connection', `Attempting to reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, { connectionId }, userId, sessionId);
           // Progressive reconnection delay: 3s, 10s, 30s, 60s, then every 2 minutes
           const reconnectDelays = [3000, 10000, 30000, 60000, 120000];
           let reconnectAttempts = 0;
@@ -843,8 +863,7 @@ async function connectWhatsApp(userId, sessionId = null) {
             reconnectAttempts++;
             const delay = reconnectDelays[Math.min(reconnectAttempts - 1, reconnectDelays.length - 1)];
             
-            console.log(`🔄 [${connectionId}] Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`);
-            console.log(`🔍 [${connectionId}] Reconnection details:`, {
+            dbLogger.info('connection', `Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`, {
               connectionId,
               userId,
               sessionId: sessionId || 'default',
@@ -852,11 +871,11 @@ async function connectWhatsApp(userId, sessionId = null) {
               delay: delay,
               maxAttempts: 10,
               timestamp: new Date().toISOString()
-            });
+            }, userId, sessionId);
             
             setTimeout(() => {
               connectWhatsApp(userId, sessionId).catch(error => {
-                console.error(`❌ [${connectionId}] Reconnection attempt ${reconnectAttempts} failed for user ${userId}:`, {
+                dbLogger.error('connection', `Reconnection attempt ${reconnectAttempts} failed for user ${userId}: ${error.message}`, {
                   connectionId,
                   userId,
                   sessionId: sessionId || 'default',
@@ -864,12 +883,12 @@ async function connectWhatsApp(userId, sessionId = null) {
                   error: error.message,
                   stack: error.stack,
                   timestamp: new Date().toISOString()
-                });
+                }, userId, sessionId);
                 
                 if (reconnectAttempts < 10) { // Max 10 reconnection attempts
                   attemptReconnect();
                 } else {
-                  console.log(`❌ [${connectionId}] Max reconnection attempts reached for user ${userId}`);
+                  dbLogger.error('connection', `Max reconnection attempts reached for user ${userId}`, { connectionId }, userId, sessionId);
                   removeConnection(userId, sessionId || 'default');
                 }
               });
@@ -878,21 +897,20 @@ async function connectWhatsApp(userId, sessionId = null) {
           
           attemptReconnect();
         } else {
-          console.log(`🚪 [${connectionId}] User ${userId} logged out, removing connection`);
+          dbLogger.info('connection', `User ${userId} logged out, removing connection`, { connectionId }, userId, sessionId);
           removeConnection(userId, sessionId || 'default');
         }
       } 
       
       // Handle connection open
       else if (connection === 'open') {
-        console.log(`✅ [${connectionId}] Connection opened for user: ${userId}`);
-        console.log(`🔍 [${connectionId}] Connection open details:`, {
+        dbLogger.info('connection', `Connection opened for user: ${userId}`, {
           connectionId,
           userId,
           sessionId: sessionId || 'default',
           timestamp: new Date().toISOString(),
           totalConnectionTime: Date.now() - startTime
-        });
+        }, userId, sessionId);
         
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
@@ -900,18 +918,18 @@ async function connectWhatsApp(userId, sessionId = null) {
             if (sock && sock.ws && sock.ws.readyState === 1) {
               // Send a ping to keep the connection alive
               await sock.ping();
-              console.log(`💓 [${connectionId}] Keep-alive ping sent for user: ${userId}`);
+              dbLogger.debug('connection', `Keep-alive ping sent for user: ${userId}`, { connectionId }, userId, sessionId);
             } else {
-              console.log(`⚠️ [${connectionId}] Cannot send keep-alive ping for user ${userId} - socket not ready`);
+              dbLogger.warn('connection', `Cannot send keep-alive ping for user ${userId} - socket not ready`, { connectionId }, userId, sessionId);
             }
           } catch (error) {
-            console.error(`❌ [${connectionId}] Keep-alive ping failed for user ${userId}:`, {
+            dbLogger.error('connection', `Keep-alive ping failed for user ${userId}: ${error.message}`, {
               connectionId,
               userId,
               error: error.message,
               stack: error.stack,
               timestamp: new Date().toISOString()
-            });
+            }, userId, sessionId);
           }
         }, 300000); // Send ping every 5 minutes
         
@@ -1028,14 +1046,14 @@ async function connectWhatsApp(userId, sessionId = null) {
     
     // Add error handling for the socket
     sock.ev.on('error', (error) => {
-      console.error(`❌ [${connectionId}] WhatsApp socket error for user ${userId}:`, {
+      dbLogger.error('socket', `WhatsApp socket error for user ${userId}: ${error.message}`, {
         connectionId,
         userId,
         sessionId: sessionId || 'default',
         error: error.message,
         stack: error.stack,
         timestamp: new Date().toISOString()
-      });
+      }, userId, sessionId);
     });
 
     // Add message listener for location handling
@@ -1044,7 +1062,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       const messageStartTime = Date.now();
       
       try {
-        console.log(`📱 [${connectionId}] [${messageId}] Message event received for user ${userId}:`, {
+        dbLogger.info('message', `Message event received for user ${userId}: ${event.messages?.length || 0} messages`, {
           connectionId,
           messageId,
           userId,
@@ -1052,7 +1070,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           messageCount: event.messages?.length || 0,
           eventType: event.type,
           timestamp: new Date().toISOString()
-        });
+        }, userId, sessionId);
         
         for (const message of event.messages) {
           const individualMessageId = `${messageId}_${event.messages.indexOf(message)}`;
@@ -1060,7 +1078,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           // // Skip if message is from self
           // if (message.key.fromMe) continue;
           
-          console.log(`📱 [${connectionId}] [${individualMessageId}] Processing message for user ${userId}:`, {
+          dbLogger.debug('message', `Processing message for user ${userId}`, {
             connectionId,
             messageId: individualMessageId,
             userId,
@@ -1073,7 +1091,7 @@ async function connectWhatsApp(userId, sessionId = null) {
             hasLocation: !!(message.message?.locationMessage || message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage),
             messageKeys: Object.keys(message.message || {}),
             processingStartTime: new Date().toISOString()
-          });
+          }, userId, sessionId);
 
           // Check if message is a location or has quoted location
           let locationData = null;
@@ -1081,7 +1099,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Check direct location message
           if (message.message?.locationMessage) {
             locationData = message.message.locationMessage;
-            console.log(`📍 [${connectionId}] [${individualMessageId}] Direct location received for user ${userId}:`, {
+            dbLogger.info('location', `Direct location received for user ${userId}`, {
               connectionId,
               messageId: individualMessageId,
               userId,
@@ -1094,12 +1112,12 @@ async function connectWhatsApp(userId, sessionId = null) {
               speed: locationData.speedInMps,
               degreesClockwiseFromMagneticNorth: locationData.degreesClockwiseFromMagneticNorth,
               timestamp: new Date().toISOString()
-            });
+            }, userId, sessionId);
           }
           // Check quoted message for location
           else if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage) {
             locationData = message.message.extendedTextMessage.contextInfo.quotedMessage.locationMessage;
-            console.log(`📍 [${connectionId}] [${individualMessageId}] Quoted location received for user ${userId}:`, {
+            dbLogger.info('location', `Quoted location received for user ${userId}`, {
               connectionId,
               messageId: individualMessageId,
               userId,
@@ -1112,7 +1130,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               speed: locationData.speedInMps,
               degreesClockwiseFromMagneticNorth: locationData.degreesClockwiseFromMagneticNorth,
               timestamp: new Date().toISOString()
-            });
+            }, userId, sessionId);
           }
 
           // If we have location data, process it
@@ -1121,7 +1139,7 @@ async function connectWhatsApp(userId, sessionId = null) {
             const locationStartTime = Date.now();
             
             try {
-              console.log(`📍 [${connectionId}] [${locationProcessingId}] Starting location processing for user ${userId}`);
+              dbLogger.info('location', `Starting location processing for user ${userId}`, { connectionId, messageId: locationProcessingId }, userId, sessionId);
               
               // Get contact information
               const contactJid = message.key.remoteJid;
@@ -1138,8 +1156,7 @@ async function connectWhatsApp(userId, sessionId = null) {
                 contactName = locationData.name;
               }
 
-              console.log(`📞 [${connectionId}] [${locationProcessingId}] Processing location for contact: ${contactName}`);
-              console.log(`📱 [${connectionId}] [${locationProcessingId}] Phone number conversion:`, {
+              dbLogger.info('location', `Processing location for contact: ${contactName}`, {
                 connectionId,
                 messageId: locationProcessingId,
                 userId,
@@ -1148,16 +1165,16 @@ async function connectWhatsApp(userId, sessionId = null) {
                 convertedPhoneNumber: phoneNumber,
                 contactName,
                 timestamp: new Date().toISOString()
-              });
+              }, userId, sessionId);
 
               // Check if customer exists by phone number (try both formats)
-              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Searching for customer with phone numbers: ${phoneNumber}, ${whatsappPhoneNumber}`);
+              dbLogger.debug('location', `Searching for customer with phone numbers: ${phoneNumber}, ${whatsappPhoneNumber}`, { connectionId, messageId: locationProcessingId }, userId, sessionId);
               
               // Normalize phone numbers for comparison
               const normalizedWhatsAppPhone = normalizePhoneNumber(whatsappPhoneNumber);
               const normalizedLocalPhone = normalizePhoneNumber(phoneNumber);
               
-              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Normalized phone numbers:`, {
+              dbLogger.debug('location', `Normalized phone numbers`, {
                 connectionId,
                 messageId: locationProcessingId,
                 userId,
@@ -1165,10 +1182,10 @@ async function connectWhatsApp(userId, sessionId = null) {
                 normalizedWhatsAppPhone,
                 normalizedLocalPhone,
                 timestamp: new Date().toISOString()
-              });
+              }, userId, sessionId);
               
               // First, let's get all locations for this user to debug
-              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Fetching all locations for user ${userId}`);
+              dbLogger.debug('database', `Fetching all locations for user ${userId}`, { connectionId, messageId: locationProcessingId }, userId, sessionId);
               const { data: allLocations, error: allLocationsError } = await retryOperation(async () => {
                 const { data, error } = await supabase
                   .from('locations')
@@ -1183,7 +1200,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               }, 3, 1000);
 
               if (allLocationsError) {
-                console.error(`❌ [${connectionId}] [${locationProcessingId}] Error fetching all locations:`, {
+                dbLogger.error('database', `Error fetching all locations: ${allLocationsError.message}`, {
                   connectionId,
                   messageId: locationProcessingId,
                   userId,
@@ -1191,12 +1208,11 @@ async function connectWhatsApp(userId, sessionId = null) {
                   error: allLocationsError.message,
                   stack: allLocationsError.stack,
                   timestamp: new Date().toISOString()
-                });
+                }, userId, sessionId);
                 continue;
               }
 
-              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Total locations for user ${userId}: ${allLocations?.length || 0}`);
-              console.log(`🔍 [${connectionId}] [${locationProcessingId}] Location fetch details:`, {
+              dbLogger.debug('database', `Total locations for user ${userId}: ${allLocations?.length || 0}`, {
                 connectionId,
                 messageId: locationProcessingId,
                 userId,
@@ -1204,18 +1220,18 @@ async function connectWhatsApp(userId, sessionId = null) {
                 locationCount: allLocations?.length || 0,
                 processingTime: Date.now() - locationStartTime,
                 timestamp: new Date().toISOString()
-              });
+              }, userId, sessionId);
               
               // Check for exact matches - find ALL matching locations
               let matchingLocations = [];
               if (allLocations && allLocations.length > 0) {
-                console.log(`🔍 [${connectionId}] [${locationProcessingId}] Checking ${allLocations.length} locations for phone matches`);
+                dbLogger.debug('location', `Checking ${allLocations.length} locations for phone matches`, { connectionId, messageId: locationProcessingId }, userId, sessionId);
                 
                 for (const location of allLocations) {
                   const locationPhoneNormalized = normalizePhoneNumber(location.phone);
                   const locationPhone2Normalized = normalizePhoneNumber(location.phone2);
                   
-                  console.log(`🔍 [${connectionId}] [${locationProcessingId}] Checking location: ${location.name}`, {
+                  dbLogger.debug('location', `Checking location: ${location.name}`, {
                     connectionId,
                     messageId: locationProcessingId,
                     userId,
@@ -1227,7 +1243,7 @@ async function connectWhatsApp(userId, sessionId = null) {
                     phone2: location.phone2,
                     phone2Normalized: locationPhone2Normalized,
                     timestamp: new Date().toISOString()
-                  });
+                  }, userId, sessionId);
                   
                   const isMatch = locationPhoneNormalized === normalizedWhatsAppPhone || 
                                  locationPhoneNormalized === normalizedLocalPhone ||
@@ -1235,7 +1251,7 @@ async function connectWhatsApp(userId, sessionId = null) {
                                  locationPhone2Normalized === normalizedLocalPhone;
                   
                   if (isMatch) {
-                    console.log(`✅ [${connectionId}] [${locationProcessingId}] Found matching location: ${location.name} (ID: ${location.id})`);
+                    dbLogger.info('location', `Found matching location: ${location.name} (ID: ${location.id})`, { connectionId, messageId: locationProcessingId, locationId: location.id }, userId, sessionId);
                     matchingLocations.push(location);
                   }
                 }
@@ -1377,7 +1393,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           }
         }
       } catch (error) {
-        console.error(`❌ [${connectionId}] [${messageId}] Error in message listener for user ${userId}:`, {
+        dbLogger.error('message', `Error in message listener for user ${userId}: ${error.message}`, {
           connectionId,
           messageId,
           userId,
@@ -1386,22 +1402,22 @@ async function connectWhatsApp(userId, sessionId = null) {
           stack: error.stack,
           processingTime: Date.now() - messageStartTime,
           timestamp: new Date().toISOString()
-        });
+        }, userId, sessionId);
       }
     });
 
     const totalConnectionTime = Date.now() - startTime;
-    console.log(`✅ [${connectionId}] WhatsApp connection setup completed for user: ${userId}`, {
+    dbLogger.info('connection', `WhatsApp connection setup completed for user: ${userId}`, {
       connectionId,
       userId,
       sessionId: sessionId || 'default',
       totalConnectionTime,
       timestamp: new Date().toISOString()
-    });
+    }, userId, sessionId);
     return sock;
   } catch (error) {
     const totalConnectionTime = Date.now() - startTime;
-    console.error(`❌ [${connectionId}] Error connecting WhatsApp for user: ${userId}`, {
+    dbLogger.error('connection', `Error connecting WhatsApp for user: ${userId} - ${error.message}`, {
       connectionId,
       userId,
       sessionId: sessionId || 'default',
@@ -1409,12 +1425,69 @@ async function connectWhatsApp(userId, sessionId = null) {
       stack: error.stack,
       totalConnectionTime,
       timestamp: new Date().toISOString()
-    });
+    }, userId, sessionId);
     throw error;
   }
 }
 
 // API Routes
+
+// 0. Logging Management
+app.get('/api/logs', async (req, res) => {
+  try {
+    const { level, category, userId, sessionId, limit = 100, startDate, endDate } = req.query;
+    
+    const filters = {};
+    if (level) filters.level = level;
+    if (category) filters.category = category;
+    if (userId) filters.userId = userId;
+    if (sessionId) filters.sessionId = sessionId;
+    if (limit) filters.limit = parseInt(limit);
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    
+    const logs = await dbLogger.getLogs(filters);
+    
+    res.json({
+      success: true,
+      logs,
+      count: logs.length,
+      filters
+    });
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/logs/stats', async (req, res) => {
+  try {
+    const stats = await dbLogger.getLogStats();
+    
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('Error fetching log stats:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/logs/cleanup', async (req, res) => {
+  try {
+    const { retentionDays = 30 } = req.body;
+    const result = await dbLogger.cleanupOldLogs(retentionDays);
+    
+    res.json({
+      success: result,
+      message: result ? `Cleaned up logs older than ${retentionDays} days` : 'Failed to clean up logs'
+    });
+  } catch (error) {
+    console.error('Error cleaning up logs:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // 1. WhatsApp Connection Management
 app.get('/api/whatsapp/status/:userId', async (req, res) => {
