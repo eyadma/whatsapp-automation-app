@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import notificationPermissionService from './notificationPermissionService';
 
 class WhatsAppStatusService {
   constructor() {
@@ -97,7 +98,7 @@ class WhatsAppStatusService {
   }
 
   // Show notification for status changes
-  showStatusNotification(userId, sessionId, status) {
+  async showStatusNotification(userId, sessionId, status) {
     const sessionName = sessionId === 'default' ? 'Default Session' : `Session ${sessionId}`;
     
     let title, message, type;
@@ -126,6 +127,9 @@ class WhatsAppStatusService {
       default:
         return;
     }
+
+    // Send push notification
+    await notificationPermissionService.sendWhatsAppStatusNotification(title, message, status);
 
     // Notify listeners about the notification
     this.notifyListeners('notification', {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "WhatsApp Automation",
     "slug": "whatsapp-automation",
-    "version": "1.3.7",
+    "version": "1.3.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "light",
@@ -30,10 +30,16 @@
         "backgroundColor": "#4CAF50"
       },
       "package": "com.eyadma.whatsappautomation",
-      "versionCode": 10,
+      "versionCode": 11,
       "permissions": [
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
       ]
     },
     "web": {
@@ -45,7 +51,21 @@
       }
     },
     "plugins": [
-      "expo-font"
-    ]
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#4CAF50",
+          "defaultChannel": "whatsapp-status"
+        }
+      ]
+    ],
+    "notification": {
+      "icon": "./assets/images/icon.png",
+      "color": "#4CAF50",
+      "androidMode": "default",
+      "androidCollapsedTitle": "WhatsApp Status"
+    }
   }
 }

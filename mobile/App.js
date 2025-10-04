@@ -10,6 +10,7 @@ import * as Contacts from 'expo-contacts';
 import ContactsPermission from "./src/components/ContactsPermission";
 import WhatsAppStatusNotification from "./src/components/WhatsAppStatusNotification";
 import WhatsAppStatusBar from "./src/components/WhatsAppStatusBar";
+import notificationPermissionService from "./src/services/notificationPermissionService";
 // Import screens
 import LoginScreen from "./src/screens/LoginScreen";
 import AdminDashboard from "./src/screens/AdminDashboard";
@@ -263,6 +264,31 @@ export default function App() {
 
       if (session?.user) {
         setUserId(session.user.id);
+        
+        // Request notification permission when user logs in
+        setTimeout(async () => {
+          try {
+            await notificationPermissionService.initialize();
+            const hasPermission = await notificationPermissionService.isPermissionGranted();
+            
+            if (!hasPermission) {
+              console.log('🔔 Requesting notification permission...');
+              const result = await notificationPermissionService.showPermissionDialog();
+              
+              if (result.granted) {
+                console.log('✅ Notification permission granted');
+                // Send test notification
+                await notificationPermissionService.sendTestNotification();
+              } else {
+                console.log('❌ Notification permission denied');
+              }
+            } else {
+              console.log('✅ Notification permission already granted');
+            }
+          } catch (error) {
+            console.error('❌ Error handling notification permission:', error);
+          }
+        }, 2000); // Wait 2 seconds after login
       } else {
         setUserId(null);
       }
