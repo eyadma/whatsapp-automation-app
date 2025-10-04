@@ -47,12 +47,16 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       
       // Send notification for status change
       if (previousStatus !== newStatus) {
-        notificationPermissionService.sendConnectionStatusNotification(
+        console.log(`🔔 Hook: Status changed from ${previousStatus} to ${newStatus}, sending notification...`);
+        const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
           previousStatus,
           newStatus,
           sessionId
         );
+        console.log(`🔔 Hook: Notification result: ${notificationResult}`);
         previousStatusRef.current = newStatus;
+      } else {
+        console.log(`🔔 Hook: Status unchanged (${newStatus}), no notification needed`);
       }
     } else if (data.type === 'status') {
       // Initial status or periodic update
@@ -75,11 +79,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           
           // Send notification for status change (initial status)
           if (previousStatus !== currentSessionStatus && previousStatus !== 'unknown') {
-            notificationPermissionService.sendConnectionStatusNotification(
+            console.log(`🔔 Hook: Initial status change from ${previousStatus} to ${currentSessionStatus}, sending notification...`);
+            const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
               previousStatus,
               currentSessionStatus,
               sessionId
             );
+            console.log(`🔔 Hook: Initial notification result: ${notificationResult}`);
           }
           previousStatusRef.current = currentSessionStatus;
         }
@@ -199,11 +205,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           
           // Send notification for status change
           if (previousStatus !== currentSessionStatus && previousStatus !== 'unknown') {
-            notificationPermissionService.sendConnectionStatusNotification(
+            console.log(`🔔 Hook: Status check change from ${previousStatus} to ${currentSessionStatus}, sending notification...`);
+            const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
               previousStatus,
               currentSessionStatus,
               sessionId
             );
+            console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
           }
           previousStatusRef.current = currentSessionStatus;
         }

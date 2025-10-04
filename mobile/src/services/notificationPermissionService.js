@@ -228,7 +228,11 @@ class NotificationPermissionService {
   // Send connection status change notification
   async sendConnectionStatusNotification(previousStatus, newStatus, sessionId = 'default') {
     try {
+      console.log(`🔔 Attempting to send notification: ${previousStatus} → ${newStatus} for session ${sessionId}`);
+      
       const hasPermission = await this.isPermissionGranted();
+      console.log(`🔔 Permission status: ${hasPermission}`);
+      
       if (!hasPermission) {
         console.log('⚠️ Cannot send notification: permission not granted');
         return false;
@@ -236,6 +240,7 @@ class NotificationPermissionService {
 
       // Only send notification if status actually changed
       if (previousStatus === newStatus) {
+        console.log(`🔔 Status unchanged (${previousStatus}), skipping notification`);
         return true;
       }
 
@@ -263,7 +268,9 @@ class NotificationPermissionService {
         body = `Session ${sessionId}: ${previousStatus} → ${newStatus}`;
       }
 
-      await Notifications.scheduleNotificationAsync({
+      console.log(`🔔 Sending notification: "${title}" - "${body}"`);
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title,
           body,
@@ -278,10 +285,45 @@ class NotificationPermissionService {
         trigger: null, // Send immediately
       });
 
-      console.log(`🔔 Connection status change notification sent: ${previousStatus} → ${newStatus} for session ${sessionId}`);
+      console.log(`🔔 Connection status change notification sent successfully! ID: ${notificationId}`);
+      console.log(`🔔 Notification: ${previousStatus} → ${newStatus} for session ${sessionId}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending connection status change notification:', error);
+      console.error('❌ Error details:', error.message, error.stack);
+      return false;
+    }
+  }
+
+  // Test notification function for debugging
+  async sendTestStatusNotification() {
+    try {
+      console.log('🔔 Sending test status notification...');
+      
+      const hasPermission = await this.isPermissionGranted();
+      console.log(`🔔 Permission status for test: ${hasPermission}`);
+      
+      if (!hasPermission) {
+        console.log('⚠️ Cannot send test notification: permission not granted');
+        return false;
+      }
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '🔔 Test Status Notification',
+          body: 'This is a test notification to verify status notifications are working',
+          data: {
+            type: 'test_status_notification',
+            timestamp: new Date().toISOString()
+          },
+        },
+        trigger: null, // Send immediately
+      });
+
+      console.log(`🔔 Test status notification sent successfully! ID: ${notificationId}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending test status notification:', error);
       return false;
     }
   }
