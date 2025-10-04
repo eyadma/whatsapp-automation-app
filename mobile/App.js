@@ -8,6 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Contacts from 'expo-contacts';
 import ContactsPermission from "./src/components/ContactsPermission";
+import WhatsAppStatusNotification from "./src/components/WhatsAppStatusNotification";
+import WhatsAppStatusBar from "./src/components/WhatsAppStatusBar";
 // Import screens
 import LoginScreen from "./src/screens/LoginScreen";
 import AdminDashboard from "./src/screens/AdminDashboard";
@@ -311,25 +313,37 @@ export default function App() {
 
   return (
     <PaperProvider theme={getTheme()}>
-              <AppContext.Provider
-          value={{
-            userId: cleanUserId,
-            user,
-            language,
-            theme,
-            getCleanUserId,
-            t,
-            setLanguage,
-            setTheme,
-            setUserId,
-            setUser,
-            // Session management
-            activeSessionId: null, // This will be managed by SessionManagementScreen
-            setActiveSessionId: () => {}, // Placeholder
-            getActiveSession: () => null, // Placeholder
-          }}
-        >
-        <NavigationContainer>
+      <AppContext.Provider
+        value={{
+          userId: cleanUserId,
+          user,
+          language,
+          theme,
+          getCleanUserId,
+          t,
+          setLanguage,
+          setTheme,
+          setUserId,
+          setUser,
+          // Session management
+          activeSessionId: null, // This will be managed by SessionManagementScreen
+          setActiveSessionId: () => {}, // Placeholder
+          getActiveSession: () => null, // Placeholder
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          {/* WhatsApp Status Bar - shows at top of app */}
+          {user && cleanUserId && (
+            <WhatsAppStatusBar 
+              userId={cleanUserId}
+              onPress={(statusData) => {
+                // Navigate to WhatsApp screen or session management
+                console.log('Status bar pressed:', statusData);
+              }}
+            />
+          )}
+          
+          <NavigationContainer>
           <Stack.Navigator 
             screenOptions={{ 
               headerShown: false,
@@ -409,7 +423,19 @@ export default function App() {
               </>
             )}
           </Stack.Navigator>
-        </NavigationContainer>
+          </NavigationContainer>
+          
+          {/* WhatsApp Status Notification - shows as overlay */}
+          {user && cleanUserId && (
+            <WhatsAppStatusNotification 
+              userId={cleanUserId}
+              onPress={(statusData) => {
+                // Navigate to WhatsApp screen or session management
+                console.log('Status notification pressed:', statusData);
+              }}
+            />
+          )}
+        </View>
       </AppContext.Provider>
     </PaperProvider>
   );

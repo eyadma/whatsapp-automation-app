@@ -43,6 +43,136 @@ async function retryOperation(operation, maxRetries = 3, delay = 1000) {
 // Export for testing
 module.exports = { retryOperation };
 
+// 24/7 Connection Persistence Manager
+const connectionPersistenceManager = {
+  connections: new Map(),
+  statusListeners: new Map(),
+  
+  // Add connection to persistence monitoring
+  addConnection(userId, sessionId, connection) {
+    const key = `${userId}_${sessionId}`;
+    this.connections.set(key, {
+      ...connection,
+      lastSeen: Date.now(),
+      status: 'connected',
+      reconnectAttempts: 0
+    });
+    
+    // Start monitoring this connection
+    this.startConnectionMonitoring(userId, sessionId);
+    
+    // Notify status listeners
+    this.notifyStatusChange(userId, sessionId, 'connected');
+  },
+  
+  // Remove connection from monitoring
+  removeConnection(userId, sessionId) {
+    const key = `${userId}_${sessionId}`;
+    this.connections.delete(key);
+    this.notifyStatusChange(userId, sessionId, 'disconnected');
+  },
+  
+  // Start monitoring connection health
+  startConnectionMonitoring(userId, sessionId) {
+    const key = `${userId}_${sessionId}`;
+    const connection = this.connections.get(key);
+    
+    if (!connection) return;
+    
+    // Health check every 30 seconds
+    const healthCheck = setInterval(async () => {
+      const currentConnection = this.connections.get(key);
+      if (!currentConnection) {
+        clearInterval(healthCheck);
+        return;
+      }
+      
+      try {
+        // Check if socket is still alive
+        if (currentConnection.sock && currentConnection.sock.ws && currentConnection.sock.ws.readyState === 1) {
+          // Send ping to keep connection alive
+          await currentConnection.sock.ping();
+          currentConnection.lastSeen = Date.now();
+          currentConnection.status = 'connected';
+        } else {
+          throw new Error('Socket not ready');
+        }
+      } catch (error) {
+        console.log(`⚠️ Connection health check failed for ${userId}: ${error.message}`);
+        currentConnection.status = 'reconnecting';
+        this.notifyStatusChange(userId, sessionId, 'reconnecting');
+        
+        // Trigger reconnection
+        try {
+          await connectWhatsApp(userId, sessionId);
+        } catch (reconnectError) {
+          console.error(`❌ Reconnection failed for ${userId}: ${reconnectError.message}`);
+          currentConnection.status = 'failed';
+          this.notifyStatusChange(userId, sessionId, 'failed');
+        }
+      }
+    }, 30000);
+    
+    // Store interval for cleanup
+    connection.healthCheckInterval = healthCheck;
+  },
+  
+  // Add status change listener
+  addStatusListener(userId, sessionId, callback) {
+    const key = `${userId}_${sessionId}`;
+    if (!this.statusListeners.has(key)) {
+      this.statusListeners.set(key, []);
+    }
+    this.statusListeners.get(key).push(callback);
+  },
+  
+  // Remove status change listener
+  removeStatusListener(userId, sessionId, callback) {
+    const key = `${userId}_${sessionId}`;
+    const listeners = this.statusListeners.get(key);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  },
+  
+  // Notify all listeners of status change
+  notifyStatusChange(userId, sessionId, status) {
+    const key = `${userId}_${sessionId}`;
+    const listeners = this.statusListeners.get(key);
+    if (listeners) {
+      listeners.forEach(callback => {
+        try {
+          callback(userId, sessionId, status);
+        } catch (error) {
+          console.error('Error in status listener:', error);
+        }
+      });
+    }
+  },
+  
+  // Get connection status
+  getConnectionStatus(userId, sessionId) {
+    const key = `${userId}_${sessionId}`;
+    const connection = this.connections.get(key);
+    return connection ? connection.status : 'disconnected';
+  },
+  
+  // Get all connection statuses for a user
+  getUserConnectionStatuses(userId) {
+    const statuses = {};
+    for (const [key, connection] of this.connections) {
+      if (key.startsWith(`${userId}_`)) {
+        const sessionId = key.split('_')[1];
+        statuses[sessionId] = connection.status;
+      }
+    }
+    return statuses;
+  }
+};
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -659,24 +789,40 @@ async function connectWhatsApp(userId, sessionId = null) {
     try {
       const socketConfig = {
         auth: state,
-        browser: ['WhatsApp Long Session', 'Chrome', '1.0.0'],
-        // Extended timeout settings for 10+ hour sessions
-        connectTimeoutMs: 60000, // 1 minute connection timeout
-        keepAliveIntervalMs: 30000, // Send keep-alive every 30 seconds
-        retryRequestDelayMs: 2000, // 2 seconds between retries
-        maxRetries: 5, // More retries for stability
-        defaultQueryTimeoutMs: 120000, // 2 minutes for queries
-        // Session persistence settings
+        browser: ['WhatsApp 24/7 Session', 'Chrome', '1.0.0'],
+        // Aggressive 24/7 connection settings
+        connectTimeoutMs: 120000, // 2 minutes connection timeout
+        keepAliveIntervalMs: 15000, // Send keep-alive every 15 seconds
+        retryRequestDelayMs: 1000, // 1 second between retries
+        maxRetries: Infinity, // Unlimited retries for 24/7 operation
+        defaultQueryTimeoutMs: 180000, // 3 minutes for queries
+        // 24/7 session persistence settings
         emitOwnEvents: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
-        // Extended session settings
+        // Aggressive session settings for 24/7 operation
         shouldSyncHistoryMessage: () => false, // Don't sync old messages
         shouldIgnoreJid: () => false, // Don't ignore any JIDs
-        // Keep session alive settings
+        // Enhanced keep-alive for 24/7 operation
         getMessage: async (key) => {
           // Implement message retrieval logic for session persistence
           return null;
+        },
+        // WebSocket settings for 24/7 operation
+        ws: {
+          keepAlive: true,
+          keepAliveInterval: 15000, // 15 seconds
+          reconnectInterval: 5000, // 5 seconds
+          maxReconnectAttempts: Infinity, // Unlimited reconnects
+          timeout: 120000 // 2 minutes
+        },
+        // Connection persistence settings
+        connectionOptions: {
+          keepAlive: true,
+          keepAliveInterval: 15000,
+          reconnectOnClose: true,
+          reconnectOnError: true,
+          maxReconnectAttempts: Infinity
         }
       };
       
@@ -854,28 +1000,28 @@ async function connectWhatsApp(userId, sessionId = null) {
         }, userId, sessionId);
         
         if (shouldReconnect) {
-          dbLogger.info('connection', `Attempting to reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, { connectionId }, userId, sessionId);
-          // Progressive reconnection delay: 3s, 10s, 30s, 60s, then every 2 minutes
-          const reconnectDelays = [3000, 10000, 30000, 60000, 120000];
+          dbLogger.info('connection', `Attempting 24/7 reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, { connectionId }, userId, sessionId);
+          // Aggressive 24/7 reconnection: 2s, 5s, 10s, 15s, then every 30s
+          const reconnectDelays = [2000, 5000, 10000, 15000, 30000];
           let reconnectAttempts = 0;
           
           const attemptReconnect = () => {
             reconnectAttempts++;
             const delay = reconnectDelays[Math.min(reconnectAttempts - 1, reconnectDelays.length - 1)];
             
-            dbLogger.info('connection', `Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`, {
+            dbLogger.info('connection', `24/7 Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`, {
               connectionId,
               userId,
               sessionId: sessionId || 'default',
               attempt: reconnectAttempts,
               delay: delay,
-              maxAttempts: 10,
+              maxAttempts: 'UNLIMITED',
               timestamp: new Date().toISOString()
             }, userId, sessionId);
             
             setTimeout(() => {
               connectWhatsApp(userId, sessionId).catch(error => {
-                dbLogger.error('connection', `Reconnection attempt ${reconnectAttempts} failed for user ${userId}: ${error.message}`, {
+                dbLogger.error('connection', `24/7 Reconnection attempt ${reconnectAttempts} failed for user ${userId}: ${error.message}`, {
                   connectionId,
                   userId,
                   sessionId: sessionId || 'default',
@@ -885,12 +1031,8 @@ async function connectWhatsApp(userId, sessionId = null) {
                   timestamp: new Date().toISOString()
                 }, userId, sessionId);
                 
-                if (reconnectAttempts < 10) { // Max 10 reconnection attempts
-                  attemptReconnect();
-                } else {
-                  dbLogger.error('connection', `Max reconnection attempts reached for user ${userId}`, { connectionId }, userId, sessionId);
-                  removeConnection(userId, sessionId || 'default');
-                }
+                // For 24/7 operation, keep trying indefinitely
+                attemptReconnect();
               });
             }, delay);
           };
@@ -1002,6 +1144,10 @@ async function connectWhatsApp(userId, sessionId = null) {
               } : null
             });
             setConnection(userId, sessionId || 'default', connectionData);
+            
+            // Add to 24/7 persistence manager
+            connectionPersistenceManager.addConnection(userId, sessionId || 'default', connectionData);
+            
             console.log(`🔍 Connected for user ${userId}`);
             
             // Update Supabase
@@ -2995,6 +3141,119 @@ app.get('/api/health', (req, res) => {
     message: 'WhatsApp Automation API is running',
     timestamp: new Date().toISOString()
   });
+});
+
+// 8. WhatsApp Connection Status Monitoring
+app.get('/api/whatsapp/status/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { sessionId } = req.query;
+    
+    if (sessionId) {
+      // Get specific session status
+      const status = connectionPersistenceManager.getConnectionStatus(userId, sessionId);
+      const connection = getConnection(userId, sessionId);
+      
+      res.json({
+        success: true,
+        data: {
+          userId,
+          sessionId,
+          status,
+          connected: connection?.connected || false,
+          lastSeen: connection?.lastActivity,
+          uptime: connection?.startTime ? Date.now() - connection.startTime.getTime() : 0
+        }
+      });
+    } else {
+      // Get all session statuses for user
+      const statuses = connectionPersistenceManager.getUserConnectionStatuses(userId);
+      const userConnections = getUserConnections(userId);
+      
+      res.json({
+        success: true,
+        data: {
+          userId,
+          sessions: statuses,
+          totalSessions: Object.keys(statuses).length,
+          activeSessions: Object.values(statuses).filter(s => s === 'connected').length,
+          connections: userConnections
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Error getting WhatsApp status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 9. WhatsApp Status Change WebSocket Endpoint
+app.get('/api/whatsapp/status-stream/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { sessionId } = req.query;
+    
+    // Set up Server-Sent Events
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+    
+    // Send initial status
+    const initialStatus = sessionId 
+      ? connectionPersistenceManager.getConnectionStatus(userId, sessionId)
+      : connectionPersistenceManager.getUserConnectionStatuses(userId);
+    
+    res.write(`data: ${JSON.stringify({
+      type: 'status',
+      userId,
+      sessionId,
+      status: initialStatus,
+      timestamp: new Date().toISOString()
+    })}\n\n`);
+    
+    // Add status change listener
+    const statusListener = (targetUserId, targetSessionId, status) => {
+      if (targetUserId === userId && (!sessionId || targetSessionId === sessionId)) {
+        res.write(`data: ${JSON.stringify({
+          type: 'status_change',
+          userId: targetUserId,
+          sessionId: targetSessionId,
+          status,
+          timestamp: new Date().toISOString()
+        })}\n\n`);
+      }
+    };
+    
+    if (sessionId) {
+      connectionPersistenceManager.addStatusListener(userId, sessionId, statusListener);
+    } else {
+      // Add listener for all sessions of this user
+      const userConnections = getUserConnections(userId);
+      userConnections.forEach(conn => {
+        connectionPersistenceManager.addStatusListener(userId, conn.sessionId, statusListener);
+      });
+    }
+    
+    // Clean up on disconnect
+    req.on('close', () => {
+      if (sessionId) {
+        connectionPersistenceManager.removeStatusListener(userId, sessionId, statusListener);
+      } else {
+        const userConnections = getUserConnections(userId);
+        userConnections.forEach(conn => {
+          connectionPersistenceManager.removeStatusListener(userId, conn.sessionId, statusListener);
+        });
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error setting up status stream:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // 6. Fetch Customers from External API
