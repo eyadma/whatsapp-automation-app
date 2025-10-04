@@ -225,6 +225,67 @@ class NotificationPermissionService {
     }
   }
 
+  // Send connection status change notification
+  async sendConnectionStatusNotification(previousStatus, newStatus, sessionId = 'default') {
+    try {
+      const hasPermission = await this.isPermissionGranted();
+      if (!hasPermission) {
+        console.log('⚠️ Cannot send notification: permission not granted');
+        return false;
+      }
+
+      // Only send notification if status actually changed
+      if (previousStatus === newStatus) {
+        return true;
+      }
+
+      let title, body;
+      
+      // Determine notification based on status change
+      if (newStatus === 'connected' && previousStatus !== 'connected') {
+        title = '✅ WhatsApp Connected';
+        body = `Session ${sessionId} is now connected and ready`;
+      } else if (newStatus === 'disconnected' && previousStatus === 'connected') {
+        title = '❌ WhatsApp Disconnected';
+        body = `Session ${sessionId} has been disconnected`;
+      } else if (newStatus === 'reconnecting' && previousStatus === 'connected') {
+        title = '🔄 WhatsApp Reconnecting';
+        body = `Session ${sessionId} lost connection, attempting to reconnect...`;
+      } else if (newStatus === 'failed' && previousStatus !== 'failed') {
+        title = '⚠️ WhatsApp Connection Failed';
+        body = `Session ${sessionId} failed to connect. Please check your connection.`;
+      } else if (newStatus === 'connecting' && previousStatus !== 'connecting') {
+        title = '🔄 WhatsApp Connecting';
+        body = `Session ${sessionId} is establishing connection...`;
+      } else {
+        // For other status changes, send a general notification
+        title = '📱 WhatsApp Status Changed';
+        body = `Session ${sessionId}: ${previousStatus} → ${newStatus}`;
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data: {
+            type: 'whatsapp_status_change',
+            sessionId,
+            previousStatus,
+            newStatus,
+            timestamp: new Date().toISOString()
+          },
+        },
+        trigger: null, // Send immediately
+      });
+
+      console.log(`🔔 Connection status change notification sent: ${previousStatus} → ${newStatus} for session ${sessionId}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending connection status change notification:', error);
+      return false;
+    }
+  }
+
   // Initialize permission service
   async initialize() {
     try {

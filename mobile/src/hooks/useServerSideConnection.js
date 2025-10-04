@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import serverSideConnectionAPI from '../services/serverSideConnectionAPI';
+import notificationPermissionService from '../services/notificationPermissionService';
 
 /**
  * Hook for managing server-side WhatsApp connections
@@ -24,20 +25,35 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   
   const statusUpdateRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const previousStatusRef = useRef('unknown');
 
   // Handle status updates from server
   const handleStatusUpdate = useCallback((data) => {
     console.log('🔄 Status update received:', data);
     
     if (data.type === 'status_change') {
+      const newStatus = data.status;
+      const previousStatus = previousStatusRef.current;
+      
+      // Update status
       setConnectionStatus(prev => ({
         ...prev,
-        isConnected: data.status === 'connected',
-        isConnecting: data.status === 'connecting' || data.status === 'reconnecting',
-        status: data.status,
+        isConnected: newStatus === 'connected',
+        isConnecting: newStatus === 'connecting' || newStatus === 'reconnecting',
+        status: newStatus,
         lastUpdate: new Date().toISOString(),
-        error: data.status === 'failed' ? 'Connection failed' : null
+        error: newStatus === 'failed' ? 'Connection failed' : null
       }));
+      
+      // Send notification for status change
+      if (previousStatus !== newStatus) {
+        notificationPermissionService.sendConnectionStatusNotification(
+          previousStatus,
+          newStatus,
+          sessionId
+        );
+        previousStatusRef.current = newStatus;
+      }
     } else if (data.type === 'status') {
       // Initial status or periodic update
       if (data.status && data.status.sessions) {
@@ -46,6 +62,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         // Update current session status
         const currentSessionStatus = data.status.sessions[sessionId];
         if (currentSessionStatus) {
+          const previousStatus = previousStatusRef.current;
+          
           setConnectionStatus(prev => ({
             ...prev,
             isConnected: currentSessionStatus === 'connected',
@@ -54,6 +72,16 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             lastUpdate: new Date().toISOString(),
             error: currentSessionStatus === 'failed' ? 'Connection failed' : null
           }));
+          
+          // Send notification for status change (initial status)
+          if (previousStatus !== currentSessionStatus && previousStatus !== 'unknown') {
+            notificationPermissionService.sendConnectionStatusNotification(
+              previousStatus,
+              currentSessionStatus,
+              sessionId
+            );
+          }
+          previousStatusRef.current = currentSessionStatus;
         }
       }
     } else if (data.type === 'connection_status') {
@@ -159,6 +187,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         
         const currentSessionStatus = result.sessions?.[sessionId];
         if (currentSessionStatus) {
+          const previousStatus = previousStatusRef.current;
+          
           setConnectionStatus(prev => ({
             ...prev,
             isConnected: currentSessionStatus === 'connected',
@@ -166,6 +196,16 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             status: currentSessionStatus,
             lastUpdate: new Date().toISOString()
           }));
+          
+          // Send notification for status change
+          if (previousStatus !== currentSessionStatus && previousStatus !== 'unknown') {
+            notificationPermissionService.sendConnectionStatusNotification(
+              previousStatus,
+              currentSessionStatus,
+              sessionId
+            );
+          }
+          previousStatusRef.current = currentSessionStatus;
         }
       }
     } catch (error) {
