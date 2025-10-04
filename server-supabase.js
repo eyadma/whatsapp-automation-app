@@ -47,6 +47,46 @@ module.exports = { retryOperation };
 const connectionPersistenceManager = {
   connections: new Map(),
   statusListeners: new Map(),
+  statusUpdateInterval: null, // Global status update interval
+  
+  // Initialize the persistence manager
+  initialize() {
+    console.log('🚀 Initializing connection persistence manager...');
+    
+    // Start global status update interval (every 30 seconds)
+    this.statusUpdateInterval = setInterval(() => {
+      this.broadcastStatusUpdates();
+    }, 30000);
+    
+    console.log('✅ Connection persistence manager initialized');
+  },
+  
+  // Broadcast status updates to all connected clients
+  broadcastStatusUpdates() {
+    const statusUpdates = [];
+    
+    this.connections.forEach((connection, key) => {
+      const [userId, sessionId] = key.split('_');
+      const statusData = {
+        userId,
+        sessionId,
+        status: connection.status || 'unknown',
+        connected: connection.connected || false,
+        connecting: connection.connecting || false,
+        lastSeen: connection.lastSeen || Date.now(),
+        timestamp: new Date().toISOString()
+      };
+      
+      statusUpdates.push(statusData);
+      
+      // Notify listeners
+      this.notifyStatusChange(userId, sessionId, statusData.status);
+    });
+    
+    if (statusUpdates.length > 0) {
+      console.log(`📡 Broadcasting status updates for ${statusUpdates.length} connections`);
+    }
+  },
   
   // Add connection to persistence monitoring
   addConnection(userId, sessionId, connection) {
@@ -3306,6 +3346,72 @@ app.get('/api/whatsapp/status-stream/:userId', async (req, res) => {
   }
 });
 
+// 10. Enhanced Status Endpoint - Returns current status of all connections
+app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`📊 Getting status for all connections of user: ${userId}`);
+    
+    const statusData = connectionPersistenceManager.getUserConnectionStatuses(userId);
+    
+    res.json({
+      success: true,
+      userId,
+      timestamp: new Date().toISOString(),
+      ...statusData
+    });
+  } catch (error) {
+    console.error(`❌ Error getting status for user ${req.params.userId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+// 11. Initiate Connection Endpoint - App only initiates, server maintains
+app.post('/api/whatsapp/initiate/:userId/:sessionId?', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const sessionId = req.params.sessionId || 'default';
+    
+    console.log(`🚀 App initiating connection for user: ${userId}, session: ${sessionId}`);
+    
+    // Check if connection already exists and is active
+    const existingConnection = connectionPersistenceManager.getConnectionStatus(userId, sessionId);
+    if (existingConnection && existingConnection.status === 'connected') {
+      console.log(`✅ Connection already active for user: ${userId}, session: ${sessionId}`);
+      return res.json({
+        success: true,
+        message: 'Connection already active',
+        status: 'connected',
+        userId,
+        sessionId
+      });
+    }
+    
+    // Initiate connection (server will maintain it)
+    await connectWhatsApp(userId, sessionId);
+    
+    res.json({
+      success: true,
+      message: 'Connection initiated successfully',
+      status: 'initiated',
+      userId,
+      sessionId,
+      note: 'Server will maintain this connection independently'
+    });
+    
+  } catch (error) {
+    console.error(`❌ Error initiating connection for user ${req.params.userId}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // 6. Fetch Customers from External API
 app.post('/api/customers/fetch/:userId', async (req, res) => {
   try {
@@ -3681,6 +3787,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📱 API Base URL: http://localhost:${PORT}/api`);
   console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
   console.log(`📱 Mobile Access: http://192.168.0.113:${PORT}/api`);
+  
+  // Initialize connection persistence manager for 24/7 operation
+  connectionPersistenceManager.initialize();
 });
 
 // Test endpoint for areas and preferred languages
