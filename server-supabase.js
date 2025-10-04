@@ -900,8 +900,35 @@ async function connectWhatsApp(userId, sessionId = null) {
       }
     }, 300000); // Check every 5 minutes
 
+    // Handle stream errors
+    sock.ev.on('stream:error', (error) => {
+      console.log(`❌ Stream error for user ${userId}:`, error);
+      dbLogger.error('connection', `Stream error for user ${userId}: ${error.message}`, {
+        connectionId,
+        userId,
+        sessionId: sessionId || 'default',
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      }, userId, sessionId);
+    });
+
+    // Handle connection errors
+    sock.ev.on('connection.error', (error) => {
+      console.log(`❌ Connection error for user ${userId}:`, error);
+      dbLogger.error('connection', `Connection error for user ${userId}: ${error.message}`, {
+        connectionId,
+        userId,
+        sessionId: sessionId || 'default',
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      }, userId, sessionId);
+    });
+
     // Handle connection updates
     sock.ev.on('connection.update', async (update) => {
+      console.log(`🔄 Connection update for user ${userId}:`, JSON.stringify(update, null, 2));
       dbLogger.info('connection', `Connection update for user ${userId}`, {
         connectionId,
         userId,
