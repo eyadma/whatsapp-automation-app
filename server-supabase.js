@@ -79,42 +79,48 @@ const connectionPersistenceManager = {
     
     if (!connection) return;
     
-    // Health check every 30 seconds
-    const healthCheck = setInterval(async () => {
+    // Wait 60 seconds before starting health checks to allow connection to stabilize
+    setTimeout(() => {
       const currentConnection = this.connections.get(key);
-      if (!currentConnection) {
-        clearInterval(healthCheck);
-        return;
-      }
+      if (!currentConnection) return;
       
-      try {
-        // Check if socket is still alive
-        if (currentConnection.sock && currentConnection.sock.ws && currentConnection.sock.ws.readyState === 1) {
-          // Send ping to keep connection alive
-          await currentConnection.sock.ping();
-          currentConnection.lastSeen = Date.now();
-          currentConnection.status = 'connected';
-        } else {
-          throw new Error('Socket not ready');
+      // Health check every 30 seconds
+      const healthCheck = setInterval(async () => {
+        const currentConnection = this.connections.get(key);
+        if (!currentConnection) {
+          clearInterval(healthCheck);
+          return;
         }
-      } catch (error) {
-        console.log(`⚠️ Connection health check failed for ${userId}: ${error.message}`);
-        currentConnection.status = 'reconnecting';
-        this.notifyStatusChange(userId, sessionId, 'reconnecting');
         
-        // Trigger reconnection
         try {
-          await connectWhatsApp(userId, sessionId);
-        } catch (reconnectError) {
-          console.error(`❌ Reconnection failed for ${userId}: ${reconnectError.message}`);
-          currentConnection.status = 'failed';
-          this.notifyStatusChange(userId, sessionId, 'failed');
+          // Check if socket is still alive
+          if (currentConnection.sock && currentConnection.sock.ws && currentConnection.sock.ws.readyState === 1) {
+            // Send ping to keep connection alive
+            await currentConnection.sock.ping();
+            currentConnection.lastSeen = Date.now();
+            currentConnection.status = 'connected';
+          } else {
+            throw new Error('Socket not ready');
+          }
+        } catch (error) {
+          console.log(`⚠️ Connection health check failed for ${userId}: ${error.message}`);
+          currentConnection.status = 'reconnecting';
+          this.notifyStatusChange(userId, sessionId, 'reconnecting');
+          
+          // Trigger reconnection
+          try {
+            await connectWhatsApp(userId, sessionId);
+          } catch (reconnectError) {
+            console.error(`❌ Reconnection failed for ${userId}: ${reconnectError.message}`);
+            currentConnection.status = 'failed';
+            this.notifyStatusChange(userId, sessionId, 'failed');
+          }
         }
-      }
-    }, 30000);
-    
-    // Store interval for cleanup
-    connection.healthCheckInterval = healthCheck;
+      }, 30000);
+      
+      // Store interval for cleanup
+      currentConnection.healthCheckInterval = healthCheck;
+    }, 60000); // Wait 60 seconds before starting health checks
   },
   
   // Add status change listener
@@ -787,42 +793,27 @@ async function connectWhatsApp(userId, sessionId = null) {
     dbLogger.info('socket', `Creating WhatsApp socket for user: ${userId}`, { connectionId }, userId, sessionId);
     let sock;
     try {
+      console.log(`🔧 Creating socket for user ${userId}, session: ${sessionId || 'default'}`);
       const socketConfig = {
         auth: state,
         browser: ['WhatsApp 24/7 Session', 'Chrome', '1.0.0'],
-        // Aggressive 24/7 connection settings
-        connectTimeoutMs: 120000, // 2 minutes connection timeout
-        keepAliveIntervalMs: 15000, // Send keep-alive every 15 seconds
-        retryRequestDelayMs: 1000, // 1 second between retries
-        maxRetries: Infinity, // Unlimited retries for 24/7 operation
-        defaultQueryTimeoutMs: 180000, // 3 minutes for queries
-        // 24/7 session persistence settings
+        // Balanced connection settings for initial connection
+        connectTimeoutMs: 60000, // 1 minute connection timeout
+        keepAliveIntervalMs: 30000, // Send keep-alive every 30 seconds
+        retryRequestDelayMs: 2000, // 2 seconds between retries
+        maxRetries: 5, // Limited retries for initial connection
+        defaultQueryTimeoutMs: 120000, // 2 minutes for queries
+        // Session persistence settings
         emitOwnEvents: false,
         markOnlineOnConnect: true,
         generateHighQualityLinkPreview: true,
-        // Aggressive session settings for 24/7 operation
+        // Session settings
         shouldSyncHistoryMessage: () => false, // Don't sync old messages
         shouldIgnoreJid: () => false, // Don't ignore any JIDs
-        // Enhanced keep-alive for 24/7 operation
+        // Keep-alive for session persistence
         getMessage: async (key) => {
           // Implement message retrieval logic for session persistence
           return null;
-        },
-        // WebSocket settings for 24/7 operation
-        ws: {
-          keepAlive: true,
-          keepAliveInterval: 15000, // 15 seconds
-          reconnectInterval: 5000, // 5 seconds
-          maxReconnectAttempts: Infinity, // Unlimited reconnects
-          timeout: 120000 // 2 minutes
-        },
-        // Connection persistence settings
-        connectionOptions: {
-          keepAlive: true,
-          keepAliveInterval: 15000,
-          reconnectOnClose: true,
-          reconnectOnError: true,
-          maxReconnectAttempts: Infinity
         }
       };
       
@@ -838,8 +829,10 @@ async function connectWhatsApp(userId, sessionId = null) {
       }, userId, sessionId);
       
       const socketStart = Date.now();
+      console.log(`🔧 Making WhatsApp socket for user ${userId}...`);
       sock = makeWASocket(socketConfig);
       const socketDuration = Date.now() - socketStart;
+      console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
       
       dbLogger.info('socket', `WhatsApp socket created for user: ${userId} in ${socketDuration}ms`, {
         connectionId,
@@ -1145,10 +1138,13 @@ async function connectWhatsApp(userId, sessionId = null) {
             });
             setConnection(userId, sessionId || 'default', connectionData);
             
-            // Add to 24/7 persistence manager
-            connectionPersistenceManager.addConnection(userId, sessionId || 'default', connectionData);
-            
             console.log(`🔍 Connected for user ${userId}`);
+            
+            // Add to 24/7 persistence manager after a delay to ensure connection is stable
+            setTimeout(() => {
+              connectionPersistenceManager.addConnection(userId, sessionId || 'default', connectionData);
+              console.log(`🔄 Added to persistence manager for user ${userId}`);
+            }, 10000); // Wait 10 seconds before adding to persistence manager
             
             // Update Supabase
             try {
