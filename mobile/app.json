@@ -50,6 +50,9 @@
         "projectId": "d6d62796-9f38-4f25-9070-4f8fbc0c7721"
       }
     },
+    "cli": {
+      "appVersionSource": "remote"
+    },
     "plugins": [
       "expo-font",
       [
