@@ -84,7 +84,7 @@ const connectionPersistenceManager = {
       const currentConnection = this.connections.get(key);
       if (!currentConnection) return;
       
-      // Health check every 30 seconds
+      // Health check every 2 minutes (less aggressive)
       const healthCheck = setInterval(async () => {
         const currentConnection = this.connections.get(key);
         if (!currentConnection) {
@@ -99,24 +99,44 @@ const connectionPersistenceManager = {
             await currentConnection.sock.ping();
             currentConnection.lastSeen = Date.now();
             currentConnection.status = 'connected';
+            // Reset failure counter on successful health check
+            currentConnection.healthCheckFailures = 0;
+            console.log(`✅ Health check passed for user ${userId}`);
           } else {
-            throw new Error('Socket not ready');
+            console.log(`⚠️ Socket not ready for user ${userId}, but not triggering reconnection yet`);
+            // Don't immediately trigger reconnection - just log the issue
+            currentConnection.status = 'checking';
           }
         } catch (error) {
           console.log(`⚠️ Connection health check failed for ${userId}: ${error.message}`);
-          currentConnection.status = 'reconnecting';
-          this.notifyStatusChange(userId, sessionId, 'reconnecting');
+          // Only trigger reconnection after multiple failures
+          if (!currentConnection.healthCheckFailures) {
+            currentConnection.healthCheckFailures = 0;
+          }
+          currentConnection.healthCheckFailures++;
           
-          // Trigger reconnection
-          try {
-            await connectWhatsApp(userId, sessionId);
-          } catch (reconnectError) {
-            console.error(`❌ Reconnection failed for ${userId}: ${reconnectError.message}`);
-            currentConnection.status = 'failed';
-            this.notifyStatusChange(userId, sessionId, 'failed');
+          // Only reconnect after 3 consecutive failures (6 minutes)
+          if (currentConnection.healthCheckFailures >= 3) {
+            console.log(`🔄 Triggering reconnection for ${userId} after ${currentConnection.healthCheckFailures} failures`);
+            currentConnection.status = 'reconnecting';
+            this.notifyStatusChange(userId, sessionId, 'reconnecting');
+            
+            // Reset failure counter
+            currentConnection.healthCheckFailures = 0;
+            
+            // Trigger reconnection
+            try {
+              await connectWhatsApp(userId, sessionId);
+            } catch (reconnectError) {
+              console.error(`❌ Reconnection failed for ${userId}: ${reconnectError.message}`);
+              currentConnection.status = 'failed';
+              this.notifyStatusChange(userId, sessionId, 'failed');
+            }
+          } else {
+            console.log(`⚠️ Health check failure ${currentConnection.healthCheckFailures}/3 for user ${userId}`);
           }
         }
-      }, 30000);
+      }, 120000); // Check every 2 minutes instead of 30 seconds
       
       // Store interval for cleanup
       currentConnection.healthCheckInterval = healthCheck;
@@ -988,6 +1008,13 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection close
       if (connection === 'close') {
+        console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        console.log(`📊 Disconnect details:`, {
+          reason: lastDisconnect?.error?.output?.statusCode,
+          message: lastDisconnect?.error?.message,
+          timestamp: new Date().toISOString()
+        });
+        
         dbLogger.warn('connection', `Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
           connectionId,
           userId,
