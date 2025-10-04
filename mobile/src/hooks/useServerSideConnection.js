@@ -28,7 +28,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const previousStatusRef = useRef('unknown');
 
   // Handle status updates from server
-  const handleStatusUpdate = useCallback((data) => {
+  const handleStatusUpdate = useCallback(async (data) => {
     console.log('🔄 Status update received:', data);
     
     if (data.type === 'status_change') {

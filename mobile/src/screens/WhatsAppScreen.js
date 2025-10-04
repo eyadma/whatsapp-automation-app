@@ -18,7 +18,7 @@ import WebCompatibleButton from '../web/components/WebCompatibleButton';
 import useServerSideConnection from '../hooks/useServerSideConnection';
 import NotificationDebugger from '../components/NotificationDebugger';
 
-const WhatsAppScreenNew = ({ navigation }) => {
+const WhatsAppScreen = ({ navigation }) => {
   const { userId, theme, t } = useContext(AppContext);
   const paperTheme = useTheme();
   
@@ -462,4 +462,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WhatsAppScreenNew;
+export default WhatsAppScreen;
