@@ -2903,11 +2903,19 @@ app.get('/api/locations/test/:userId', async (req, res) => {
     console.log(`🧪 Testing locations table access for user: ${userId}`);
     
     // Test if locations table exists and is accessible
-    const { data: locations, error: locationsError } = await supabase
-      .from('locations')
-      .select('*')
-      .eq('user_id', userId)
-      .limit(5);
+    const { data: locations, error: locationsError } = await retryOperation(async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('*')
+        .eq('user_id', userId)
+        .limit(5);
+      
+      if (error) {
+        throw new Error(`Database query error: ${error.message}`);
+      }
+      
+      return { data, error };
+    }, 3, 1000);
     
     if (locationsError) {
       console.error('❌ Locations table error:', locationsError);
@@ -2928,10 +2936,18 @@ app.get('/api/locations/test/:userId', async (req, res) => {
       area: 'Test Area'
     };
     
-    const { data: insertedTest, error: insertError } = await supabase
-      .from('locations')
-      .insert([testData])
-      .select();
+    const { data: insertedTest, error: insertError } = await retryOperation(async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .insert([testData])
+        .select();
+      
+      if (error) {
+        throw new Error(`Database insert error: ${error.message}`);
+      }
+      
+      return { data, error };
+    }, 3, 1000);
     
     if (insertError) {
       console.error('❌ Locations insert test failed:', insertError);
@@ -2944,10 +2960,16 @@ app.get('/api/locations/test/:userId', async (req, res) => {
     }
     
     // Clean up test record
-    await supabase
-      .from('locations')
-      .delete()
-      .eq('id', insertedTest[0].id);
+    await retryOperation(async () => {
+      const { error: deleteError } = await supabase
+        .from('locations')
+        .delete()
+        .eq('id', insertedTest[0].id);
+      
+      if (deleteError) {
+        throw new Error(`Database delete error: ${deleteError.message}`);
+      }
+    }, 3, 1000);
     
     res.json({
       success: true,
