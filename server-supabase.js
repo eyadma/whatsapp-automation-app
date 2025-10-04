@@ -3441,9 +3441,3 @@ app.get('/api/areas/test/:userId', async (req, res) => {
     });
   }
 });
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 WhatsApp automation server ready`);
-});
