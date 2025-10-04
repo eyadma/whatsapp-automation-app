@@ -287,7 +287,7 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
       }
 
     } catch (error) {
-      logger.error(`Background message failed for ${customer.name}`, error.message);
+      dbLogger.error('background', `Background message failed for ${customer.name}: ${error.message}`, { customerId: customer.id, customerName: customer.name, error: error.message }, userId);
       process.failed++;
       
       // Log failed message
@@ -309,8 +309,8 @@ async function processMessagesInBackgroundWithProcessed(processId, customers, pr
   process.endTime = new Date();
   const duration = (process.endTime - process.startTime) / 1000;
   
-  logger.info(`Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`);
-  logger.info(`Results: ${process.completed} sent, ${process.failed} failed`);
+  dbLogger.info('background', `Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`, { processId, duration, completed: process.completed, failed: process.failed }, userId);
+  dbLogger.info('background', `Results: ${process.completed} sent, ${process.failed} failed`, { processId, completed: process.completed, failed: process.failed }, userId);
   
   // Send completion update message
   try {
@@ -427,7 +427,7 @@ async function processMessagesInBackground(processId, customers, messageTemplate
       }
 
     } catch (error) {
-      logger.error(`Background message failed for ${customer.name}`, error.message);
+      dbLogger.error('background', `Background message failed for ${customer.name}: ${error.message}`, { customerId: customer.id, customerName: customer.name, error: error.message }, userId);
       process.failed++;
       
       // Log failed message
@@ -449,8 +449,8 @@ async function processMessagesInBackground(processId, customers, messageTemplate
   process.endTime = new Date();
   const duration = (process.endTime - process.startTime) / 1000;
   
-  logger.info(`Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`);
-  logger.info(`Results: ${process.completed} sent, ${process.failed} failed`);
+  dbLogger.info('background', `Background process ${processId} completed in ${Math.floor(duration / 60)}m ${duration % 60}s`, { processId, duration, completed: process.completed, failed: process.failed }, userId);
+  dbLogger.info('background', `Results: ${process.completed} sent, ${process.failed} failed`, { processId, completed: process.completed, failed: process.failed }, userId);
   
   // Send completion update message
   try {
