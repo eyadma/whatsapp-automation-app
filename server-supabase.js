@@ -919,26 +919,44 @@ async function connectWhatsApp(userId, sessionId = null) {
       connectionPersistenceManager.addConnection(userId, sessionId || 'default', initialConnectionData);
       console.log(`🔄 Set initial connecting status for user ${userId}`);
       
+      // Create proper logger according to Baileys docs
+      const logger = {
+        level: 'info',
+        child: () => logger,
+        trace: (obj, msg) => console.log(`[TRACE] ${msg}`, obj),
+        debug: (obj, msg) => console.log(`[DEBUG] ${msg}`, obj),
+        info: (obj, msg) => console.log(`[INFO] ${msg}`, obj),
+        warn: (obj, msg) => console.warn(`[WARN] ${msg}`, obj),
+        error: (obj, msg) => console.error(`[ERROR] ${msg}`, obj),
+        fatal: (obj, msg) => console.error(`[FATAL] ${msg}`, obj)
+      };
+
       const socketConfig = {
         auth: state,
-        browser: ['WhatsApp 24/7 Session', 'Chrome', '1.0.0'],
-        // Balanced connection settings for initial connection
-        connectTimeoutMs: 60000, // 1 minute connection timeout
-        keepAliveIntervalMs: 30000, // Send keep-alive every 30 seconds
-        retryRequestDelayMs: 2000, // 2 seconds between retries
-        maxRetries: 5, // Limited retries for initial connection
-        defaultQueryTimeoutMs: 120000, // 2 minutes for queries
-        // Session persistence settings
-        emitOwnEvents: false,
-        markOnlineOnConnect: true,
-        generateHighQualityLinkPreview: true,
+        logger: logger,
+        // Proper browser configuration for desktop emulation
+        browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
+        // Connection settings
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000,
+        retryRequestDelayMs: 2000,
+        maxRetries: 5,
+        defaultQueryTimeoutMs: 120000,
         // Session settings
-        shouldSyncHistoryMessage: () => false, // Don't sync old messages
-        shouldIgnoreJid: () => false, // Don't ignore any JIDs
-        // Keep-alive for session persistence
+        emitOwnEvents: false,
+        markOnlineOnConnect: false, // Don't mark online to avoid notification issues
+        generateHighQualityLinkPreview: true,
+        // Message retrieval function - required by Baileys
         getMessage: async (key) => {
-          // Implement message retrieval logic for session persistence
-          return null;
+          try {
+            // Try to retrieve message from database or return null
+            // This is required for message decryption and resending
+            dbLogger.debug('message', `Retrieving message for key: ${JSON.stringify(key)}`, { connectionId }, userId, sessionId);
+            return null; // For now, return null - implement database lookup if needed
+          } catch (error) {
+            dbLogger.error('message', `Error retrieving message: ${error.message}`, { connectionId, error: error.message }, userId, sessionId);
+            return null;
+          }
         }
       };
       
@@ -1051,8 +1069,10 @@ async function connectWhatsApp(userId, sessionId = null) {
       }, userId, sessionId);
     });
 
-    // Handle connection updates
+    // Handle connection updates according to Baileys documentation
     sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+      
       console.log(`🔄 Connection update for user ${userId}:`, JSON.stringify(update, null, 2));
       dbLogger.info('connection', `Connection update for user ${userId}`, {
         connectionId,
@@ -1061,8 +1081,6 @@ async function connectWhatsApp(userId, sessionId = null) {
         update,
         timestamp: new Date().toISOString()
       }, userId, sessionId);
-      
-      const { connection, lastDisconnect, qr } = update;
       
       dbLogger.debug('connection', 'Connection update details', {
         connectionId,
@@ -1125,7 +1143,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         dbLogger.debug('connection', `Connection set for user ${userId}`, { connectionId }, userId, sessionId);
       }
       
-      // Handle connection close
+      // Handle connection close according to Baileys documentation
       if (connection === 'close') {
         console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
         console.log(`📊 Disconnect details:`, {
@@ -1133,6 +1151,40 @@ async function connectWhatsApp(userId, sessionId = null) {
           message: lastDisconnect?.error?.message,
           timestamp: new Date().toISOString()
         });
+        
+        // Handle restartRequired disconnect - this is normal after QR scan
+        if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.restartRequired) {
+          console.log(`🔄 Restart required for user ${userId} - this is normal after QR scan`);
+          dbLogger.info('connection', `Restart required for user ${userId} - creating new socket`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: 'restartRequired',
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Create new socket as recommended by Baileys docs
+          setTimeout(async () => {
+            try {
+              console.log(`🔄 Creating new socket after restart required for user ${userId}`);
+              await connectWhatsApp(userId, sessionId);
+            } catch (error) {
+              console.error(`❌ Failed to create new socket after restart: ${error.message}`);
+              dbLogger.error('connection', `Failed to create new socket after restart: ${error.message}`, {
+                connectionId,
+                userId,
+                sessionId: sessionId || 'default',
+                error: error.message,
+                stack: error.stack
+              }, userId, sessionId);
+            }
+          }, 2000); // Wait 2 seconds before creating new socket
+          
+          return; // Don't proceed with normal disconnect handling
+        }
         
         dbLogger.warn('connection', `Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
           connectionId,
