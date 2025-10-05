@@ -63,14 +63,36 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Update current session status
       const currentSessionData = data.sessions[sessionId];
       if (currentSessionData) {
+        console.log(`🔍 Hook: Processing session data for ${sessionId}:`, {
+          connected: currentSessionData.connected,
+          connecting: currentSessionData.connecting,
+          status: currentSessionData.status,
+          connectionType: currentSessionData.connectionType,
+          hasQR: !!currentSessionData.qrCode
+        });
+        
+        // Determine the actual status based on connection data
+        let actualStatus = currentSessionData.status;
+        if (currentSessionData.connected) {
+          actualStatus = 'connected';
+        } else if (currentSessionData.connecting) {
+          if (currentSessionData.qrCode) {
+            actualStatus = 'qr_required';
+          } else {
+            actualStatus = 'connecting';
+          }
+        }
+        
+        console.log(`🔍 Hook: Determined actual status: ${actualStatus}`);
+        
         setConnectionStatus(prev => ({
           ...prev,
-          isConnected: currentSessionData.connected || currentSessionData.status === 'connected',
-          isConnecting: currentSessionData.connecting || currentSessionData.status === 'connecting' || currentSessionData.status === 'reconnecting',
-          status: currentSessionData.status,
+          isConnected: currentSessionData.connected || actualStatus === 'connected',
+          isConnecting: currentSessionData.connecting || actualStatus === 'connecting' || actualStatus === 'qr_required',
+          status: actualStatus,
           qrCode: currentSessionData.qrCode || null,
           lastUpdate: new Date().toISOString(),
-          error: currentSessionData.status === 'failed' ? 'Connection failed' : null
+          error: actualStatus === 'failed' ? 'Connection failed' : null
         }));
       }
     } else if (data.type === 'connection_status') {
