@@ -14,8 +14,8 @@ import { Card, Button, TextInput, Divider, Chip, useTheme } from 'react-native-p
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { AppContext } from '../context/AppContext';
+import { whatsappAPI } from '../services/api';
 import { supabase } from '../services/supabase';
-import { resolveApiBaseUrl } from '../services/apiBase';
 import WebCompatibleButton from '../web/components/WebCompatibleButton';
 import useServerSideConnection from '../hooks/useServerSideConnection';
 
@@ -29,20 +29,18 @@ const WhatsAppScreen = ({ navigation }) => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sessionSwitching, setSessionSwitching] = useState(false);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
   
   // Use the new server-side connection hook
   const {
     connectionStatus,
     initiateConnection,
     disconnectSession,
-    refreshStatus,
     isConnected,
     isConnecting,
     hasError,
-    lastUpdate,
-    availableSessions
-  } = useServerSideConnection(userId, selectedSession?.session_id);
+    lastUpdate
+  } = useServerSideConnection(userId, selectedSession?.session_id || 'default');
+
 
   useEffect(() => {
     if (userId) {
@@ -50,7 +48,7 @@ const WhatsAppScreen = ({ navigation }) => {
     }
   }, [userId]);
 
-  // Auto-refresh when screen comes into focus
+  // Auto-refresh when screen comes into focus (e.g., after creating a session)
   useFocusEffect(
     React.useCallback(() => {
       if (userId) {
@@ -59,20 +57,25 @@ const WhatsAppScreen = ({ navigation }) => {
       }
     }, [userId])
   );
+  
+  // Check connection status when selected session changes
+  useEffect(() => {
+    if (selectedSession) {
+      console.log('🔄 Session changed to:', selectedSession.session_name);
+      checkConnectionStatus(true); // Check status for new session with logging
+    }
+  }, [selectedSession]);
 
   const loadSessions = async () => {
     try {
-      setLoading(true);
-      
-      // Get user's sessions
-      const { data: sessionsData, error: sessionsError } = await supabase
+      const { data: sessionsData, error } = await supabase
         .from('whatsapp_sessions')
         .select('*')
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
-      if (sessionsError) throw sessionsError;
+      if (error) throw error;
 
       const realSessions = sessionsData || [];
       setSessions(realSessions);
@@ -81,30 +84,51 @@ const WhatsAppScreen = ({ navigation }) => {
       if (realSessions.length > 0 && !selectedSession) {
         setSelectedSession(realSessions[0]);
       } else if (realSessions.length === 0) {
+        // No sessions available, reset connection status
         setSelectedSession(null);
+        setConnectionStatus({
+          isConnected: false,
+          isConnecting: false,
+          qrCode: null,
+          connectionType: 'unknown',
+        });
+        setPreviousConnectionStatus(null);
       }
     } catch (error) {
       console.error('Error loading sessions:', error);
-      Alert.alert('Error', 'Failed to load sessions');
-    } finally {
-      setLoading(false);
     }
   };
+
+  // Connection status is now handled by the useServerSideConnection hook
+  // No need for manual status checking - the hook provides real-time updates
 
   const handleConnect = async () => {
     if (!selectedSession) {
       Alert.alert(t('error'), t('pleaseSelectSessionFirst'));
       return;
     }
-
+    
+    setLoading(true);
     try {
-      console.log('🔄 Initiating connection for session:', selectedSession.session_id);
+      console.log('🔗 Starting WhatsApp connection for session:', selectedSession.session_id);
+      console.log('📱 Session details:', {
+        sessionId: selectedSession.session_id,
+        sessionName: selectedSession.session_name,
+        phoneNumber: selectedSession.phone_number
+      });
+      
+      // Use the new server-side connection hook
       await initiateConnection();
+      
+      Alert.alert(t('success'), t('whatsappConnectionInitiated'));
     } catch (error) {
-      console.error('Error connecting:', error);
+      console.error('❌ Connection error:', error);
       Alert.alert(t('error'), t('failedToConnectWhatsApp').replace('{error}', error.message));
+    } finally {
+      setLoading(false);
     }
   };
+
 
   const handleDisconnect = async () => {
     Alert.alert(
@@ -116,18 +140,20 @@ const WhatsAppScreen = ({ navigation }) => {
           text: t('disconnect'),
           style: 'destructive',
           onPress: async () => {
+            setLoading(true);
             try {
               if (!selectedSession) {
                 Alert.alert(t('error'), t('noSessionSelectedError'));
                 return;
               }
               
-              console.log('🔄 Disconnecting session:', selectedSession.session_id);
+              // Use the new server-side connection hook
               await disconnectSession();
               Alert.alert(t('success'), t('whatsappDisconnectedSuccessfully'));
             } catch (error) {
-              console.error('Error disconnecting:', error);
               Alert.alert(t('error'), t('failedToDisconnect').replace('{error}', error.message));
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -135,62 +161,49 @@ const WhatsAppScreen = ({ navigation }) => {
     );
   };
 
-  const handleResolveConflict = async () => {
+  const handleGenerateQR = async () => {
     if (!selectedSession) {
-      Alert.alert(t('error'), t('noSessionSelectedError'));
+      Alert.alert(t('error'), t('pleaseSelectSessionFirst'));
       return;
     }
-
-    Alert.alert(
-      'Resolve Session Conflict',
-      'This will clear the conflicting session and allow you to reconnect. Continue?',
-      [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: 'Resolve',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🔧 Resolving conflict for session:', selectedSession.session_id);
-              
-              // Get the correct base URL using the same logic as other services
-              const baseUrl = await resolveApiBaseUrl();
-              const url = `${baseUrl}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`;
-              
-              console.log('🔧 Resolving conflict at URL:', url);
-              
-              const response = await fetch(url, { 
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-              });
-              
-              if (response.ok) {
-                const result = await response.json();
-                console.log('✅ Conflict resolved:', result);
-                Alert.alert(t('success'), 'Conflict resolved! You can now reconnect.');
-              } else {
-                const errorText = await response.text();
-                console.error('❌ Server error response:', errorText);
-                throw new Error(`Server error: ${response.status} - ${errorText}`);
-              }
-            } catch (error) {
-              console.error('Error resolving conflict:', error);
-              Alert.alert(t('error'), 'Failed to resolve conflict. Please try again.');
-            }
-          }
-        }
-      ]
-    );
+    
+    setLoading(true);
+    try {
+      console.log('🔍 Generating QR code for session:', selectedSession.session_id);
+      
+      const response = await whatsappAPI.generateQR(userId, selectedSession.session_id);
+      console.log('📱 Generate QR response:', response);
+      
+      if (response.data && response.data.qrCode) {
+        setConnectionStatus({
+          isConnected: false,
+          isConnecting: true,
+          qrCode: response.data.qrCode,
+        });
+        
+        Alert.alert(t('success'), t('qrCodeGeneratedSuccessfully'));
+        
+        // Start polling for connection status after QR generation
+        setTimeout(async () => {
+          await checkConnectionStatus(true);
+        }, 3000);
+        
+        // Check again after a bit more time to catch delayed updates
+        setTimeout(async () => {
+          await checkConnectionStatus(true);
+        }, 5000);
+      } else {
+        Alert.alert(t('error'), t('failedToGenerateQR'));
+      }
+    } catch (error) {
+      console.error('❌ Error generating QR code:', error);
+      Alert.alert(t('error'), t('failedToGenerateQRWithError').replace('{error}', error.message));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleClearSession = async () => {
-    if (!selectedSession) {
-      Alert.alert(t('error'), t('noSessionSelectedError'));
-      return;
-    }
-
+  const handleCleanSession = async () => {
     Alert.alert(
       t('cleanSession'),
       t('cleanSessionMessage'),
@@ -200,38 +213,30 @@ const WhatsAppScreen = ({ navigation }) => {
           text: t('cleanSessionButton'),
           style: 'destructive',
           onPress: async () => {
+            setLoading(true);
             try {
+              if (!selectedSession) {
+                Alert.alert(t('error'), t('noSessionSelectedError'));
+                return;
+              }
+              
               console.log('🧹 Cleaning session:', selectedSession.session_id);
               
-              // Get the correct base URL using the same logic as other services
-              const baseUrl = await resolveApiBaseUrl();
-              const url = `${baseUrl}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`;
+              const response = await whatsappAPI.cleanSession(userId);
+              console.log('🧹 Clean session response:', response);
               
-              console.log('🧹 Cleaning session at URL:', url);
-              
-              // Call the server to clean the session
-              const response = await fetch(url, { 
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+              setConnectionStatus({
+                isConnected: false,
+                isConnecting: false,
+                qrCode: null,
               });
               
-              if (response.ok) {
-                const result = await response.json();
-                console.log('✅ Session cleaned:', result);
-                Alert.alert(t('success'), t('sessionCleanedSuccessfully'));
-                
-                // Reload sessions to refresh the list
-                await loadSessions();
-              } else {
-                const errorText = await response.text();
-                console.error('❌ Server error response:', errorText);
-                throw new Error(`Server error: ${response.status} - ${errorText}`);
-              }
+              Alert.alert(t('success'), t('sessionCleanedSuccessfully'));
             } catch (error) {
               console.error('❌ Error cleaning session:', error);
               Alert.alert(t('error'), t('failedToCleanSession').replace('{error}', error.message));
+            } finally {
+              setLoading(false);
             }
           },
         },
@@ -239,26 +244,67 @@ const WhatsAppScreen = ({ navigation }) => {
     );
   };
 
-  const handleRefreshStatus = async () => {
-    try {
-      console.log('🔄 Manually refreshing status...');
-      
-      // Use the hook's refreshStatus function
-      await refreshStatus();
-      
-      // Also reload sessions to get fresh data
-      await loadSessions();
-    } catch (error) {
-      console.error('Error refreshing status:', error);
+  const handleDeleteSession = async () => {
+    if (!selectedSession) {
+      Alert.alert(t('error'), t('noSessionSelectedError'));
+      return;
     }
+
+    Alert.alert(
+      t('deleteSession'),
+      t('deleteSessionMessage').replace('{sessionName}', selectedSession.session_name),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              console.log('🗑️ Deleting session:', selectedSession.session_id);
+              
+              // Delete session from database
+              const { error } = await supabase
+                .from('whatsapp_sessions')
+                .delete()
+                .eq('session_id', selectedSession.session_id)
+                .eq('user_id', userId);
+
+              if (error) throw error;
+
+              // Reset connection status
+              setConnectionStatus({
+                isConnected: false,
+                isConnecting: false,
+                qrCode: null,
+              });
+              
+              // Clear selected session
+              setSelectedSession(null);
+              setPreviousConnectionStatus(null);
+              
+              // Reload sessions to update the list
+              await loadSessions();
+              
+              Alert.alert(t('success'), t('sessionDeletedSuccessfully'));
+            } catch (error) {
+              console.error('❌ Error deleting session:', error);
+              Alert.alert(t('error'), t('failedToDeleteSession').replace('{error}', error.message));
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
+
+
+
 
   const getStatusColor = () => {
     if (!selectedSession) return '#999';
     if (sessionSwitching) return '#FFA500';
-    if (connectionStatus?.status === 'conflict') return '#FF5722';
-    if (connectionStatus?.status === 'qr_required') return '#9C27B0'; // Purple for QR code
-    if (connectionStatus?.status === 'error') return '#F44336'; // Red for error
     if (isConnected) return '#25D366';
     if (isConnecting) return '#FFA500';
     return '#FF3B30';
@@ -267,25 +313,16 @@ const WhatsAppScreen = ({ navigation }) => {
   const getStatusText = () => {
     if (!selectedSession) return t('noSession');
     if (sessionSwitching) return t('switching');
-    if (connectionStatus?.status === 'conflict') return 'Session Conflict';
-    if (connectionStatus?.status === 'conflict_resolved') return 'Conflict Resolved';
-    if (connectionStatus?.status === 'qr_required') return 'QR Code Required';
-    if (connectionStatus?.status === 'error') return 'Connection Error';
     if (isConnected) {
-      if (connectionStatus?.connectionType === 'saved_session') {
-        return t('whatsappConnected');
-      } else {
-        return t('connected');
-      }
+      return t('whatsappConnected');
     }
     if (isConnecting) {
-      if (connectionStatus?.connectionType === 'qr_required') {
-        return t('scanQRCodePlease');
-      } else {
-        return t('connecting');
-      }
+      return t('connectingToWhatsApp');
     }
-    return t('disconnected');
+    if (hasError) {
+      return t('connectionError');
+    }
+    return t('whatsappDisconnected');
   };
 
   // Create dynamic styles based on theme
@@ -318,6 +355,14 @@ const WhatsAppScreen = ({ navigation }) => {
                     onPress={async () => {
                       setSessionSwitching(true);
                       setSelectedSession(session);
+                      // Reset connection status when switching sessions
+                      setConnectionStatus({
+                        isConnected: false,
+                        isConnecting: false,
+                        qrCode: null,
+                        connectionType: 'unknown',
+                      });
+                      setPreviousConnectionStatus(null);
                       
                       // Small delay to show the switching state
                       setTimeout(() => {
@@ -393,71 +438,12 @@ const WhatsAppScreen = ({ navigation }) => {
               <Text style={dynamicStyles.selectedSessionDetails}>
                 {selectedSession.phone_number ? `${t('phone')}: ${selectedSession.phone_number}` : t('noPhoneNumber')}
               </Text>
-              
-              {/* Debug Info Toggle */}
-              <TouchableOpacity
-                onPress={() => setShowDebugInfo(!showDebugInfo)}
-                style={dynamicStyles.debugToggle}
-              >
-                <Text style={dynamicStyles.debugToggleText}>
-                  {showDebugInfo ? 'Hide Debug Info' : 'Show Debug Info'}
-                </Text>
-              </TouchableOpacity>
-              
-              {/* Debug Information */}
-              {showDebugInfo && (
-                <View style={dynamicStyles.debugContainer}>
-                  <Text style={dynamicStyles.debugTitle}>Debug Information:</Text>
-                  <Text style={dynamicStyles.debugText}>
-                    Hook Status: {connectionStatus?.status || 'unknown'}
-                  </Text>
-                  <Text style={dynamicStyles.debugText}>
-                    Hook Connected: {isConnected ? 'true' : 'false'}
-                  </Text>
-                  <Text style={dynamicStyles.debugText}>
-                    Hook Connecting: {isConnecting ? 'true' : 'false'}
-                  </Text>
-                  <Text style={dynamicStyles.debugText}>
-                    Hook Error: {hasError ? 'true' : 'false'}
-                  </Text>
-                  <Text style={dynamicStyles.debugText}>
-                    Last Update: {lastUpdate || 'never'}
-                  </Text>
-                  <Text style={dynamicStyles.debugText}>
-                    Available Sessions: {Object.keys(availableSessions).length}
-                  </Text>
-                </View>
-              )}
             </View>
           )}
 
-          {/* Conflict Resolution UI */}
-          {connectionStatus?.status === 'conflict' && (
-            <View style={dynamicStyles.conflictContainer}>
-              <Text style={dynamicStyles.conflictText}>
-                ⚠️ Another device is connected to this WhatsApp account
-              </Text>
-              <CompatibleButton
-                mode="contained"
-                onPress={handleResolveConflict}
-                style={dynamicStyles.resolveButton}
-                icon="alert-circle"
-              >
-                Resolve Conflict
-              </CompatibleButton>
-            </View>
-          )}
-
-          {connectionStatus?.status === 'conflict_resolved' && (
-            <View style={dynamicStyles.conflictResolvedContainer}>
-              <Text style={dynamicStyles.conflictResolvedText}>
-                ✅ Conflict resolved! You can now reconnect.
-              </Text>
-            </View>
-          )}
 
           {/* QR Code Display */}
-          {(connectionStatus?.qrCode || connectionStatus?.status === 'qr_required') && (
+          {connectionStatus.qrCode && (
             <View style={dynamicStyles.qrContainer}>
               <Text style={dynamicStyles.qrTitle}>Scan QR Code to Connect</Text>
               <View style={dynamicStyles.qrWrapper}>
@@ -485,7 +471,7 @@ const WhatsAppScreen = ({ navigation }) => {
 
           {/* Action Buttons */}
           <View style={dynamicStyles.buttonContainer}>
-            {!isConnected && !isConnecting && connectionStatus?.status !== 'conflict' && connectionStatus?.status !== 'qr_required' ? (
+            {!isConnected && !isConnecting ? (
               <CompatibleButton
                 mode="contained"
                 onPress={handleConnect}
@@ -501,7 +487,7 @@ const WhatsAppScreen = ({ navigation }) => {
                 mode="contained"
                 onPress={handleDisconnect}
                 loading={loading}
-                disabled={loading || !selectedSession || !isConnected}
+                disabled={loading || !selectedSession}
                 style={[dynamicStyles.button, dynamicStyles.disconnectButton]}
                 labelStyle={dynamicStyles.buttonLabel}
               >
@@ -513,7 +499,7 @@ const WhatsAppScreen = ({ navigation }) => {
           {/* Utility Buttons */}
           <View style={dynamicStyles.utilityButtonsContainer}>
             <TouchableOpacity
-              onPress={handleRefreshStatus}
+              onPress={() => checkConnectionStatus(true)}
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.refreshButton]}
             >
@@ -531,7 +517,7 @@ const WhatsAppScreen = ({ navigation }) => {
             </TouchableOpacity>
             
             <TouchableOpacity
-              onPress={handleClearSession}
+              onPress={handleCleanSession}
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.cleanSessionButton]}
             >
@@ -549,11 +535,11 @@ const WhatsAppScreen = ({ navigation }) => {
             </TouchableOpacity>
             
             <TouchableOpacity
-              onPress={() => navigation.navigate('Sessions')}
-              disabled={loading}
-              style={[dynamicStyles.customButton, dynamicStyles.manageSessionsButton]}
+              onPress={handleDeleteSession}
+              disabled={loading || !selectedSession}
+              style={[dynamicStyles.customButton, dynamicStyles.deleteButton]}
             >
-              <Ionicons name="settings" size={14} color="#007AFF" style={{ marginRight: 4 }} />
+              <Ionicons name="trash" size={14} color="#FF3B30" style={{ marginRight: 4 }} />
               <View style={dynamicStyles.textContainer}>
                 <Text
                   style={[
@@ -561,11 +547,33 @@ const WhatsAppScreen = ({ navigation }) => {
                     { writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr' }
                   ]}
                 >
-                  {t('manageSessions')}
+                  {t('deleteSession')}
                 </Text>
               </View>
             </TouchableOpacity>
           </View>
+
+
+
+
+          {/* Generate QR Button */}
+            {!isConnected && !isConnecting && (
+            <View style={dynamicStyles.generateQRContainer}>
+              <CompatibleButton
+                mode="contained"
+                onPress={handleGenerateQR}
+                loading={loading}
+                disabled={loading || !selectedSession}
+                style={[dynamicStyles.button, dynamicStyles.generateQRButton]}
+                labelStyle={dynamicStyles.buttonLabel}
+              >
+                <Ionicons name="qr-code" size={20} color="white" style={{ marginRight: 8 }} />
+                {t('generateQRCode')}
+              </CompatibleButton>
+            </View>
+          )}
+
+
         </Card.Content>
       </Card>
     </ScrollView>
@@ -624,85 +632,47 @@ const createStyles = (theme) => StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.onSurface,
   },
-  selectedSessionInfo: {
-    backgroundColor: theme.colors.primaryContainer,
-    padding: 16,
+  userInfo: {
+    marginBottom: 16,
+  },
+  userLabel: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: 4,
+  },
+  userId: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.onSurface,
+    backgroundColor: theme.colors.surfaceVariant,
+    padding: 8,
+    borderRadius: 4,
+  },
+  serverButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: theme.colors.surfaceVariant,
     borderRadius: 8,
     marginBottom: 16,
+  },
+  connectionInfo: {
+    marginVertical: 16,
+    padding: 16,
+    backgroundColor: theme.colors.primaryContainer,
+    borderRadius: 8,
     alignItems: 'center',
   },
-  selectedSessionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.onPrimaryContainer,
-    marginBottom: 4,
-  },
-  selectedSessionName: {
-    fontSize: 18,
+  infoLabel: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: theme.colors.onPrimaryContainer,
     marginBottom: 4,
   },
-  selectedSessionDetails: {
+  infoText: {
     fontSize: 14,
     color: theme.colors.onPrimaryContainer,
-  },
-  debugToggle: {
-    marginTop: 8,
-    padding: 4,
-  },
-  debugToggleText: {
-    fontSize: 12,
-    color: theme.colors.onPrimaryContainer,
-    textDecorationLine: 'underline',
-  },
-  debugContainer: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: theme.colors.outline,
-  },
-  debugTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: theme.colors.onSurface,
-    marginBottom: 4,
-  },
-  debugText: {
-    fontSize: 10,
-    color: theme.colors.onSurface,
-    marginBottom: 2,
-  },
-  conflictContainer: {
-    backgroundColor: '#FFF3E0',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF5722',
-  },
-  conflictText: {
-    fontSize: 14,
-    color: '#E65100',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  resolveButton: {
-    backgroundColor: '#FF5722',
-  },
-  conflictResolvedContainer: {
-    backgroundColor: '#E8F5E8',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-  },
-  conflictResolvedText: {
-    fontSize: 14,
-    color: '#2E7D32',
     textAlign: 'center',
   },
   qrContainer: {
@@ -745,6 +715,27 @@ const createStyles = (theme) => StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
+  qrErrorContainer: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: theme.colors.errorContainer,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.error,
+  },
+  qrErrorText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.onErrorContainer,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  qrErrorSubtext: {
+    fontSize: 12,
+    color: theme.colors.onErrorContainer,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
   buttonContainer: {
     marginVertical: 20,
   },
@@ -783,11 +774,8 @@ const createStyles = (theme) => StyleSheet.create({
   refreshButton: {
     borderColor: '#007AFF',
   },
-  cleanSessionButton: {
-    borderColor: '#FF6B35',
-  },
-  manageSessionsButton: {
-    borderColor: '#007AFF',
+  deleteButton: {
+    borderColor: '#FF3B30',
   },
   textContainer: {
     flex: 1,
@@ -804,6 +792,45 @@ const createStyles = (theme) => StyleSheet.create({
     textBreakStrategy: 'simple',
     minWidth: 0,
     flexShrink: 1,
+  },
+  generateQRContainer: {
+    marginTop: 16,
+  },
+  generateQRButton: {
+    backgroundColor: '#25D366',
+  },
+  cleanSessionContainer: {
+    marginTop: 12,
+  },
+  cleanSessionButton: {
+    borderColor: '#FF6B35',
+  },
+  testConnectionContainer: {
+    marginTop: 12,
+  },
+  testButton: {
+    borderColor: '#007AFF',
+  },
+  debugButton: {
+    borderColor: '#FF6B35',
+    marginTop: 8,
+  },
+  instructions: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: theme.colors.secondaryContainer,
+    borderRadius: 8,
+  },
+  instructionsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: theme.colors.onSecondaryContainer,
+  },
+  instructionsText: {
+    fontSize: 14,
+    color: theme.colors.onSecondaryContainer,
+    lineHeight: 20,
   },
   // Session Selector Styles
   sessionSelectorContainer: {
@@ -855,6 +882,29 @@ const createStyles = (theme) => StyleSheet.create({
     color: '#B8860B',
     fontWeight: '600',
   },
+  selectedSessionInfo: {
+    backgroundColor: theme.colors.primaryContainer,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  selectedSessionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.onPrimaryContainer,
+    marginBottom: 4,
+  },
+  selectedSessionName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.onPrimaryContainer,
+    marginBottom: 4,
+  },
+  selectedSessionDetails: {
+    fontSize: 14,
+    color: theme.colors.onPrimaryContainer,
+  },
   noSessionsContainer: {
     backgroundColor: theme.colors.tertiaryContainer,
     padding: 20,
@@ -888,4 +938,4 @@ const createStyles = (theme) => StyleSheet.create({
   },
 });
 
-export default WhatsAppScreen;
+export default WhatsAppScreen; 

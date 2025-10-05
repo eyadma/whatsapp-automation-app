@@ -23,6 +23,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { AppContext } from '../context/AppContext';
 import { supabase } from '../services/supabase';
+import useServerSideConnection from '../hooks/useServerSideConnection';
 
 const SimpleSessionManagementScreen = ({ navigation }) => {
   const { userId, t } = useContext(AppContext);
@@ -32,10 +33,17 @@ const SimpleSessionManagementScreen = ({ navigation }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState({});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
+  
+  // Use the new server-side connection hook for overall status
+  const {
+    connectionStatus,
+    availableSessions,
+    isConnected,
+    isConnecting
+  } = useServerSideConnection(userId, null); // No specific session for this screen
   const [formData, setFormData] = useState({
     name: '',
     alias: '',
@@ -289,15 +297,15 @@ const SimpleSessionManagementScreen = ({ navigation }) => {
   };
 
   const getStatusColor = (sessionId) => {
-    const status = connectionStatus[sessionId];
+    const status = availableSessions[sessionId];
     if (!status) return '#666';
-    return status.connected ? '#25D366' : '#FF3B30';
+    return status === 'connected' ? '#25D366' : '#FF3B30';
   };
 
   const getStatusText = (sessionId) => {
-    const status = connectionStatus[sessionId];
+    const status = availableSessions[sessionId];
     if (!status) return 'Unknown';
-    return status.connected ? 'Connected' : 'Disconnected';
+    return status === 'connected' ? 'Connected' : 'Disconnected';
   };
 
   if (loading && sessions.length === 0) {

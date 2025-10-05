@@ -14,6 +14,7 @@ import { timeRestrictionsAPI } from '../services/timeRestrictionsAPI';
 import { supabase } from '../services/supabase';
 import { formatTimeWithArabicNumerals, formatDateTimeWithArabicNumerals } from '../utils/numberFormatting';
 import WebCompatibleButton from '../web/components/WebCompatibleButton';
+import useServerSideConnection from '../hooks/useServerSideConnection';
 
 const EnhancedMessageScreen = ({ navigation }) => {
   const { userId, t, language, activeSessionId } = useContext(AppContext);
@@ -54,14 +55,17 @@ const EnhancedMessageScreen = ({ navigation }) => {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedSpeed, setSelectedSpeed] = useState('medium'); // Default to medium
   const [backgroundSending, setBackgroundSending] = useState(true); // Background sending is always on
-  const [whatsappStatus, setWhatsappStatus] = useState({ 
-    connected: false, 
-    connecting: false,
-    activeSessionId: null
-  });
-  const [whatsappStatusLoading, setWhatsappStatusLoading] = useState(false);
-  const [availableSessions, setAvailableSessions] = useState([]);
   const [selectedSessionForSending, setSelectedSessionForSending] = useState(null);
+  
+  // Use the new server-side connection hook
+  const {
+    connectionStatus,
+    initiateConnection,
+    isConnected,
+    isConnecting,
+    hasError,
+    availableSessions
+  } = useServerSideConnection(userId, selectedSessionForSending?.session_id || activeSessionId || 'default');
   
   // Enhanced ETA Management states
   const [showCopyETAModal, setShowCopyETAModal] = useState(false);
@@ -81,28 +85,13 @@ const EnhancedMessageScreen = ({ navigation }) => {
       console.log('📱 Active session ID:', activeSessionId);
       loadData();
       loadAvailableSessions(); // Load available sessions
-      checkWhatsAppStatus(); // Check WhatsApp status when screen loads
+      // WhatsApp status is now handled by the useServerSideConnection hook
       // Don't auto-check areas on every load - only when manually requested
     }
   }, [isFocused, userId, activeSessionId]);
 
-  // Periodic WhatsApp status check when screen is focused
-  useEffect(() => {
-    let statusInterval;
-    
-    if (isFocused && userId && activeSessionId) {
-      // Check status every 5 seconds when screen is focused and has active session
-      statusInterval = setInterval(() => {
-        checkWhatsAppStatus();
-      }, 5000);
-    }
-    
-    return () => {
-      if (statusInterval) {
-        clearInterval(statusInterval);
-      }
-    };
-  }, [isFocused, userId, activeSessionId]);
+  // WhatsApp status is now handled by the useServerSideConnection hook
+  // No need for periodic status checks - the hook provides real-time updates
 
   const loadData = async () => {
     setLoading(true);
@@ -572,7 +561,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
     }
 
     // Check if the selected session is connected
-    if (!selectedSessionForSending.connected) {
+    if (!isConnected) {
       Alert.alert(
         t('sessionNotConnected'),
         t('sessionNotConnectedMessage').replace('{sessionName}', selectedSessionForSending.session_name || selectedSessionForSending.session_id),
@@ -1311,9 +1300,9 @@ const EnhancedMessageScreen = ({ navigation }) => {
               </Text>
               <Text style={[
                 dynamicStyles.selectedSessionStatus,
-                { color: selectedSessionForSending.connected ? '#25D366' : '#FF3B30' }
+                { color: isConnected ? '#25D366' : '#FF3B30' }
               ]}>
-                {selectedSessionForSending.connected ? '✅ Ready to send' : '❌ Not connected'}
+                {isConnected ? '✅ Ready to send' : '❌ Not connected'}
               </Text>
             </View>
           )}
@@ -1458,27 +1447,27 @@ const EnhancedMessageScreen = ({ navigation }) => {
               <View style={dynamicStyles.connectionActions}>
                 <TouchableOpacity
                   style={dynamicStyles.refreshButton}
-                  onPress={checkWhatsAppStatus}
-                  disabled={whatsappStatus.connecting}
+                  onPress={() => {}} // Status is now handled by the hook
+                  disabled={isConnecting}
                 >
                   <Ionicons 
                     name="refresh" 
                     size={16} 
-                    color={whatsappStatus.connecting ? '#999' : '#007AFF'} 
+                    color={isConnecting ? '#999' : '#007AFF'} 
                   />
                 </TouchableOpacity>
                 <View style={[
                   dynamicStyles.connectionIndicator,
-                  { backgroundColor: selectedSessionForSending?.connected ? '#25D366' : '#FF3B30' }
+                  { backgroundColor: isConnected ? '#25D366' : '#FF3B30' }
                 ]} />
               </View>
             </View>
             <Text style={[
               dynamicStyles.connectionStatus,
-              { color: selectedSessionForSending?.connected ? '#25D366' : '#FF3B30' }
+              { color: isConnected ? '#25D366' : '#FF3B30' }
             ]}>
               {selectedSessionForSending 
-                ? (selectedSessionForSending.connected 
+                ? (isConnected 
                   ? `✅ Connected - Ready to send from "${selectedSessionForSending.session_name || selectedSessionForSending.session_id}"`
                   : `❌ ${t('notConnected')} - "${selectedSessionForSending.session_name || selectedSessionForSending.session_id}" ${t('needsToBeConnected')}`)
                 : '❌ No session selected - Choose a session above'
@@ -1542,7 +1531,7 @@ const EnhancedMessageScreen = ({ navigation }) => {
                       return;
                     }
                     
-                    if (!selectedSessionForSending.connected) {
+                    if (!isConnected) {
                       Alert.alert(
                         t('sessionNotConnected'),
                         `The selected session "${selectedSessionForSending.session_name || selectedSessionForSending.session_id}" is not connected.\n\nPlease go to the WhatsApp tab and connect this session first.`,
@@ -1582,9 +1571,9 @@ const EnhancedMessageScreen = ({ navigation }) => {
             </Text>
             <Text style={[
               dynamicStyles.backgroundNote,
-              { color: selectedSessionForSending?.connected ? '#25D366' : '#FF3B30' }
+              { color: isConnected ? '#25D366' : '#FF3B30' }
             ]}>
-              {selectedSessionForSending?.connected 
+              {isConnected 
                 ? '✅ WhatsApp Connected - Background sending available'
                 : selectedSessionForSending
                 ? '❌ Selected session not connected - Connect first to use background sending'

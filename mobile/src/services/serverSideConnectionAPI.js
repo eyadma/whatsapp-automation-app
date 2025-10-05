@@ -88,55 +88,59 @@ class ServerSideConnectionAPI {
     }
   }
 
-  // Start listening to real-time status updates (polling for React Native)
+  // Start listening to real-time status updates
   async startStatusStream(userId, onStatusUpdate) {
     try {
-      console.log('📡 Starting status polling for React Native');
+      const baseUrl = await this.getBaseUrl();
+      const endpoint = `${baseUrl}/api/whatsapp/status-stream/${userId}`;
       
-      // Clear existing polling if any
-      if (this.pollingInterval) {
-        clearInterval(this.pollingInterval);
+      console.log('📡 Starting status stream:', endpoint);
+      
+      // Close existing stream if any
+      if (this.eventSource) {
+        this.eventSource.close();
       }
       
-      // Send initial connection status
-      onStatusUpdate && onStatusUpdate({
-        type: 'connection_status',
-        status: 'connected',
-        timestamp: new Date().toISOString()
-      });
+      this.eventSource = new EventSource(endpoint);
       
-      // Start polling every 5 seconds
-      this.pollingInterval = setInterval(async () => {
-        try {
-          const status = await this.getStatusAll(userId);
-          if (status.success && status.sessions) {
-            onStatusUpdate && onStatusUpdate({
-              type: 'status',
-              status: status,
-              timestamp: new Date().toISOString()
-            });
-          }
-        } catch (error) {
-          console.error('📡 Status polling error:', error);
-          onStatusUpdate && onStatusUpdate({
-            type: 'connection_status',
-            status: 'error',
-            error: error.message,
-            timestamp: new Date().toISOString()
-          });
-        }
-      }, 5000); // Poll every 5 seconds
-      
-      // Return a mock EventSource-like object
-      return {
-        close: () => {
-          if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-            this.pollingInterval = null;
-          }
-        },
-        readyState: 1 // OPEN
+      this.eventSource.onopen = () => {
+        console.log('📡 Status stream connected');
+        onStatusUpdate && onStatusUpdate({
+          type: 'connection_status',
+          status: 'connected',
+          timestamp: new Date().toISOString()
+        });
       };
+
+      this.eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('📡 Received status update:', data);
+          onStatusUpdate && onStatusUpdate(data);
+        } catch (error) {
+          console.error('Error parsing status update:', error);
+        }
+      };
+
+      this.eventSource.onerror = (error) => {
+        console.error('📡 Status stream error:', error);
+        onStatusUpdate && onStatusUpdate({
+          type: 'connection_status',
+          status: 'error',
+          error: error,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Attempt to reconnect after 5 seconds
+        setTimeout(() => {
+          if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
+            console.log('📡 Attempting to reconnect status stream...');
+            this.startStatusStream(userId, onStatusUpdate);
+          }
+        }, 5000);
+      };
+
+      return this.eventSource;
     } catch (error) {
       console.error('Error starting status stream:', error);
       throw error;
@@ -149,12 +153,6 @@ class ServerSideConnectionAPI {
       console.log('📡 Stopping status stream');
       this.eventSource.close();
       this.eventSource = null;
-    }
-    
-    if (this.pollingInterval) {
-      console.log('📡 Stopping status polling');
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
     }
   }
 
@@ -189,24 +187,19 @@ class ServerSideConnectionAPI {
 
   // Check if status stream is active
   isStatusStreamActive() {
-    return (this.eventSource && this.eventSource.readyState === 1) || 
-           (this.pollingInterval !== null);
+    return this.eventSource && this.eventSource.readyState === EventSource.OPEN;
   }
 
   // Get status stream state
   getStatusStreamState() {
-    if (this.pollingInterval !== null) {
-      return 'polling';
-    }
-    
     if (!this.eventSource) return 'not_initialized';
     
     switch (this.eventSource.readyState) {
-      case 0: // CONNECTING
+      case EventSource.CONNECTING:
         return 'connecting';
-      case 1: // OPEN
+      case EventSource.OPEN:
         return 'open';
-      case 2: // CLOSED
+      case EventSource.CLOSED:
         return 'closed';
       default:
         return 'unknown';
