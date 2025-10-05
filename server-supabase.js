@@ -98,6 +98,10 @@ const connectionPersistenceManager = {
       reconnectAttempts: 0
     });
     
+    console.log(`🔄 Added to persistence manager for user ${userId}, session ${sessionId}, key: ${key}`);
+    console.log(`📊 Total connections now:`, this.connections.size);
+    console.log(`📊 Connection keys:`, Array.from(this.connections.keys()));
+    
     // Start monitoring this connection
     this.startConnectionMonitoring(userId, sessionId);
     
@@ -231,7 +235,8 @@ const connectionPersistenceManager = {
     const statuses = {};
     for (const [key, connection] of this.connections) {
       if (key.startsWith(`${userId}_`)) {
-        const sessionId = key.split('_')[1];
+        // Extract sessionId by removing the userId_ prefix
+        const sessionId = key.substring(`${userId}_`.length);
         statuses[sessionId] = connection.status;
       }
     }
@@ -3430,6 +3435,9 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
     console.log(`📊 Getting status for all connections of user: ${userId}`);
     
     const statusData = connectionPersistenceManager.getUserConnectionStatuses(userId);
+    
+    console.log(`📊 Status data for user ${userId}:`, statusData);
+    console.log(`📊 Available connections:`, Array.from(connectionPersistenceManager.connections.keys()));
     
     res.json({
       success: true,
