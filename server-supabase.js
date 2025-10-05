@@ -133,17 +133,45 @@ const connectionPersistenceManager = {
         }
         
         try {
-          // Check if socket is still alive
-          if (currentConnection.sock && currentConnection.sock.ws && currentConnection.sock.ws.readyState === 1) {
+          // Check if socket is still alive using comprehensive WebSocket detection
+          let wsReady = false;
+          let wsState = 'unknown';
+          
+          if (currentConnection.sock?.ws?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.ws.readyState === 1';
+          } else if (currentConnection.sock?.ws?.socket?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.ws.socket.readyState === 1';
+          } else if (currentConnection.sock?.conn?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.conn.readyState === 1';
+          } else if (currentConnection.sock?.connection?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.connection.readyState === 1';
+          } else if (currentConnection.sock?.socket?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.socket.readyState === 1';
+          }
+          
+          // Also check if the connection is actually working by testing sendMessage method
+          const hasSendMessage = currentConnection.sock && typeof currentConnection.sock.sendMessage === 'function';
+          
+          if (wsReady && hasSendMessage) {
             // Send ping to keep connection alive
-            await currentConnection.sock.ping();
+            try {
+              await currentConnection.sock.ping();
+            } catch (pingError) {
+              // Ping might fail but connection could still be working
+              console.log(`⚠️ Ping failed but connection might still be working: ${pingError.message}`);
+            }
             currentConnection.lastSeen = Date.now();
             currentConnection.status = 'connected';
             // Reset failure counter on successful health check
             currentConnection.healthCheckFailures = 0;
-            console.log(`✅ Health check passed for user ${userId}`);
+            console.log(`✅ Health check passed for user ${userId} (${wsState})`);
           } else {
-            console.log(`⚠️ Socket not ready for user ${userId}, but not triggering reconnection yet`);
+            console.log(`⚠️ Socket not ready for user ${userId} (${wsState}, hasSendMessage: ${hasSendMessage}), but not triggering reconnection yet`);
             // Don't immediately trigger reconnection - just log the issue
             currentConnection.status = 'checking';
           }
