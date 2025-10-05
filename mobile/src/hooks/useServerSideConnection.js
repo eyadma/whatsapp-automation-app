@@ -181,53 +181,65 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     }
   }, [userId, sessionId]);
 
-  // Get current status
+  // Get current status - using the same accurate logic as send message screen
   const getCurrentStatus = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !sessionId) return;
     
     try {
       console.log('🔍 Getting current status for user:', userId, 'session:', sessionId);
-      const result = await serverSideConnectionAPI.getStatusAll(userId);
       
-      console.log('📊 Status API result:', result);
+      // Use the accurate session-specific endpoint (same as send message screen)
+      const baseUrl = await serverSideConnectionAPI.getBaseUrl();
+      const url = `${baseUrl}/api/whatsapp/status/${userId}/${sessionId}`;
+      console.log('🔍 Checking specific session status at URL:', url);
       
-      if (result.success) {
-        setAvailableSessions(result.sessions || {});
-        
-        const currentSessionStatus = result.sessions?.[sessionId];
-        console.log(`🔄 Hook: Current session status for ${sessionId}:`, currentSessionStatus);
-        
-        if (currentSessionStatus) {
-          const previousStatus = previousStatusRef.current;
-          
-          console.log(`🔄 Hook: Updating status from ${previousStatus} to ${currentSessionStatus}`);
-          
-          setConnectionStatus(prev => ({
-            ...prev,
-            isConnected: currentSessionStatus === 'connected',
-            isConnecting: currentSessionStatus === 'connecting' || currentSessionStatus === 'reconnecting',
-            status: currentSessionStatus,
-            lastUpdate: new Date().toISOString(),
-            error: currentSessionStatus === 'failed' ? 'Connection failed' : null
-          }));
-          
-          // Send notification for status change
-          if (previousStatus !== currentSessionStatus && previousStatus !== 'unknown') {
-            console.log(`🔔 Hook: Status check change from ${previousStatus} to ${currentSessionStatus}, sending notification...`);
-            const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
-              previousStatus,
-              currentSessionStatus,
-              sessionId
-            );
-            console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
-          }
-          previousStatusRef.current = currentSessionStatus;
-        } else {
-          console.log(`⚠️ Hook: No status found for session ${sessionId} in available sessions:`, Object.keys(result.sessions || {}));
-        }
-      } else {
-        console.log('⚠️ Hook: Status API returned unsuccessful result:', result);
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const data = await response.json();
+      console.log('📊 Specific session status response:', data);
+      
+      // Determine status based on the accurate data
+      let currentStatus = 'disconnected';
+      if (data.connected && data.wsReady) {
+        currentStatus = 'connected';
+      } else if (data.connecting) {
+        currentStatus = 'connecting';
+      } else if (data.connected && !data.wsReady) {
+        currentStatus = 'disconnected'; // WebSocket not ready
+      }
+      
+      console.log(`🔄 Hook: Determined status for ${sessionId}: ${currentStatus} (connected: ${data.connected}, wsReady: ${data.wsReady})`);
+      
+      const previousStatus = previousStatusRef.current;
+      
+      setConnectionStatus(prev => ({
+        ...prev,
+        isConnected: currentStatus === 'connected',
+        isConnecting: currentStatus === 'connecting' || currentStatus === 'reconnecting',
+        status: currentStatus,
+        lastUpdate: new Date().toISOString(),
+        error: currentStatus === 'failed' ? 'Connection failed' : null,
+        qrCode: data.qrCode || null,
+        wsReady: data.wsReady || false,
+        socketState: data.socketState || 'unknown'
+      }));
+      
+      // Send notification for status change
+      if (previousStatus !== currentStatus && previousStatus !== 'unknown') {
+        console.log(`🔔 Hook: Status check change from ${previousStatus} to ${currentStatus}, sending notification...`);
+        const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
+          previousStatus,
+          currentStatus,
+          sessionId
+        );
+        console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
+      }
+      previousStatusRef.current = currentStatus;
+      
     } catch (error) {
       console.error('Error getting current status:', error);
     }

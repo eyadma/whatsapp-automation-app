@@ -200,29 +200,83 @@ class WhatsAppStatusService {
     }
   }
 
-  // Manual status check
+  // Manual status check - using the same accurate logic as send message screen
   async checkStatus(userId, sessionId = null) {
     try {
       const baseUrl = await this.getBaseUrl();
-      const url = sessionId 
-        ? `${baseUrl}/api/whatsapp/status/${userId}/${sessionId}`
-        : `${baseUrl}/api/whatsapp/status-all/${userId}`;
       
-      console.log('🔍 Checking status at URL:', url);
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('📊 Status check response:', data);
-      
-      if (data.success) {
-        return data;
+      if (sessionId) {
+        // Use the accurate session-specific endpoint (same as send message screen)
+        const url = `${baseUrl}/api/whatsapp/status/${userId}/${sessionId}`;
+        console.log('🔍 Checking specific session status at URL:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 Specific session status response:', data);
+        
+        // Return in the same format as whatsappAPI.getStatus
+        return {
+          success: true,
+          data: {
+            connected: data.connected || false,
+            isConnecting: data.connecting || false,
+            qrCode: data.qrCode || null,
+            connectionType: data.connectionType || 'unknown',
+            session: data.session || null,
+            wsReady: data.wsReady || false,
+            socketState: data.socketState || 'unknown'
+          }
+        };
       } else {
-        throw new Error(data.error || 'Failed to get status');
+        // For multiple sessions, get all sessions and check each one individually
+        const sessionsUrl = `${baseUrl}/api/whatsapp/status-all/${userId}`;
+        console.log('🔍 Checking all sessions status at URL:', sessionsUrl);
+        
+        const response = await fetch(sessionsUrl);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('📊 All sessions status response:', data);
+        
+        if (data.success && data.sessions) {
+          // For each session, get the detailed status
+          const detailedStatuses = {};
+          for (const [sessionId, status] of Object.entries(data.sessions)) {
+            try {
+              const sessionResponse = await fetch(`${baseUrl}/api/whatsapp/status/${userId}/${sessionId}`);
+              if (sessionResponse.ok) {
+                const sessionData = await sessionResponse.json();
+                detailedStatuses[sessionId] = {
+                  connected: sessionData.connected || false,
+                  isConnecting: sessionData.connecting || false,
+                  wsReady: sessionData.wsReady || false,
+                  socketState: sessionData.socketState || 'unknown',
+                  connectionType: sessionData.connectionType || 'unknown'
+                };
+              } else {
+                detailedStatuses[sessionId] = { connected: false, isConnecting: false };
+              }
+            } catch (error) {
+              console.error(`Error checking detailed status for session ${sessionId}:`, error);
+              detailedStatuses[sessionId] = { connected: false, isConnecting: false };
+            }
+          }
+          
+          return {
+            success: true,
+            sessions: detailedStatuses
+          };
+        } else {
+          throw new Error(data.error || 'Failed to get status');
+        }
       }
     } catch (error) {
       console.error('Error checking WhatsApp status:', error);
