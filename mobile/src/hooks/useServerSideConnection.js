@@ -34,6 +34,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     const currentStatus = connectionStatus.status;
     const now = Date.now();
     
+    console.log(`🔄 Status transition: ${currentStatus} → ${newStatus} (delay logic)`);
+    
     // If transitioning to connecting, start the delay timer
     if (newStatus === 'connecting' && currentStatus !== 'connecting') {
       connectingStartTimeRef.current = now;
@@ -42,6 +44,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Clear any existing delay timeout
       if (connectingDelayTimeoutRef.current) {
         clearTimeout(connectingDelayTimeoutRef.current);
+        connectingDelayTimeoutRef.current = null;
       }
     }
     
@@ -50,8 +53,10 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       const connectingDuration = now - (connectingStartTimeRef.current || now);
       const minConnectingDuration = 3000; // 3 seconds minimum
       
+      console.log(`🔄 Connecting duration: ${connectingDuration}ms, minimum: ${minConnectingDuration}ms`);
+      
       if (connectingDuration < minConnectingDuration) {
-        console.log(`🔄 Delaying disconnect transition (${connectingDuration}ms < ${minConnectingDuration}ms)`);
+        console.log(`🔄 DELAYING disconnect transition (${connectingDuration}ms < ${minConnectingDuration}ms)`);
         
         // Set a timeout to allow the transition after the minimum duration
         connectingDelayTimeoutRef.current = setTimeout(() => {
@@ -71,12 +76,15 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         }, minConnectingDuration - connectingDuration);
         
         return; // Don't update status yet
+      } else {
+        console.log('🔄 Connecting duration sufficient, allowing immediate disconnect');
       }
     }
     
     // If transitioning away from connecting, clear the delay timer
     if (currentStatus === 'connecting' && newStatus !== 'connecting') {
       if (connectingDelayTimeoutRef.current) {
+        console.log('🔄 Clearing delay timeout - transitioning away from connecting');
         clearTimeout(connectingDelayTimeoutRef.current);
         connectingDelayTimeoutRef.current = null;
       }
@@ -84,6 +92,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     }
     
     // Update status immediately for non-delayed transitions
+    console.log(`🔄 Updating status immediately: ${newStatus}`);
     setConnectionStatus(prev => ({
       ...prev,
       isConnected: newStatus === 'connected',
@@ -132,14 +141,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         if (currentSessionStatus) {
           const previousStatus = previousStatusRef.current;
           
-          setConnectionStatus(prev => ({
-            ...prev,
-            isConnected: currentSessionStatus === 'connected',
-            isConnecting: currentSessionStatus === 'connecting' || currentSessionStatus === 'reconnecting',
-            status: currentSessionStatus,
-            lastUpdate: new Date().toISOString(),
-            error: currentSessionStatus === 'failed' ? 'Connection failed' : null
-          }));
+          // Use delay logic for status updates
+          updateStatusWithDelay(currentSessionStatus, {});
           
           // Send notification for status change (initial status)
           if (previousStatus !== currentSessionStatus && previousStatus !== 'unknown') {
@@ -151,7 +154,6 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             );
             console.log(`🔔 Hook: Initial notification result: ${notificationResult}`);
           }
-          previousStatusRef.current = currentSessionStatus;
         }
       }
     } else if (data.type === 'connection_status') {
@@ -198,30 +200,24 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     if (!userId) return;
     
     try {
-      setConnectionStatus(prev => ({ ...prev, isConnecting: true, error: null }));
+      // Start with connecting status using delay logic
+      updateStatusWithDelay('connecting', {});
       
       const result = await serverSideConnectionAPI.initiateConnection(userId, sessionId);
       
       if (result.success) {
         console.log('✅ Connection initiated successfully:', result);
-        setConnectionStatus(prev => ({
-          ...prev,
-          isConnecting: false,
-          status: result.status,
-          lastUpdate: new Date().toISOString()
-        }));
+        // Use delay logic for status update
+        updateStatusWithDelay(result.status, {});
       } else {
         throw new Error(result.message || 'Failed to initiate connection');
       }
     } catch (error) {
       console.error('Error initiating connection:', error);
-      setConnectionStatus(prev => ({
-        ...prev,
-        isConnecting: false,
-        error: error.message
-      }));
+      // Use delay logic for error status
+      updateStatusWithDelay('failed', { error: error.message });
     }
-  }, [userId, sessionId]);
+  }, [userId, sessionId, updateStatusWithDelay]);
 
   // Disconnect session
   const disconnectSession = useCallback(async () => {
@@ -232,18 +228,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       
       if (result.success) {
         console.log('✅ Session disconnected successfully:', result);
-        setConnectionStatus(prev => ({
-          ...prev,
-          isConnected: false,
-          isConnecting: false,
-          status: 'disconnected',
-          lastUpdate: new Date().toISOString()
-        }));
+        // Use delay logic for disconnect status
+        updateStatusWithDelay('disconnected', {});
       }
     } catch (error) {
       console.error('Error disconnecting session:', error);
     }
-  }, [userId, sessionId]);
+  }, [userId, sessionId, updateStatusWithDelay]);
 
   // Get current status - using the same accurate logic as send message screen
   const getCurrentStatus = useCallback(async () => {
