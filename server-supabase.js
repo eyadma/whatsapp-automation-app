@@ -1078,11 +1078,39 @@ async function connectWhatsApp(userId, sessionId = null) {
           dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
         }
         
-        const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+        const disconnectCode = lastDisconnect?.error?.output?.statusCode;
+        const isConflictError = disconnectCode === 440 && lastDisconnect?.error?.message?.includes('conflict');
+        const isLoggedOut = disconnectCode === DisconnectReason.loggedOut;
+        
+        // Handle conflict errors differently - don't reconnect immediately
+        if (isConflictError) {
+          dbLogger.warn('connection', `Stream conflict detected for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''} - Another device may be connected`, {
+            connectionId,
+            disconnectCode,
+            disconnectMessage: lastDisconnect?.error?.message,
+            conflictType: lastDisconnect?.error?.data?.content?.[0]?.attrs?.type
+          }, userId, sessionId);
+          
+          // Clean up the connection and notify user
+          removeConnection(userId, sessionId || 'default');
+          
+          // Notify user about conflict via status stream
+          connectionPersistenceManager.notifyStatusChange(userId, sessionId || 'default', 'conflict', {
+            message: 'Another device is connected to this WhatsApp account',
+            conflictType: lastDisconnect?.error?.data?.content?.[0]?.attrs?.type || 'replaced',
+            timestamp: new Date().toISOString()
+          });
+          
+          return; // Don't attempt reconnection for conflict errors
+        }
+        
+        const shouldReconnect = !isLoggedOut && !isConflictError;
         dbLogger.debug('connection', `Reconnection decision: ${shouldReconnect ? 'WILL_RECONNECT' : 'WILL_NOT_RECONNECT'}`, {
           connectionId,
           shouldReconnect,
-          disconnectCode: lastDisconnect?.error?.output?.statusCode,
+          disconnectCode,
+          isConflictError,
+          isLoggedOut,
           loggedOutCode: DisconnectReason.loggedOut
         }, userId, sessionId);
         
@@ -3274,6 +3302,54 @@ app.get('/api/whatsapp/status/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error getting WhatsApp status:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 8.5. Handle WhatsApp Session Conflicts
+app.post('/api/whatsapp/resolve-conflict/:userId/:sessionId', async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    
+    console.log(`🔧 Resolving conflict for user: ${userId}, session: ${sessionId}`);
+    
+    // Clean up any existing connection
+    const existingConnection = getConnection(userId, sessionId);
+    if (existingConnection) {
+      console.log(`🧹 Cleaning up conflicting connection for user: ${userId}, session: ${sessionId}`);
+      removeConnection(userId, sessionId);
+    }
+    
+    // Clean up session files to force fresh connection
+    const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId);
+    if (fs.existsSync(sessionDir)) {
+      console.log(`🗑️ Removing session directory: ${sessionDir}`);
+      try {
+        fs.rmSync(sessionDir, { recursive: true, force: true });
+        console.log(`✅ Session directory removed successfully`);
+      } catch (error) {
+        console.error(`❌ Error removing session directory:`, error);
+      }
+    }
+    
+    // Notify user that conflict has been resolved
+    connectionPersistenceManager.notifyStatusChange(userId, sessionId, 'conflict_resolved', {
+      message: 'Session conflict resolved. You can now reconnect.',
+      timestamp: new Date().toISOString()
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Conflict resolved. You can now reconnect to WhatsApp.',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error resolving conflict:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to resolve conflict',
+      details: error.message
+    });
   }
 });
 

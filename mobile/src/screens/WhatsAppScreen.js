@@ -115,10 +115,51 @@ const WhatsAppScreen = ({ navigation }) => {
     }
   };
 
+  const handleResolveConflict = async () => {
+    if (!selectedSession) {
+      Alert.alert('Error', 'No session selected');
+      return;
+    }
+
+    Alert.alert(
+      'Resolve Session Conflict',
+      'This will clear the conflicting session and allow you to reconnect. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Resolve',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🔧 Resolving conflict for session:', selectedSession.session_id);
+              
+              const response = await fetch(
+                `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`,
+                { method: 'POST' }
+              );
+              
+              if (response.ok) {
+                const result = await response.json();
+                console.log('✅ Conflict resolved:', result);
+                Alert.alert('Success', 'Conflict resolved! You can now reconnect.');
+              } else {
+                throw new Error('Failed to resolve conflict');
+              }
+            } catch (error) {
+              console.error('Error resolving conflict:', error);
+              Alert.alert('Error', 'Failed to resolve conflict. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const getStatusColor = () => {
     if (isConnected) return '#4CAF50';
     if (isConnecting) return '#FF9800';
     if (hasError) return '#F44336';
+    if (connectionStatus?.status === 'conflict') return '#FF5722';
     return '#9E9E9E';
   };
 
@@ -126,6 +167,8 @@ const WhatsAppScreen = ({ navigation }) => {
     if (isConnected) return 'Connected';
     if (isConnecting) return 'Connecting...';
     if (hasError) return 'Error';
+    if (connectionStatus?.status === 'conflict') return 'Session Conflict';
+    if (connectionStatus?.status === 'conflict_resolved') return 'Conflict Resolved';
     return 'Disconnected';
   };
 
@@ -231,16 +274,43 @@ const WhatsAppScreen = ({ navigation }) => {
   const renderConnectionControls = () => {
     if (!selectedSession) return null;
 
+    const isConflict = connectionStatus?.status === 'conflict';
+    const isConflictResolved = connectionStatus?.status === 'conflict_resolved';
+
     return (
       <Card style={styles.card}>
         <Card.Content>
           <Text style={styles.sectionTitle}>Connection Controls:</Text>
           
+          {isConflict && (
+            <View style={styles.conflictContainer}>
+              <Text style={styles.conflictText}>
+                ⚠️ Another device is connected to this WhatsApp account
+              </Text>
+              <CompatibleButton
+                mode="contained"
+                onPress={handleResolveConflict}
+                style={[styles.button, styles.resolveButton]}
+                icon="alert-circle"
+              >
+                Resolve Conflict
+              </CompatibleButton>
+            </View>
+          )}
+          
+          {isConflictResolved && (
+            <View style={styles.conflictResolvedContainer}>
+              <Text style={styles.conflictResolvedText}>
+                ✅ Conflict resolved! You can now reconnect.
+              </Text>
+            </View>
+          )}
+          
           <View style={styles.buttonRow}>
             <CompatibleButton
               mode="contained"
               onPress={handleConnect}
-              disabled={isConnecting || isConnected}
+              disabled={isConnecting || isConnected || isConflict}
               style={[styles.button, styles.connectButton]}
               icon="wifi"
             >
@@ -429,6 +499,37 @@ const styles = StyleSheet.create({
   },
   disconnectButton: {
     borderColor: '#F44336',
+  },
+  resolveButton: {
+    backgroundColor: '#FF5722',
+    marginTop: 8,
+  },
+  conflictContainer: {
+    backgroundColor: '#FFF3E0',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF5722',
+  },
+  conflictText: {
+    fontSize: 14,
+    color: '#E65100',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  conflictResolvedContainer: {
+    backgroundColor: '#E8F5E8',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  conflictResolvedText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    textAlign: 'center',
   },
   qrContainer: {
     alignItems: 'center',

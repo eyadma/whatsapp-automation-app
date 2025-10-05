@@ -262,6 +262,12 @@ class NotificationPermissionService {
       } else if (newStatus === 'connecting' && previousStatus !== 'connecting') {
         title = '🔄 WhatsApp Connecting';
         body = `Session ${sessionId} is establishing connection...`;
+      } else if (newStatus === 'conflict' && previousStatus !== 'conflict') {
+        title = '⚠️ WhatsApp Session Conflict';
+        body = `Another device is connected to session ${sessionId}. Tap to resolve.`;
+      } else if (newStatus === 'conflict_resolved' && previousStatus === 'conflict') {
+        title = '✅ Conflict Resolved';
+        body = `Session ${sessionId} conflict has been resolved. You can reconnect now.`;
       } else {
         // For other status changes, send a general notification
         title = '📱 WhatsApp Status Changed';
