@@ -3386,20 +3386,38 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
     
     console.log(`📊 Getting status for all connections of user: ${userId}`);
     
+    // Debug: Check what connections exist
+    console.log(`🔍 Debug - connections map has user: ${connections.has(userId)}`);
+    if (connections.has(userId)) {
+      const userConnections = connections.get(userId);
+      console.log(`🔍 Debug - user connections:`, Array.from(userConnections.keys()));
+      userConnections.forEach((conn, sessionId) => {
+        console.log(`🔍 Debug - session ${sessionId}:`, {
+          connected: conn.connected,
+          connecting: conn.connecting,
+          hasQR: !!conn.qrCode,
+          connectionType: conn.connectionType
+        });
+      });
+    }
+    
     const statusData = connectionPersistenceManager.getUserConnectionStatuses(userId);
+    console.log(`🔍 Debug - statusData from persistence manager:`, statusData);
     
     // Also get full connection data including QR codes
     const fullConnectionData = {};
-    const userConnections = getUserConnections(userId);
-    userConnections.forEach(conn => {
-      fullConnectionData[conn.sessionId] = {
-        status: statusData[conn.sessionId] || 'disconnected',
-        qrCode: conn.qrCode || null,
-        connected: conn.connected || false,
-        connecting: conn.connecting || false,
-        connectionType: conn.connectionType || 'unknown'
-      };
-    });
+    if (connections.has(userId)) {
+      const userConnections = connections.get(userId);
+      userConnections.forEach((conn, sessionId) => {
+        fullConnectionData[sessionId] = {
+          status: statusData[sessionId] || 'disconnected',
+          qrCode: conn.qrCode || null,
+          connected: conn.connected || false,
+          connecting: conn.connecting || false,
+          connectionType: conn.connectionType || 'unknown'
+        };
+      });
+    }
     
     res.json({
       success: true,
@@ -3438,7 +3456,16 @@ app.post('/api/whatsapp/initiate/:userId/:sessionId?', async (req, res) => {
     }
     
     // Initiate connection (server will maintain it)
+    console.log(`🔧 About to call connectWhatsApp for user: ${userId}, session: ${sessionId}`);
     await connectWhatsApp(userId, sessionId);
+    console.log(`✅ connectWhatsApp completed for user: ${userId}, session: ${sessionId}`);
+    
+    // Debug: Check if connection was added
+    console.log(`🔍 Debug - After connectWhatsApp, connections map has user: ${connections.has(userId)}`);
+    if (connections.has(userId)) {
+      const userConnections = connections.get(userId);
+      console.log(`🔍 Debug - user connections after connectWhatsApp:`, Array.from(userConnections.keys()));
+    }
     
     res.json({
       success: true,
