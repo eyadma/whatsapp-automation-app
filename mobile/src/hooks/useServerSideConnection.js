@@ -44,15 +44,38 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         setAvailableSessions(data.status.sessions);
         
         // Update current session status
-        const currentSessionStatus = data.status.sessions[sessionId];
-        if (currentSessionStatus) {
+        const currentSessionData = data.status.sessions[sessionId];
+        if (currentSessionData) {
+          console.log(`🔍 Hook: Processing status update for ${sessionId}:`, {
+            connected: currentSessionData.connected,
+            connecting: currentSessionData.connecting,
+            status: currentSessionData.status,
+            connectionType: currentSessionData.connectionType,
+            hasQR: !!currentSessionData.qrCode
+          });
+          
+          // Determine the actual status based on connection data
+          let actualStatus = currentSessionData.status;
+          if (currentSessionData.connected) {
+            actualStatus = 'connected';
+          } else if (currentSessionData.connecting) {
+            if (currentSessionData.qrCode) {
+              actualStatus = 'qr_required';
+            } else {
+              actualStatus = 'connecting';
+            }
+          }
+          
+          console.log(`🔍 Hook: Determined actual status: ${actualStatus}`);
+          
           setConnectionStatus(prev => ({
             ...prev,
-            isConnected: currentSessionStatus === 'connected',
-            isConnecting: currentSessionStatus === 'connecting' || currentSessionStatus === 'reconnecting',
-            status: currentSessionStatus,
+            isConnected: currentSessionData.connected || actualStatus === 'connected',
+            isConnecting: currentSessionData.connecting || actualStatus === 'connecting' || actualStatus === 'qr_required',
+            status: actualStatus,
+            qrCode: currentSessionData.qrCode || null,
             lastUpdate: new Date().toISOString(),
-            error: currentSessionStatus === 'failed' ? 'Connection failed' : null
+            error: actualStatus === 'failed' ? 'Connection failed' : null
           }));
         }
       }
