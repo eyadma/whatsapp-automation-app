@@ -29,6 +29,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const previousStatusRef = useRef('disconnected');
   const connectingStartTimeRef = useRef(null);
   const connectingDelayTimeoutRef = useRef(null);
+  const lastNotificationTimeRef = useRef(0);
+  const notificationDebounceTimeoutRef = useRef(null);
+  const isRefreshingRef = useRef(false);
 
   // Show error alert for connection failures
   const showConnectionErrorAlert = useCallback(() => {
@@ -42,6 +45,45 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         }
       ]
     );
+  }, []);
+
+  // Debounced notification function to prevent notification flash
+  const sendDebouncedNotification = useCallback(async (previousStatus, newStatus, sessionId) => {
+    const now = Date.now();
+    const timeSinceLastNotification = now - lastNotificationTimeRef.current;
+    const minNotificationInterval = 3000; // 3 seconds minimum between notifications
+    
+    // Clear any existing debounce timeout
+    if (notificationDebounceTimeoutRef.current) {
+      clearTimeout(notificationDebounceTimeoutRef.current);
+    }
+    
+    // If enough time has passed, send notification immediately
+    if (timeSinceLastNotification >= minNotificationInterval) {
+      console.log(`🔔 Sending immediate notification: ${previousStatus} → ${newStatus}`);
+      const result = await notificationPermissionService.sendConnectionStatusNotification(
+        previousStatus,
+        newStatus,
+        sessionId
+      );
+      lastNotificationTimeRef.current = now;
+      return result;
+    } else {
+      // Debounce the notification
+      console.log(`🔔 Debouncing notification: ${previousStatus} → ${newStatus} (${minNotificationInterval - timeSinceLastNotification}ms remaining)`);
+      return new Promise((resolve) => {
+        notificationDebounceTimeoutRef.current = setTimeout(async () => {
+          console.log(`🔔 Sending debounced notification: ${previousStatus} → ${newStatus}`);
+          const result = await notificationPermissionService.sendConnectionStatusNotification(
+            previousStatus,
+            newStatus,
+            sessionId
+          );
+          lastNotificationTimeRef.current = Date.now();
+          resolve(result);
+        }, minNotificationInterval - timeSinceLastNotification);
+      });
+    }
   }, []);
 
   // Handle status transitions with delay logic
@@ -134,15 +176,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Update status with delay logic
       updateStatusWithDelay(newStatus, data);
       
-      // Send notification for status change
-      if (previousStatus !== newStatus) {
-        console.log(`🔔 Hook: Status changed from ${previousStatus} to ${newStatus}, sending notification...`);
-        const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
-          previousStatus,
-          newStatus,
-          sessionId
-        );
+      // Send notification for status change (but not during refresh)
+      if (previousStatus !== newStatus && !isRefreshingRef.current) {
+        console.log(`🔔 Hook: Status changed from ${previousStatus} to ${newStatus}, sending debounced notification...`);
+        const notificationResult = await sendDebouncedNotification(previousStatus, newStatus, sessionId);
         console.log(`🔔 Hook: Notification result: ${notificationResult}`);
+      } else if (isRefreshingRef.current) {
+        console.log(`🔔 Hook: Status change during refresh (${previousStatus} → ${newStatus}), skipping notification`);
       } else {
         console.log(`🔔 Hook: Status unchanged (${newStatus}), no notification needed`);
       }
@@ -330,26 +370,33 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Update status with delay logic
       updateStatusWithDelay(currentStatus, data);
       
-      // Send notification for status change
-      if (previousStatus !== currentStatus && previousStatus !== 'unknown') {
-        console.log(`🔔 Hook: Status check change from ${previousStatus} to ${currentStatus}, sending notification...`);
-        const notificationResult = await notificationPermissionService.sendConnectionStatusNotification(
-          previousStatus,
-          currentStatus,
-          sessionId
-        );
+      // Send notification for status change (but not during refresh)
+      if (previousStatus !== currentStatus && previousStatus !== 'unknown' && !isRefreshingRef.current) {
+        console.log(`🔔 Hook: Status check change from ${previousStatus} to ${currentStatus}, sending debounced notification...`);
+        const notificationResult = await sendDebouncedNotification(previousStatus, currentStatus, sessionId);
         console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
+      } else if (isRefreshingRef.current) {
+        console.log(`🔔 Hook: Status check change during refresh (${previousStatus} → ${currentStatus}), skipping notification`);
       }
       
     } catch (error) {
       console.error('Error getting current status:', error);
     }
-  }, [userId, sessionId, connectionStatus.status]);
+  }, [userId, sessionId, connectionStatus.status, sendDebouncedNotification]);
 
   // Manual status refresh function
   const refreshStatus = useCallback(async () => {
     console.log('🔄 Manual status refresh requested');
-    await getCurrentStatus();
+    isRefreshingRef.current = true;
+    try {
+      await getCurrentStatus();
+    } finally {
+      // Reset refreshing flag after a delay to allow status to stabilize
+      setTimeout(() => {
+        isRefreshingRef.current = false;
+        console.log('🔄 Refresh flag reset');
+      }, 2000);
+    }
   }, [getCurrentStatus]);
 
   // Initialize on mount
@@ -381,6 +428,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       }
       if (connectingDelayTimeoutRef.current) {
         clearTimeout(connectingDelayTimeoutRef.current);
+      }
+      if (notificationDebounceTimeoutRef.current) {
+        clearTimeout(notificationDebounceTimeoutRef.current);
       }
     };
   }, [stopStatusStream]);
