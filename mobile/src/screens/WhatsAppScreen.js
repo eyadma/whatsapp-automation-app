@@ -86,13 +86,7 @@ const WhatsAppScreen = ({ navigation }) => {
       } else if (realSessions.length === 0) {
         // No sessions available, reset connection status
         setSelectedSession(null);
-        setConnectionStatus({
-          isConnected: false,
-          isConnecting: false,
-          qrCode: null,
-          connectionType: 'unknown',
-        });
-        setPreviousConnectionStatus(null);
+        // Connection status is now handled by the useServerSideConnection hook
       }
     } catch (error) {
       console.error('Error loading sessions:', error);
@@ -175,11 +169,8 @@ const WhatsAppScreen = ({ navigation }) => {
       console.log('📱 Generate QR response:', response);
       
       if (response.data && response.data.qrCode) {
-        setConnectionStatus({
-          isConnected: false,
-          isConnecting: true,
-          qrCode: response.data.qrCode,
-        });
+        // QR code generation is handled by the server-side connection
+        // Connection status is now managed by the useServerSideConnection hook
         
         Alert.alert(t('success'), t('qrCodeGeneratedSuccessfully'));
         
@@ -218,11 +209,7 @@ const WhatsAppScreen = ({ navigation }) => {
               const response = await whatsappAPI.cleanSession(userId);
               console.log('🧹 Clean session response:', response);
               
-              setConnectionStatus({
-                isConnected: false,
-                isConnecting: false,
-                qrCode: null,
-              });
+              // Connection status is now handled by the useServerSideConnection hook
               
               Alert.alert(t('success'), t('sessionCleanedSuccessfully'));
             } catch (error) {
@@ -265,16 +252,10 @@ const WhatsAppScreen = ({ navigation }) => {
 
               if (error) throw error;
 
-              // Reset connection status
-              setConnectionStatus({
-                isConnected: false,
-                isConnecting: false,
-                qrCode: null,
-              });
+              // Connection status is now handled by the useServerSideConnection hook
               
               // Clear selected session
               setSelectedSession(null);
-              setPreviousConnectionStatus(null);
               
               // Reload sessions to update the list
               await loadSessions();
@@ -348,14 +329,7 @@ const WhatsAppScreen = ({ navigation }) => {
                     onPress={async () => {
                       setSessionSwitching(true);
                       setSelectedSession(session);
-                      // Reset connection status when switching sessions
-                      setConnectionStatus({
-                        isConnected: false,
-                        isConnecting: false,
-                        qrCode: null,
-                        connectionType: 'unknown',
-                      });
-                      setPreviousConnectionStatus(null);
+                      // Connection status is now handled by the useServerSideConnection hook
                       
                       // Small delay to show the switching state
                       setTimeout(() => {
