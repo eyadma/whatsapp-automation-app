@@ -62,7 +62,7 @@ const WhatsAppScreen = ({ navigation }) => {
   useEffect(() => {
     if (selectedSession) {
       console.log('🔄 Session changed to:', selectedSession.session_name);
-      checkConnectionStatus(true); // Check status for new session with logging
+      // Connection status is now handled by the useServerSideConnection hook
     }
   }, [selectedSession]);
 
@@ -183,15 +183,8 @@ const WhatsAppScreen = ({ navigation }) => {
         
         Alert.alert(t('success'), t('qrCodeGeneratedSuccessfully'));
         
-        // Start polling for connection status after QR generation
-        setTimeout(async () => {
-          await checkConnectionStatus(true);
-        }, 3000);
-        
-        // Check again after a bit more time to catch delayed updates
-        setTimeout(async () => {
-          await checkConnectionStatus(true);
-        }, 5000);
+        // Connection status is now handled by the useServerSideConnection hook
+        // No need for manual status checking
       } else {
         Alert.alert(t('error'), t('failedToGenerateQR'));
       }
@@ -499,7 +492,7 @@ const WhatsAppScreen = ({ navigation }) => {
           {/* Utility Buttons */}
           <View style={dynamicStyles.utilityButtonsContainer}>
             <TouchableOpacity
-              onPress={() => checkConnectionStatus(true)}
+              onPress={() => {}} // Status is now handled by the hook
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.refreshButton]}
             >
