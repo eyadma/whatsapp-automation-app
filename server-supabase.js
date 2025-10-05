@@ -854,6 +854,19 @@ async function connectWhatsApp(userId, sessionId = null) {
     let sock;
     try {
       console.log(`🔧 Creating socket for user ${userId}, session: ${sessionId || 'default'}`);
+      
+      // Set initial connection status to connecting
+      const initialConnectionData = {
+        userId,
+        sessionId: sessionId || 'default',
+        status: 'connecting',
+        connectionId,
+        startTime: new Date().toISOString(),
+        reconnectAttempts: 0
+      };
+      connectionPersistenceManager.addConnection(userId, sessionId || 'default', initialConnectionData);
+      console.log(`🔄 Set initial connecting status for user ${userId}`);
+      
       const socketConfig = {
         auth: state,
         browser: ['WhatsApp 24/7 Session', 'Chrome', '1.0.0'],
@@ -1043,6 +1056,20 @@ async function connectWhatsApp(userId, sessionId = null) {
         }, userId, sessionId);
         
         setConnection(userId, sessionId || 'default', connectionData);
+        
+        // Update persistence manager with QR status
+        const qrConnectionData = {
+          userId,
+          sessionId: sessionId || 'default',
+          status: 'qr_required',
+          connectionId,
+          qrCode: qr,
+          startTime: new Date().toISOString(),
+          reconnectAttempts: 0
+        };
+        connectionPersistenceManager.addConnection(userId, sessionId || 'default', qrConnectionData);
+        console.log(`🔄 Updated persistence manager with QR status for user ${userId}`);
+        
         dbLogger.debug('connection', `Connection set for user ${userId}`, { connectionId }, userId, sessionId);
       }
       
@@ -1234,11 +1261,17 @@ async function connectWhatsApp(userId, sessionId = null) {
             
             console.log(`🔍 Connected for user ${userId}`);
             
-            // Add to 24/7 persistence manager after a delay to ensure connection is stable
-            setTimeout(() => {
-              connectionPersistenceManager.addConnection(userId, sessionId || 'default', connectionData);
-              console.log(`🔄 Added to persistence manager for user ${userId}`);
-            }, 10000); // Wait 10 seconds before adding to persistence manager
+            // Add to 24/7 persistence manager immediately when connection is established
+            const connectedStatusData = {
+              userId,
+              sessionId: sessionId || 'default',
+              status: 'connected',
+              connectionId,
+              startTime: new Date().toISOString(),
+              reconnectAttempts: 0
+            };
+            connectionPersistenceManager.addConnection(userId, sessionId || 'default', connectedStatusData);
+            console.log(`🔄 Added to persistence manager for user ${userId}`);
             
             // Update Supabase
             try {
@@ -3355,11 +3388,24 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
     
     const statusData = connectionPersistenceManager.getUserConnectionStatuses(userId);
     
+    // Also get full connection data including QR codes
+    const fullConnectionData = {};
+    const userConnections = getUserConnections(userId);
+    userConnections.forEach(conn => {
+      fullConnectionData[conn.sessionId] = {
+        status: statusData[conn.sessionId] || 'disconnected',
+        qrCode: conn.qrCode || null,
+        connected: conn.connected || false,
+        connecting: conn.connecting || false,
+        connectionType: conn.connectionType || 'unknown'
+      };
+    });
+    
     res.json({
       success: true,
       userId,
       timestamp: new Date().toISOString(),
-      ...statusData
+      sessions: fullConnectionData
     });
   } catch (error) {
     console.error(`❌ Error getting status for user ${req.params.userId}:`, error);

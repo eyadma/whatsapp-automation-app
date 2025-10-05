@@ -56,6 +56,23 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           }));
         }
       }
+    } else if (data.sessions) {
+      // Direct sessions data from status-all endpoint
+      setAvailableSessions(data.sessions);
+      
+      // Update current session status
+      const currentSessionData = data.sessions[sessionId];
+      if (currentSessionData) {
+        setConnectionStatus(prev => ({
+          ...prev,
+          isConnected: currentSessionData.connected || currentSessionData.status === 'connected',
+          isConnecting: currentSessionData.connecting || currentSessionData.status === 'connecting' || currentSessionData.status === 'reconnecting',
+          status: currentSessionData.status,
+          qrCode: currentSessionData.qrCode || null,
+          lastUpdate: new Date().toISOString(),
+          error: currentSessionData.status === 'failed' ? 'Connection failed' : null
+        }));
+      }
     } else if (data.type === 'connection_status') {
       setStatusStreamActive(data.status === 'connected');
       
