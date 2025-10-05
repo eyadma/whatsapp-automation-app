@@ -189,7 +189,7 @@ class ServerSideConnectionAPI {
 
   // Check if status stream is active
   isStatusStreamActive() {
-    return (this.eventSource && this.eventSource.readyState === EventSource.OPEN) || 
+    return (this.eventSource && this.eventSource.readyState === 1) || 
            (this.pollingInterval !== null);
   }
 
@@ -202,11 +202,11 @@ class ServerSideConnectionAPI {
     if (!this.eventSource) return 'not_initialized';
     
     switch (this.eventSource.readyState) {
-      case EventSource.CONNECTING:
+      case 0: // CONNECTING
         return 'connecting';
-      case EventSource.OPEN:
+      case 1: // OPEN
         return 'open';
-      case EventSource.CLOSED:
+      case 2: // CLOSED
         return 'closed';
       default:
         return 'unknown';

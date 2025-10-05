@@ -11,7 +11,7 @@ class WhatsAppStatusService {
     this.statusCache = new Map();
   }
 
-  // Start monitoring WhatsApp status for a user
+  // Start monitoring WhatsApp status for a user (using polling for React Native)
   async startMonitoring(userId) {
     if (this.isMonitoring && this.currentUserId === userId) {
       return; // Already monitoring this user
@@ -22,37 +22,28 @@ class WhatsAppStatusService {
     this.isMonitoring = true;
 
     try {
-      // Set up Server-Sent Events connection
-      const baseUrl = await this.getBaseUrl();
-      const eventSourceUrl = `${baseUrl}/api/whatsapp/status-stream/${userId}`;
+      console.log('📡 Starting WhatsApp status polling for React Native');
       
-      this.eventSource = new EventSource(eventSourceUrl);
+      // Send initial connection status
+      this.notifyListeners('connection_status', { status: 'connected' });
       
-      this.eventSource.onopen = () => {
-        console.log('📡 WhatsApp status stream connected');
-        this.notifyListeners('connection_status', { status: 'connected' });
-      };
-
-      this.eventSource.onmessage = (event) => {
+      // Start polling every 10 seconds
+      this.pollingInterval = setInterval(async () => {
         try {
-          const data = JSON.parse(event.data);
-          this.handleStatusUpdate(data);
-        } catch (error) {
-          console.error('Error parsing status update:', error);
-        }
-      };
-
-      this.eventSource.onerror = (error) => {
-        console.error('📡 WhatsApp status stream error:', error);
-        this.notifyListeners('connection_status', { status: 'error', error });
-        
-        // Attempt to reconnect after 5 seconds
-        setTimeout(() => {
-          if (this.isMonitoring) {
-            this.startMonitoring(userId);
+          const status = await this.checkStatus(userId);
+          if (status) {
+            this.handleStatusUpdate({
+              type: 'status',
+              userId,
+              status: status,
+              timestamp: new Date().toISOString()
+            });
           }
-        }, 5000);
-      };
+        } catch (error) {
+          console.error('📡 Status polling error:', error);
+          this.notifyListeners('connection_status', { status: 'error', error: error.message });
+        }
+      }, 10000); // Poll every 10 seconds
 
     } catch (error) {
       console.error('Error starting WhatsApp status monitoring:', error);
@@ -66,6 +57,12 @@ class WhatsAppStatusService {
       this.eventSource.close();
       this.eventSource = null;
     }
+    
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+    
     this.isMonitoring = false;
     this.currentUserId = null;
     console.log('📡 WhatsApp status monitoring stopped');
@@ -208,14 +205,22 @@ class WhatsAppStatusService {
     try {
       const baseUrl = await this.getBaseUrl();
       const url = sessionId 
-        ? `${baseUrl}/api/whatsapp/status/${userId}?sessionId=${sessionId}`
-        : `${baseUrl}/api/whatsapp/status/${userId}`;
+        ? `${baseUrl}/api/whatsapp/status/${userId}/${sessionId}`
+        : `${baseUrl}/api/whatsapp/status-all/${userId}`;
+      
+      console.log('🔍 Checking status at URL:', url);
       
       const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('📊 Status check response:', data);
       
       if (data.success) {
-        return data.data;
+        return data;
       } else {
         throw new Error(data.error || 'Failed to get status');
       }
