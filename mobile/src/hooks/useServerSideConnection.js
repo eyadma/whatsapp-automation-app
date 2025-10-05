@@ -33,6 +33,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const notificationDebounceTimeoutRef = useRef(null);
   const isRefreshingRef = useRef(false);
   const lastImportantStatusRef = useRef('disconnected'); // Track last connected/disconnected status
+  const notificationCountRef = useRef(0);
+  const notificationResetTimeRef = useRef(Date.now());
 
   // Show error alert for connection failures
   const showConnectionErrorAlert = useCallback(() => {
@@ -70,7 +72,21 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     
     const now = Date.now();
     const timeSinceLastNotification = now - lastNotificationTimeRef.current;
-    const minNotificationInterval = 3000; // 3 seconds minimum between notifications
+    const minNotificationInterval = 60 * 60 * 1000; // 1 hour minimum between notifications
+    
+    // Reset notification count every hour
+    const timeSinceReset = now - notificationResetTimeRef.current;
+    if (timeSinceReset >= 60 * 60 * 1000) { // 1 hour
+      notificationCountRef.current = 0;
+      notificationResetTimeRef.current = now;
+      console.log('🔔 Notification count reset for new hour');
+    }
+    
+    // Block notifications if we've already sent one this hour
+    if (notificationCountRef.current >= 1) {
+      console.log(`🔔 Notification blocked - already sent ${notificationCountRef.current} notification(s) this hour`);
+      return;
+    }
     
     // Clear any existing debounce timeout
     if (notificationDebounceTimeoutRef.current) {
@@ -86,6 +102,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         sessionId
       );
       lastNotificationTimeRef.current = now;
+      notificationCountRef.current += 1;
+      console.log(`🔔 Notification count: ${notificationCountRef.current}/1 this hour`);
       return result;
     } else {
       // Debounce the notification
@@ -99,6 +117,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             sessionId
           );
           lastNotificationTimeRef.current = Date.now();
+          notificationCountRef.current += 1;
+          console.log(`🔔 Notification count: ${notificationCountRef.current}/1 this hour`);
           resolve(result);
         }, minNotificationInterval - timeSinceLastNotification);
       });
