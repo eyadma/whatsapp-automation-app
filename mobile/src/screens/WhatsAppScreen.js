@@ -28,12 +28,14 @@ const WhatsAppScreen = ({ navigation }) => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sessionSwitching, setSessionSwitching] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   
   // Use the new server-side connection hook
   const {
     connectionStatus,
     initiateConnection,
     disconnectSession,
+    refreshStatus,
     isConnected,
     isConnecting,
     hasError,
@@ -172,6 +174,64 @@ const WhatsAppScreen = ({ navigation }) => {
     );
   };
 
+  const handleClearSession = async () => {
+    if (!selectedSession) {
+      Alert.alert(t('error'), t('noSessionSelectedError'));
+      return;
+    }
+
+    Alert.alert(
+      t('cleanSession'),
+      t('cleanSessionMessage'),
+      [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('cleanSessionButton'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🧹 Cleaning session:', selectedSession.session_id);
+              
+              // Call the server to clean the session
+              const response = await fetch(
+                `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`,
+                { method: 'POST' }
+              );
+              
+              if (response.ok) {
+                const result = await response.json();
+                console.log('✅ Session cleaned:', result);
+                Alert.alert(t('success'), t('sessionCleanedSuccessfully'));
+                
+                // Reload sessions to refresh the list
+                await loadSessions();
+              } else {
+                throw new Error('Failed to clean session');
+              }
+            } catch (error) {
+              console.error('❌ Error cleaning session:', error);
+              Alert.alert(t('error'), t('failedToCleanSession').replace('{error}', error.message));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRefreshStatus = async () => {
+    try {
+      console.log('🔄 Manually refreshing status...');
+      
+      // Use the hook's refreshStatus function
+      await refreshStatus();
+      
+      // Also reload sessions to get fresh data
+      await loadSessions();
+    } catch (error) {
+      console.error('Error refreshing status:', error);
+    }
+  };
+
   const getStatusColor = () => {
     if (!selectedSession) return '#999';
     if (sessionSwitching) return '#FFA500';
@@ -308,6 +368,41 @@ const WhatsAppScreen = ({ navigation }) => {
               <Text style={dynamicStyles.selectedSessionDetails}>
                 {selectedSession.phone_number ? `${t('phone')}: ${selectedSession.phone_number}` : t('noPhoneNumber')}
               </Text>
+              
+              {/* Debug Info Toggle */}
+              <TouchableOpacity
+                onPress={() => setShowDebugInfo(!showDebugInfo)}
+                style={dynamicStyles.debugToggle}
+              >
+                <Text style={dynamicStyles.debugToggleText}>
+                  {showDebugInfo ? 'Hide Debug Info' : 'Show Debug Info'}
+                </Text>
+              </TouchableOpacity>
+              
+              {/* Debug Information */}
+              {showDebugInfo && (
+                <View style={dynamicStyles.debugContainer}>
+                  <Text style={dynamicStyles.debugTitle}>Debug Information:</Text>
+                  <Text style={dynamicStyles.debugText}>
+                    Hook Status: {connectionStatus?.status || 'unknown'}
+                  </Text>
+                  <Text style={dynamicStyles.debugText}>
+                    Hook Connected: {isConnected ? 'true' : 'false'}
+                  </Text>
+                  <Text style={dynamicStyles.debugText}>
+                    Hook Connecting: {isConnecting ? 'true' : 'false'}
+                  </Text>
+                  <Text style={dynamicStyles.debugText}>
+                    Hook Error: {hasError ? 'true' : 'false'}
+                  </Text>
+                  <Text style={dynamicStyles.debugText}>
+                    Last Update: {lastUpdate || 'never'}
+                  </Text>
+                  <Text style={dynamicStyles.debugText}>
+                    Available Sessions: {Object.keys(availableSessions).length}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -393,7 +488,7 @@ const WhatsAppScreen = ({ navigation }) => {
           {/* Utility Buttons */}
           <View style={dynamicStyles.utilityButtonsContainer}>
             <TouchableOpacity
-              onPress={() => loadSessions()}
+              onPress={handleRefreshStatus}
               disabled={loading || !selectedSession}
               style={[dynamicStyles.customButton, dynamicStyles.refreshButton]}
             >
@@ -406,6 +501,24 @@ const WhatsAppScreen = ({ navigation }) => {
                   ]}
                 >
                   {t('refreshStatus')}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              onPress={handleClearSession}
+              disabled={loading || !selectedSession}
+              style={[dynamicStyles.customButton, dynamicStyles.cleanSessionButton]}
+            >
+              <Ionicons name="refresh-circle" size={14} color="#FF6B35" style={{ marginRight: 4 }} />
+              <View style={dynamicStyles.textContainer}>
+                <Text
+                  style={[
+                    dynamicStyles.customButtonText,
+                    { writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr' }
+                  ]}
+                >
+                  {t('cleanSession')}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -508,6 +621,34 @@ const createStyles = (theme) => StyleSheet.create({
   selectedSessionDetails: {
     fontSize: 14,
     color: theme.colors.onPrimaryContainer,
+  },
+  debugToggle: {
+    marginTop: 8,
+    padding: 4,
+  },
+  debugToggleText: {
+    fontSize: 12,
+    color: theme.colors.onPrimaryContainer,
+    textDecorationLine: 'underline',
+  },
+  debugContainer: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.outline,
+  },
+  debugTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: theme.colors.onSurface,
+    marginBottom: 4,
+  },
+  debugText: {
+    fontSize: 10,
+    color: theme.colors.onSurface,
+    marginBottom: 2,
   },
   conflictContainer: {
     backgroundColor: '#FFF3E0',
@@ -616,6 +757,9 @@ const createStyles = (theme) => StyleSheet.create({
   },
   refreshButton: {
     borderColor: '#007AFF',
+  },
+  cleanSessionButton: {
+    borderColor: '#FF6B35',
   },
   manageSessionsButton: {
     borderColor: '#007AFF',

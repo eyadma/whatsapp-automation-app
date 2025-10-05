@@ -186,21 +186,29 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     if (!userId) return;
     
     try {
+      console.log('🔍 Getting current status for user:', userId, 'session:', sessionId);
       const result = await serverSideConnectionAPI.getStatusAll(userId);
+      
+      console.log('📊 Status API result:', result);
       
       if (result.success) {
         setAvailableSessions(result.sessions || {});
         
         const currentSessionStatus = result.sessions?.[sessionId];
+        console.log(`🔄 Hook: Current session status for ${sessionId}:`, currentSessionStatus);
+        
         if (currentSessionStatus) {
           const previousStatus = previousStatusRef.current;
+          
+          console.log(`🔄 Hook: Updating status from ${previousStatus} to ${currentSessionStatus}`);
           
           setConnectionStatus(prev => ({
             ...prev,
             isConnected: currentSessionStatus === 'connected',
             isConnecting: currentSessionStatus === 'connecting' || currentSessionStatus === 'reconnecting',
             status: currentSessionStatus,
-            lastUpdate: new Date().toISOString()
+            lastUpdate: new Date().toISOString(),
+            error: currentSessionStatus === 'failed' ? 'Connection failed' : null
           }));
           
           // Send notification for status change
@@ -214,12 +222,22 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
           }
           previousStatusRef.current = currentSessionStatus;
+        } else {
+          console.log(`⚠️ Hook: No status found for session ${sessionId} in available sessions:`, Object.keys(result.sessions || {}));
         }
+      } else {
+        console.log('⚠️ Hook: Status API returned unsuccessful result:', result);
       }
     } catch (error) {
       console.error('Error getting current status:', error);
     }
   }, [userId, sessionId]);
+
+  // Manual status refresh function
+  const refreshStatus = useCallback(async () => {
+    console.log('🔄 Manual status refresh requested');
+    await getCurrentStatus();
+  }, [getCurrentStatus]);
 
   // Initialize on mount
   useEffect(() => {
@@ -261,6 +279,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     initiateConnection,
     disconnectSession,
     getCurrentStatus,
+    refreshStatus,
     startStatusStream,
     stopStatusStream,
     
