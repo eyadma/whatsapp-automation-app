@@ -278,6 +278,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // WhatsApp connection management - Updated for multi-session support
 const connections = new Map(); // userId -> Map of sessionId -> connection
 const userSessions = new Map(); // userId -> Set of active sessionIds
+const connectionLocks = new Map(); // connectionKey -> connectionId (prevents multiple simultaneous connections)
 
 // Background message processing management
 const backgroundProcesses = new Map();
@@ -801,6 +802,29 @@ async function connectWhatsApp(userId, sessionId = null) {
       throw new Error('userId is required');
     }
     
+    // Add connection lock to prevent multiple simultaneous connections
+    const connectionKey = `${userId}_${sessionId || 'default'}`;
+    if (connectionLocks.has(connectionKey)) {
+      dbLogger.info('connection', `Connection already in progress for ${connectionKey}, waiting...`, { connectionId, connectionKey }, userId, sessionId);
+      // Wait for existing connection to complete
+      let attempts = 0;
+      while (connectionLocks.has(connectionKey) && attempts < 30) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        attempts++;
+      }
+      
+      // Check if connection was established while waiting
+      const establishedConnection = getConnection(userId, sessionId);
+      if (establishedConnection && establishedConnection.connected) {
+        dbLogger.info('connection', `Connection established while waiting for lock`, { connectionId }, userId, sessionId);
+        return establishedConnection;
+      }
+    }
+    
+    // Set connection lock
+    connectionLocks.set(connectionKey, connectionId);
+    dbLogger.info('connection', `Set connection lock for ${connectionKey}`, { connectionId, connectionKey }, userId, sessionId);
+    
     const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
     dbLogger.debug('connection', `Session directory: ${sessionDir}`, {
       RAILWAY_VOLUME_MOUNT_PATH: process.env.RAILWAY_VOLUME_MOUNT_PATH,
@@ -1143,13 +1167,29 @@ async function connectWhatsApp(userId, sessionId = null) {
         
         if (shouldReconnect) {
           dbLogger.info('connection', `Attempting 24/7 reconnect for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, { connectionId }, userId, sessionId);
-          // Aggressive 24/7 reconnection: 2s, 5s, 10s, 15s, then every 30s
-          const reconnectDelays = [2000, 5000, 10000, 15000, 30000];
+          // Less aggressive reconnection to prevent conflicts: 5s, 15s, 30s, 60s, then every 2 minutes
+          const reconnectDelays = [5000, 15000, 30000, 60000, 120000];
           let reconnectAttempts = 0;
           
           const attemptReconnect = () => {
             reconnectAttempts++;
             const delay = reconnectDelays[Math.min(reconnectAttempts - 1, reconnectDelays.length - 1)];
+            
+            // Check if there's already a connection in progress
+            const connectionKey = `${userId}_${sessionId || 'default'}`;
+            if (connectionLocks.has(connectionKey)) {
+              dbLogger.info('connection', `Skipping reconnection attempt ${reconnectAttempts} - connection already in progress for ${connectionKey}`, {
+                connectionId,
+                userId,
+                sessionId: sessionId || 'default',
+                attempt: reconnectAttempts,
+                connectionKey
+              }, userId, sessionId);
+              
+              // Try again after the delay
+              setTimeout(attemptReconnect, delay);
+              return;
+            }
             
             dbLogger.info('connection', `24/7 Reconnection attempt ${reconnectAttempts} for user ${userId} in ${delay/1000}s`, {
               connectionId,
@@ -1704,6 +1744,14 @@ async function connectWhatsApp(userId, sessionId = null) {
     });
 
     const totalConnectionTime = Date.now() - startTime;
+    
+    // Clean up connection lock on successful connection
+    const successConnectionKey = `${userId}_${sessionId || 'default'}`;
+    if (connectionLocks.has(successConnectionKey)) {
+      connectionLocks.delete(successConnectionKey);
+      dbLogger.info('connection', `Cleared connection lock for ${successConnectionKey} after successful connection`, { connectionId, connectionKey: successConnectionKey }, userId, sessionId);
+    }
+    
     dbLogger.info('connection', `WhatsApp connection setup completed for user: ${userId}`, {
       connectionId,
       userId,
@@ -1714,6 +1762,14 @@ async function connectWhatsApp(userId, sessionId = null) {
     return sock;
   } catch (error) {
     const totalConnectionTime = Date.now() - startTime;
+    
+    // Clean up connection lock
+    const errorConnectionKey = `${userId}_${sessionId || 'default'}`;
+    if (connectionLocks.has(errorConnectionKey)) {
+      connectionLocks.delete(errorConnectionKey);
+      dbLogger.info('connection', `Cleared connection lock for ${errorConnectionKey} due to error`, { connectionId, connectionKey: errorConnectionKey }, userId, sessionId);
+    }
+    
     dbLogger.error('connection', `Error connecting WhatsApp for user: ${userId} - ${error.message}`, {
       connectionId,
       userId,
