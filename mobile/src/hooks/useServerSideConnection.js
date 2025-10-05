@@ -32,6 +32,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const lastNotificationTimeRef = useRef(0);
   const notificationDebounceTimeoutRef = useRef(null);
   const isRefreshingRef = useRef(false);
+  const lastImportantStatusRef = useRef('disconnected'); // Track last connected/disconnected status
 
   // Show error alert for connection failures
   const showConnectionErrorAlert = useCallback(() => {
@@ -47,8 +48,26 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     );
   }, []);
 
-  // Debounced notification function to prevent notification flash
+  // Debounced notification function - only for connected/disconnected status changes
   const sendDebouncedNotification = useCallback(async (previousStatus, newStatus, sessionId) => {
+    // Only send notifications for connected and disconnected status changes
+    const importantStatuses = ['connected', 'disconnected'];
+    
+    if (!importantStatuses.includes(newStatus)) {
+      console.log(`🔔 Skipping notification for ${newStatus} - only notifying for connected/disconnected`);
+      return;
+    }
+    
+    // Check if this is a real change to an important status
+    const lastImportantStatus = lastImportantStatusRef.current;
+    if (newStatus === lastImportantStatus) {
+      console.log(`🔔 Skipping notification - ${newStatus} is same as last important status`);
+      return;
+    }
+    
+    // Update the last important status
+    lastImportantStatusRef.current = newStatus;
+    
     const now = Date.now();
     const timeSinceLastNotification = now - lastNotificationTimeRef.current;
     const minNotificationInterval = 3000; // 3 seconds minimum between notifications
@@ -60,9 +79,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     
     // If enough time has passed, send notification immediately
     if (timeSinceLastNotification >= minNotificationInterval) {
-      console.log(`🔔 Sending immediate notification: ${previousStatus} → ${newStatus}`);
+      console.log(`🔔 Sending immediate notification: ${lastImportantStatus} → ${newStatus}`);
       const result = await notificationPermissionService.sendConnectionStatusNotification(
-        previousStatus,
+        lastImportantStatus,
         newStatus,
         sessionId
       );
@@ -70,12 +89,12 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       return result;
     } else {
       // Debounce the notification
-      console.log(`🔔 Debouncing notification: ${previousStatus} → ${newStatus} (${minNotificationInterval - timeSinceLastNotification}ms remaining)`);
+      console.log(`🔔 Debouncing notification: ${lastImportantStatus} → ${newStatus} (${minNotificationInterval - timeSinceLastNotification}ms remaining)`);
       return new Promise((resolve) => {
         notificationDebounceTimeoutRef.current = setTimeout(async () => {
-          console.log(`🔔 Sending debounced notification: ${previousStatus} → ${newStatus}`);
+          console.log(`🔔 Sending debounced notification: ${lastImportantStatus} → ${newStatus}`);
           const result = await notificationPermissionService.sendConnectionStatusNotification(
-            previousStatus,
+            lastImportantStatus,
             newStatus,
             sessionId
           );
@@ -404,6 +423,14 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     if (userId) {
       console.log('🚀 Initializing server-side connection for user:', userId);
       
+      // Initialize last important status based on current connection status
+      if (connectionStatus.isConnected) {
+        lastImportantStatusRef.current = 'connected';
+      } else {
+        lastImportantStatusRef.current = 'disconnected';
+      }
+      console.log(`🔔 Initialized last important status: ${lastImportantStatusRef.current}`);
+      
       // Get initial status
       getCurrentStatus();
       
@@ -417,7 +444,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [userId, getCurrentStatus, startStatusStream, stopStatusStream]);
+  }, [userId, getCurrentStatus, startStatusStream, stopStatusStream, connectionStatus.isConnected]);
 
   // Cleanup on unmount
   useEffect(() => {
