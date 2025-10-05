@@ -157,10 +157,16 @@ const connectionPersistenceManager = {
           // Also check if the connection is actually working by testing sendMessage method
           const hasSendMessage = currentConnection.sock && typeof currentConnection.sock.sendMessage === 'function';
           
-          if (wsReady && hasSendMessage) {
+          // Check if connection is actually working by looking at the main connections map
+          const mainConnection = getConnection(userId, sessionId);
+          const isActuallyConnected = mainConnection && mainConnection.connected;
+          
+          if ((wsReady && hasSendMessage) || isActuallyConnected) {
             // Send ping to keep connection alive
             try {
-              await currentConnection.sock.ping();
+              if (currentConnection.sock && typeof currentConnection.sock.ping === 'function') {
+                await currentConnection.sock.ping();
+              }
             } catch (pingError) {
               // Ping might fail but connection could still be working
               console.log(`⚠️ Ping failed but connection might still be working: ${pingError.message}`);
@@ -169,9 +175,9 @@ const connectionPersistenceManager = {
             currentConnection.status = 'connected';
             // Reset failure counter on successful health check
             currentConnection.healthCheckFailures = 0;
-            console.log(`✅ Health check passed for user ${userId} (${wsState})`);
+            console.log(`✅ Health check passed for user ${userId} (${wsState}, actuallyConnected: ${isActuallyConnected})`);
           } else {
-            console.log(`⚠️ Socket not ready for user ${userId} (${wsState}, hasSendMessage: ${hasSendMessage}), but not triggering reconnection yet`);
+            console.log(`⚠️ Socket not ready for user ${userId} (${wsState}, hasSendMessage: ${hasSendMessage}, actuallyConnected: ${isActuallyConnected}), but not triggering reconnection yet`);
             // Don't immediately trigger reconnection - just log the issue
             currentConnection.status = 'checking';
           }
@@ -3540,13 +3546,25 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
     const statusData = connectionPersistenceManager.getUserConnectionStatuses(userId);
     console.log(`🔍 Debug - statusData from persistence manager:`, statusData);
     
-    // Also get full connection data including QR codes
+    // Get full connection data including QR codes - use actual connection status, not persistence manager status
     const fullConnectionData = {};
     if (connections.has(userId)) {
       const userConnections = connections.get(userId);
       userConnections.forEach((conn, sessionId) => {
+        // Determine the actual status based on connection data, not persistence manager
+        let actualStatus = 'disconnected';
+        if (conn.connected) {
+          actualStatus = 'connected';
+        } else if (conn.connecting) {
+          if (conn.qrCode) {
+            actualStatus = 'qr_required';
+          } else {
+            actualStatus = 'connecting';
+          }
+        }
+        
         fullConnectionData[sessionId] = {
-          status: statusData[sessionId] || 'disconnected',
+          status: actualStatus, // Use actual connection status, not persistence manager status
           qrCode: conn.qrCode || null,
           connected: conn.connected || false,
           connecting: conn.connecting || false,
