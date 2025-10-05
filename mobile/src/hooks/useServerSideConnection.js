@@ -230,6 +230,18 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         setTimeout(() => {
           console.log('🔄 Starting delayed status check after connection initiation');
           getCurrentStatus();
+          
+          // Start more frequent polling to catch WebSocket becoming ready
+          const pollInterval = setInterval(() => {
+            console.log('🔄 Frequent polling to catch WebSocket ready state');
+            getCurrentStatus();
+          }, 1000); // Poll every 1 second
+          
+          // Stop frequent polling after 30 seconds
+          setTimeout(() => {
+            clearInterval(pollInterval);
+            console.log('🔄 Stopping frequent polling after 30 seconds');
+          }, 30000);
         }, 2000); // 2 second delay
       } else {
         throw new Error(result.message || 'Failed to initiate connection');
@@ -292,7 +304,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       } else if (data.error) {
         currentStatus = 'error'; // Connection error
       } else if (data.connected && !data.wsReady) {
-        currentStatus = 'disconnected'; // WebSocket not ready
+        // Connection is established but WebSocket not ready yet - still consider it connecting
+        currentStatus = 'connecting';
+        console.log('🔄 Connection established but WebSocket not ready yet, treating as connecting');
       }
       
       console.log(`🔄 Hook: Determined status for ${sessionId}: ${currentStatus} (connected: ${data.connected}, wsReady: ${data.wsReady}, hasQR: ${!!data.qrCode})`);
@@ -304,6 +318,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       if (connectionStatus.status === 'connecting' && currentStatus === 'disconnected') {
         console.log('🔄 Currently connecting, not overriding with disconnected status from server');
         return; // Don't update status, let delay logic handle it
+      }
+      
+      // Special handling: if we're currently "connecting" and server says "connecting" (WebSocket not ready),
+      // this is normal - keep the connecting status
+      if (connectionStatus.status === 'connecting' && currentStatus === 'connecting') {
+        console.log('🔄 Currently connecting, server confirms connecting status (WebSocket not ready yet)');
+        // Don't return here - let the status update proceed to maintain the connecting state
       }
       
       // Update status with delay logic
