@@ -29,12 +29,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const previousStatusRef = useRef('disconnected');
   const connectingStartTimeRef = useRef(null);
   const connectingDelayTimeoutRef = useRef(null);
-  const lastNotificationTimeRef = useRef(0);
-  const notificationDebounceTimeoutRef = useRef(null);
   const isRefreshingRef = useRef(false);
-  const lastImportantStatusRef = useRef('disconnected'); // Track last connected/disconnected status
-  const notificationCountRef = useRef(0);
-  const notificationResetTimeRef = useRef(Date.now());
+  const lastKnownStatusRef = useRef('disconnected'); // Track last known status for comparison
+  const statusCheckIntervalRef = useRef(null); // Interval for 10-minute status checks
 
   // Show error alert for connection failures
   const showConnectionErrorAlert = useCallback(() => {
@@ -50,78 +47,83 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     );
   }, []);
 
-  // Debounced notification function - only for connected/disconnected status changes
-  const sendDebouncedNotification = useCallback(async (previousStatus, newStatus, sessionId) => {
-    // Only send notifications for connected and disconnected status changes
-    const importantStatuses = ['connected', 'disconnected'];
+  // Simple notification function for status changes
+  const sendStatusChangeNotification = useCallback(async (previousStatus, newStatus, sessionId) => {
+    console.log(`🔔 Sending status change notification: ${previousStatus} → ${newStatus}`);
+    const result = await notificationPermissionService.sendConnectionStatusNotification(
+      previousStatus,
+      newStatus,
+      sessionId
+    );
+    console.log(`🔔 Notification result: ${result}`);
+    return result;
+  }, []);
+
+  // 10-minute status check function
+  const performStatusCheck = useCallback(async () => {
+    if (!userId || !sessionId) return;
     
-    if (!importantStatuses.includes(newStatus)) {
-      console.log(`🔔 Skipping notification for ${newStatus} - only notifying for connected/disconnected`);
-      return;
+    try {
+      console.log('🔍 Performing 10-minute status check...');
+      
+      // Get current status from server
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/whatsapp/status/${userId}/${sessionId}`);
+      if (!response.ok) {
+        console.error('Failed to get status for check');
+        return;
+      }
+      
+      const data = await response.json();
+      
+      // Determine current status
+      let currentStatus = 'disconnected';
+      if (data.connected && data.wsReady) {
+        currentStatus = 'connected';
+      } else if (data.connecting) {
+        currentStatus = 'connecting';
+      } else if (data.qrCode) {
+        currentStatus = 'qr_required';
+      } else if (data.error) {
+        currentStatus = 'error';
+      }
+      
+      const lastKnownStatus = lastKnownStatusRef.current;
+      
+      console.log(`🔍 Status check: last known = ${lastKnownStatus}, current = ${currentStatus}`);
+      
+      // Only notify if status has changed
+      if (currentStatus !== lastKnownStatus) {
+        console.log(`🔔 Status changed from ${lastKnownStatus} to ${currentStatus} - sending notification`);
+        await sendStatusChangeNotification(lastKnownStatus, currentStatus, sessionId);
+        lastKnownStatusRef.current = currentStatus;
+      } else {
+        console.log(`🔍 Status unchanged (${currentStatus}) - no notification needed`);
+      }
+      
+    } catch (error) {
+      console.error('Error during status check:', error);
+    }
+  }, [userId, sessionId, sendStatusChangeNotification]);
+
+  // Start 10-minute status checking
+  const startStatusChecking = useCallback(() => {
+    if (statusCheckIntervalRef.current) {
+      clearInterval(statusCheckIntervalRef.current);
     }
     
-    // Check if this is a real change to an important status
-    const lastImportantStatus = lastImportantStatusRef.current;
-    if (newStatus === lastImportantStatus) {
-      console.log(`🔔 Skipping notification - ${newStatus} is same as last important status`);
-      return;
-    }
+    console.log('🔄 Starting 10-minute status checking...');
+    statusCheckIntervalRef.current = setInterval(performStatusCheck, 10 * 60 * 1000); // 10 minutes
     
-    // Update the last important status
-    lastImportantStatusRef.current = newStatus;
-    
-    const now = Date.now();
-    const timeSinceLastNotification = now - lastNotificationTimeRef.current;
-    const minNotificationInterval = 60 * 60 * 1000; // 1 hour minimum between notifications
-    
-    // Reset notification count every hour
-    const timeSinceReset = now - notificationResetTimeRef.current;
-    if (timeSinceReset >= 60 * 60 * 1000) { // 1 hour
-      notificationCountRef.current = 0;
-      notificationResetTimeRef.current = now;
-      console.log('🔔 Notification count reset for new hour');
-    }
-    
-    // Block notifications if we've already sent one this hour
-    if (notificationCountRef.current >= 1) {
-      console.log(`🔔 Notification blocked - already sent ${notificationCountRef.current} notification(s) this hour`);
-      return;
-    }
-    
-    // Clear any existing debounce timeout
-    if (notificationDebounceTimeoutRef.current) {
-      clearTimeout(notificationDebounceTimeoutRef.current);
-    }
-    
-    // If enough time has passed, send notification immediately
-    if (timeSinceLastNotification >= minNotificationInterval) {
-      console.log(`🔔 Sending immediate notification: ${lastImportantStatus} → ${newStatus}`);
-      const result = await notificationPermissionService.sendConnectionStatusNotification(
-        lastImportantStatus,
-        newStatus,
-        sessionId
-      );
-      lastNotificationTimeRef.current = now;
-      notificationCountRef.current += 1;
-      console.log(`🔔 Notification count: ${notificationCountRef.current}/1 this hour`);
-      return result;
-    } else {
-      // Debounce the notification
-      console.log(`🔔 Debouncing notification: ${lastImportantStatus} → ${newStatus} (${minNotificationInterval - timeSinceLastNotification}ms remaining)`);
-      return new Promise((resolve) => {
-        notificationDebounceTimeoutRef.current = setTimeout(async () => {
-          console.log(`🔔 Sending debounced notification: ${lastImportantStatus} → ${newStatus}`);
-          const result = await notificationPermissionService.sendConnectionStatusNotification(
-            lastImportantStatus,
-            newStatus,
-            sessionId
-          );
-          lastNotificationTimeRef.current = Date.now();
-          notificationCountRef.current += 1;
-          console.log(`🔔 Notification count: ${notificationCountRef.current}/1 this hour`);
-          resolve(result);
-        }, minNotificationInterval - timeSinceLastNotification);
-      });
+    // Perform initial check
+    performStatusCheck();
+  }, [performStatusCheck]);
+
+  // Stop 10-minute status checking
+  const stopStatusChecking = useCallback(() => {
+    if (statusCheckIntervalRef.current) {
+      console.log('🔄 Stopping 10-minute status checking...');
+      clearInterval(statusCheckIntervalRef.current);
+      statusCheckIntervalRef.current = null;
     }
   }, []);
 
@@ -215,15 +217,12 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Update status with delay logic
       updateStatusWithDelay(newStatus, data);
       
-      // Send notification for status change (but not during refresh)
-      if (previousStatus !== newStatus && !isRefreshingRef.current) {
-        console.log(`🔔 Hook: Status changed from ${previousStatus} to ${newStatus}, sending debounced notification...`);
-        const notificationResult = await sendDebouncedNotification(previousStatus, newStatus, sessionId);
-        console.log(`🔔 Hook: Notification result: ${notificationResult}`);
-      } else if (isRefreshingRef.current) {
-        console.log(`🔔 Hook: Status change during refresh (${previousStatus} → ${newStatus}), skipping notification`);
+      // Update last known status for 10-minute checks (but not during refresh)
+      if (!isRefreshingRef.current) {
+        lastKnownStatusRef.current = newStatus;
+        console.log(`🔍 Updated last known status to: ${newStatus}`);
       } else {
-        console.log(`🔔 Hook: Status unchanged (${newStatus}), no notification needed`);
+        console.log(`🔍 Status change during refresh (${previousStatus} → ${newStatus}), not updating last known status`);
       }
     } else if (data.type === 'status') {
       // Initial status or periodic update
@@ -409,19 +408,18 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Update status with delay logic
       updateStatusWithDelay(currentStatus, data);
       
-      // Send notification for status change (but not during refresh)
-      if (previousStatus !== currentStatus && previousStatus !== 'unknown' && !isRefreshingRef.current) {
-        console.log(`🔔 Hook: Status check change from ${previousStatus} to ${currentStatus}, sending debounced notification...`);
-        const notificationResult = await sendDebouncedNotification(previousStatus, currentStatus, sessionId);
-        console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
-      } else if (isRefreshingRef.current) {
-        console.log(`🔔 Hook: Status check change during refresh (${previousStatus} → ${currentStatus}), skipping notification`);
+      // Update last known status for 10-minute checks (but not during refresh)
+      if (!isRefreshingRef.current) {
+        lastKnownStatusRef.current = currentStatus;
+        console.log(`🔍 Updated last known status to: ${currentStatus}`);
+      } else {
+        console.log(`🔍 Status check change during refresh (${previousStatus} → ${currentStatus}), not updating last known status`);
       }
       
     } catch (error) {
       console.error('Error getting current status:', error);
     }
-  }, [userId, sessionId, connectionStatus.status, sendDebouncedNotification]);
+  }, [userId, sessionId, connectionStatus.status]);
 
   // Manual status refresh function
   const refreshStatus = useCallback(async () => {
@@ -443,44 +441,49 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     if (userId) {
       console.log('🚀 Initializing server-side connection for user:', userId);
       
-      // Initialize last important status based on current connection status
+      // Initialize last known status based on current connection status
       if (connectionStatus.isConnected) {
-        lastImportantStatusRef.current = 'connected';
+        lastKnownStatusRef.current = 'connected';
       } else {
-        lastImportantStatusRef.current = 'disconnected';
+        lastKnownStatusRef.current = 'disconnected';
       }
-      console.log(`🔔 Initialized last important status: ${lastImportantStatusRef.current}`);
+      console.log(`🔍 Initialized last known status: ${lastKnownStatusRef.current}`);
       
       // Get initial status
       getCurrentStatus();
       
       // Start status stream
       startStatusStream();
+      
+      // Start 10-minute status checking
+      startStatusChecking();
     }
     
     return () => {
       stopStatusStream();
+      stopStatusChecking();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [userId, getCurrentStatus, startStatusStream, stopStatusStream, connectionStatus.isConnected]);
+  }, [userId, getCurrentStatus, startStatusStream, stopStatusStream, startStatusChecking, stopStatusChecking, connectionStatus.isConnected]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopStatusStream();
+      stopStatusChecking();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (connectingDelayTimeoutRef.current) {
         clearTimeout(connectingDelayTimeoutRef.current);
       }
-      if (notificationDebounceTimeoutRef.current) {
-        clearTimeout(notificationDebounceTimeoutRef.current);
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
       }
     };
-  }, [stopStatusStream]);
+  }, [stopStatusStream, stopStatusChecking]);
 
   return {
     // Connection state
