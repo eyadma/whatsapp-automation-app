@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import whatsappStatusService from '../services/whatsappStatusService';
+import { useServerSideConnection } from '../hooks/useServerSideConnection';
 
 const WhatsAppStatusNotification = ({ userId, onPress }) => {
   const theme = useTheme();
@@ -10,51 +10,31 @@ const WhatsAppStatusNotification = ({ userId, onPress }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(-100));
   const [pulseAnim] = useState(new Animated.Value(1));
+  
+  // Use the new server-side connection hook
+  const { availableSessions, isConnected, isConnecting } = useServerSideConnection(userId, 'default');
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !availableSessions) return;
 
-    // Start monitoring
-    whatsappStatusService.startMonitoring(userId);
-
-    // Add status listener
-    const statusListener = (eventType, data) => {
-      if (eventType === 'status_change') {
-        setStatus(data);
-        showNotification();
-      } else if (eventType === 'connection_status') {
-        if (data.status === 'error') {
-          hideNotification();
-        }
-      }
-    };
-
-    whatsappStatusService.addStatusListener('main', statusListener);
-
-    // Get initial status
-    whatsappStatusService.checkStatus(userId).then(initialStatus => {
-      if (initialStatus && initialStatus.sessions) {
-        // Show notification if any session is not connected
-        const hasDisconnectedSessions = Object.values(initialStatus.sessions).some(s => s !== 'connected');
-        if (hasDisconnectedSessions) {
-          setStatus({
-            userId,
-            sessionId: 'all',
-            status: 'disconnected',
-            timestamp: new Date().toISOString()
-          });
-          showNotification();
-        }
-      }
-    }).catch(error => {
-      console.error('Error getting initial status:', error);
-    });
-
-    return () => {
-      whatsappStatusService.removeStatusListener('main', statusListener);
-      whatsappStatusService.stopMonitoring();
-    };
-  }, [userId]);
+    // Check if any sessions are not connected
+    const statusValues = Object.values(availableSessions);
+    const hasDisconnectedSessions = statusValues.some(s => !s.connected);
+    const hasConnectingSessions = statusValues.some(s => s.connecting);
+    
+    if (hasDisconnectedSessions || hasConnectingSessions) {
+      const overallStatus = hasConnectingSessions ? 'connecting' : 'disconnected';
+      setStatus({
+        userId,
+        sessionId: 'all',
+        status: overallStatus,
+        timestamp: new Date().toISOString()
+      });
+      showNotification();
+    } else {
+      hideNotification();
+    }
+  }, [userId, availableSessions, isConnected, isConnecting]);
 
   const showNotification = () => {
     setIsVisible(true);
@@ -99,8 +79,8 @@ const WhatsAppStatusNotification = ({ userId, onPress }) => {
         return { icon: 'checkmark-circle', color: '#4CAF50', text: 'Connected' };
       case 'disconnected':
         return { icon: 'close-circle', color: '#F44336', text: 'Disconnected' };
-      case 'reconnecting':
-        return { icon: 'refresh-circle', color: '#FF9800', text: 'Reconnecting...' };
+      case 'connecting':
+        return { icon: 'refresh-circle', color: '#FF9800', text: 'Connecting...' };
       case 'failed':
         return { icon: 'alert-circle', color: '#F44336', text: 'Connection Failed' };
       default:

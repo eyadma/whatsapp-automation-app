@@ -2,66 +2,34 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
-import whatsappStatusService from '../services/whatsappStatusService';
+import { useServerSideConnection } from '../hooks/useServerSideConnection';
 
 const WhatsAppStatusBar = ({ userId, onPress }) => {
   const theme = useTheme();
-  const [statuses, setStatuses] = useState({});
   const [isVisible, setIsVisible] = useState(false);
+  
+  // Use the new server-side connection hook
+  const { availableSessions, isConnected, isConnecting } = useServerSideConnection(userId, 'default');
 
   useEffect(() => {
     if (!userId) return;
 
-    // Start monitoring
-    whatsappStatusService.startMonitoring(userId);
-
-    // Add status listener
-    const statusListener = (eventType, data) => {
-      if (eventType === 'status_change') {
-        setStatuses(prev => ({
-          ...prev,
-          [data.sessionId]: data
-        }));
-        setIsVisible(true);
-      }
-    };
-
-    whatsappStatusService.addStatusListener('statusBar', statusListener);
-
-    // Get initial status
-    whatsappStatusService.checkStatus(userId).then(initialStatus => {
-      if (initialStatus && initialStatus.sessions) {
-        const sessionStatuses = {};
-        Object.entries(initialStatus.sessions).forEach(([sessionId, status]) => {
-          sessionStatuses[sessionId] = {
-            userId,
-            sessionId,
-            status,
-            timestamp: new Date().toISOString()
-          };
-        });
-        setStatuses(sessionStatuses);
-        setIsVisible(true);
-      }
-    }).catch(error => {
-      console.error('Error getting initial status:', error);
-    });
-
-    return () => {
-      whatsappStatusService.removeStatusListener('statusBar', statusListener);
-    };
-  }, [userId]);
+    // Show the status bar if there are any sessions
+    if (availableSessions && Object.keys(availableSessions).length > 0) {
+      setIsVisible(true);
+    }
+  }, [userId, availableSessions]);
 
   const getOverallStatus = () => {
-    const statusValues = Object.values(statuses);
-    if (statusValues.length === 0) return 'unknown';
+    if (!availableSessions || Object.keys(availableSessions).length === 0) return 'unknown';
     
-    const hasConnected = statusValues.some(s => s.status === 'connected');
-    const hasReconnecting = statusValues.some(s => s.status === 'reconnecting');
+    const statusValues = Object.values(availableSessions);
+    const hasConnected = statusValues.some(s => s.connected);
+    const hasConnecting = statusValues.some(s => s.connecting);
     const hasFailed = statusValues.some(s => s.status === 'failed');
     
-    if (hasConnected && !hasReconnecting && !hasFailed) return 'connected';
-    if (hasReconnecting) return 'reconnecting';
+    if (hasConnected && !hasConnecting && !hasFailed) return 'connected';
+    if (hasConnecting) return 'connecting';
     if (hasFailed) return 'failed';
     return 'disconnected';
   };
@@ -84,11 +52,11 @@ const WhatsAppStatusBar = ({ userId, onPress }) => {
           text: 'WhatsApp Disconnected',
           bgColor: '#FFEBEE'
         };
-      case 'reconnecting':
+      case 'connecting':
         return { 
           icon: 'refresh-circle', 
           color: '#FF9800', 
-          text: 'WhatsApp Reconnecting...',
+          text: 'WhatsApp Connecting...',
           bgColor: '#FFF3E0'
         };
       case 'failed':
@@ -109,8 +77,9 @@ const WhatsAppStatusBar = ({ userId, onPress }) => {
   };
 
   const getSessionCount = () => {
-    const totalSessions = Object.keys(statuses).length;
-    const connectedSessions = Object.values(statuses).filter(s => s.status === 'connected').length;
+    if (!availableSessions) return '0/0';
+    const totalSessions = Object.keys(availableSessions).length;
+    const connectedSessions = Object.values(availableSessions).filter(s => s.connected).length;
     return `${connectedSessions}/${totalSessions}`;
   };
 
@@ -132,7 +101,7 @@ const WhatsAppStatusBar = ({ userId, onPress }) => {
       ]}
       onPress={() => {
         if (onPress) {
-          onPress({ statuses, overallStatus });
+          onPress({ availableSessions, overallStatus });
         }
       }}
       activeOpacity={0.8}
