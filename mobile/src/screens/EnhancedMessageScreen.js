@@ -56,15 +56,15 @@ const EnhancedMessageScreen = ({ navigation }) => {
   const [selectedSpeed, setSelectedSpeed] = useState('medium'); // Default to medium
   const [backgroundSending, setBackgroundSending] = useState(true); // Background sending is always on
   const [selectedSessionForSending, setSelectedSessionForSending] = useState(null);
+  const [availableSessions, setAvailableSessions] = useState([]);
   
-  // Use the new server-side connection hook
+  // Use the new server-side connection hook for connection status only
   const {
     connectionStatus,
     initiateConnection,
     isConnected,
     isConnecting,
-    hasError,
-    availableSessions
+    hasError
   } = useServerSideConnection(userId, selectedSessionForSending?.session_id || activeSessionId || 'default');
   
   // Enhanced ETA Management states
