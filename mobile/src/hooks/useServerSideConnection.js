@@ -26,6 +26,78 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const statusUpdateRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const previousStatusRef = useRef('unknown');
+  const connectingStartTimeRef = useRef(null);
+  const connectingDelayTimeoutRef = useRef(null);
+
+  // Handle status transitions with delay logic
+  const updateStatusWithDelay = useCallback((newStatus, statusData) => {
+    const currentStatus = connectionStatus.status;
+    const now = Date.now();
+    
+    // If transitioning to connecting, start the delay timer
+    if (newStatus === 'connecting' && currentStatus !== 'connecting') {
+      connectingStartTimeRef.current = now;
+      console.log('🔄 Starting connecting status with delay');
+      
+      // Clear any existing delay timeout
+      if (connectingDelayTimeoutRef.current) {
+        clearTimeout(connectingDelayTimeoutRef.current);
+      }
+    }
+    
+    // If currently connecting and trying to transition to disconnected
+    if (currentStatus === 'connecting' && newStatus === 'disconnected') {
+      const connectingDuration = now - (connectingStartTimeRef.current || now);
+      const minConnectingDuration = 3000; // 3 seconds minimum
+      
+      if (connectingDuration < minConnectingDuration) {
+        console.log(`🔄 Delaying disconnect transition (${connectingDuration}ms < ${minConnectingDuration}ms)`);
+        
+        // Set a timeout to allow the transition after the minimum duration
+        connectingDelayTimeoutRef.current = setTimeout(() => {
+          console.log('🔄 Minimum connecting duration reached, allowing disconnect');
+          setConnectionStatus(prev => ({
+            ...prev,
+            isConnected: false,
+            isConnecting: false,
+            status: 'disconnected',
+            lastUpdate: new Date().toISOString(),
+            error: null,
+            qrCode: statusData.qrCode || null,
+            wsReady: statusData.wsReady || false,
+            socketState: statusData.socketState || 'unknown'
+          }));
+          previousStatusRef.current = 'disconnected';
+        }, minConnectingDuration - connectingDuration);
+        
+        return; // Don't update status yet
+      }
+    }
+    
+    // If transitioning away from connecting, clear the delay timer
+    if (currentStatus === 'connecting' && newStatus !== 'connecting') {
+      if (connectingDelayTimeoutRef.current) {
+        clearTimeout(connectingDelayTimeoutRef.current);
+        connectingDelayTimeoutRef.current = null;
+      }
+      connectingStartTimeRef.current = null;
+    }
+    
+    // Update status immediately for non-delayed transitions
+    setConnectionStatus(prev => ({
+      ...prev,
+      isConnected: newStatus === 'connected',
+      isConnecting: newStatus === 'connecting' || newStatus === 'reconnecting',
+      status: newStatus,
+      lastUpdate: new Date().toISOString(),
+      error: newStatus === 'failed' ? 'Connection failed' : null,
+      qrCode: statusData.qrCode || null,
+      wsReady: statusData.wsReady || false,
+      socketState: statusData.socketState || 'unknown'
+    }));
+    
+    previousStatusRef.current = newStatus;
+  }, [connectionStatus.status]);
 
   // Handle status updates from server
   const handleStatusUpdate = useCallback(async (data) => {
@@ -35,15 +107,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       const newStatus = data.status;
       const previousStatus = previousStatusRef.current;
       
-      // Update status
-      setConnectionStatus(prev => ({
-        ...prev,
-        isConnected: newStatus === 'connected',
-        isConnecting: newStatus === 'connecting' || newStatus === 'reconnecting',
-        status: newStatus,
-        lastUpdate: new Date().toISOString(),
-        error: newStatus === 'failed' ? 'Connection failed' : null
-      }));
+      // Update status with delay logic
+      updateStatusWithDelay(newStatus, data);
       
       // Send notification for status change
       if (previousStatus !== newStatus) {
@@ -54,7 +119,6 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           sessionId
         );
         console.log(`🔔 Hook: Notification result: ${notificationResult}`);
-        previousStatusRef.current = newStatus;
       } else {
         console.log(`🔔 Hook: Status unchanged (${newStatus}), no notification needed`);
       }
@@ -218,17 +282,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       
       const previousStatus = previousStatusRef.current;
       
-      setConnectionStatus(prev => ({
-        ...prev,
-        isConnected: currentStatus === 'connected',
-        isConnecting: currentStatus === 'connecting' || currentStatus === 'reconnecting',
-        status: currentStatus,
-        lastUpdate: new Date().toISOString(),
-        error: currentStatus === 'failed' ? 'Connection failed' : null,
-        qrCode: data.qrCode || null,
-        wsReady: data.wsReady || false,
-        socketState: data.socketState || 'unknown'
-      }));
+      // Update status with delay logic
+      updateStatusWithDelay(currentStatus, data);
       
       // Send notification for status change
       if (previousStatus !== currentStatus && previousStatus !== 'unknown') {
@@ -240,7 +295,6 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         );
         console.log(`🔔 Hook: Status check notification result: ${notificationResult}`);
       }
-      previousStatusRef.current = currentStatus;
       
     } catch (error) {
       console.error('Error getting current status:', error);
@@ -279,6 +333,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       stopStatusStream();
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (connectingDelayTimeoutRef.current) {
+        clearTimeout(connectingDelayTimeoutRef.current);
       }
     };
   }, [stopStatusStream]);
