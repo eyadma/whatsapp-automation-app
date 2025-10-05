@@ -257,6 +257,7 @@ const WhatsAppScreen = ({ navigation }) => {
     if (!selectedSession) return '#999';
     if (sessionSwitching) return '#FFA500';
     if (connectionStatus?.status === 'conflict') return '#FF5722';
+    if (connectionStatus?.status === 'qr_required') return '#9C27B0'; // Purple for QR code
     if (isConnected) return '#25D366';
     if (isConnecting) return '#FFA500';
     return '#FF3B30';
@@ -267,6 +268,7 @@ const WhatsAppScreen = ({ navigation }) => {
     if (sessionSwitching) return t('switching');
     if (connectionStatus?.status === 'conflict') return 'Session Conflict';
     if (connectionStatus?.status === 'conflict_resolved') return 'Conflict Resolved';
+    if (connectionStatus?.status === 'qr_required') return 'QR Code Required';
     if (isConnected) {
       if (connectionStatus?.connectionType === 'saved_session') {
         return t('whatsappConnected');
@@ -453,7 +455,7 @@ const WhatsAppScreen = ({ navigation }) => {
           )}
 
           {/* QR Code Display */}
-          {connectionStatus?.qrCode && (
+          {(connectionStatus?.qrCode || connectionStatus?.status === 'qr_required') && (
             <View style={dynamicStyles.qrContainer}>
               <Text style={dynamicStyles.qrTitle}>Scan QR Code to Connect</Text>
               <View style={dynamicStyles.qrWrapper}>
@@ -481,7 +483,7 @@ const WhatsAppScreen = ({ navigation }) => {
 
           {/* Action Buttons */}
           <View style={dynamicStyles.buttonContainer}>
-            {!isConnected && !isConnecting && connectionStatus?.status !== 'conflict' ? (
+            {!isConnected && !isConnecting && connectionStatus?.status !== 'conflict' && connectionStatus?.status !== 'qr_required' ? (
               <CompatibleButton
                 mode="contained"
                 onPress={handleConnect}

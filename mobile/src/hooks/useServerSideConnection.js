@@ -208,11 +208,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         currentStatus = 'connected';
       } else if (data.connecting) {
         currentStatus = 'connecting';
+      } else if (data.qrCode) {
+        currentStatus = 'qr_required'; // QR code is available for scanning
       } else if (data.connected && !data.wsReady) {
         currentStatus = 'disconnected'; // WebSocket not ready
       }
       
-      console.log(`🔄 Hook: Determined status for ${sessionId}: ${currentStatus} (connected: ${data.connected}, wsReady: ${data.wsReady})`);
+      console.log(`🔄 Hook: Determined status for ${sessionId}: ${currentStatus} (connected: ${data.connected}, wsReady: ${data.wsReady}, hasQR: ${!!data.qrCode})`);
       
       const previousStatus = previousStatusRef.current;
       
