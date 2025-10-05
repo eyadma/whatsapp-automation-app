@@ -222,8 +222,15 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       
       if (result.success) {
         console.log('✅ Connection initiated successfully:', result);
-        // Use delay logic for status update
-        updateStatusWithDelay(result.status, {});
+        // Don't immediately update status - let polling handle it after delay
+        // The server might return 'disconnected' initially while connection is being established
+        console.log('🔄 Connection initiated, letting polling mechanism handle status updates');
+        
+        // Start status polling after a delay to allow connection to establish
+        setTimeout(() => {
+          console.log('🔄 Starting delayed status check after connection initiation');
+          getCurrentStatus();
+        }, 2000); // 2 second delay
       } else {
         throw new Error(result.message || 'Failed to initiate connection');
       }
@@ -234,7 +241,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Show error alert
       showConnectionErrorAlert();
     }
-  }, [userId, sessionId, updateStatusWithDelay, showConnectionErrorAlert]);
+  }, [userId, sessionId, updateStatusWithDelay, showConnectionErrorAlert, getCurrentStatus]);
 
   // Disconnect session
   const disconnectSession = useCallback(async () => {
@@ -292,6 +299,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       
       const previousStatus = previousStatusRef.current;
       
+      // Special handling: if we're currently "connecting" and server says "disconnected",
+      // don't override immediately - let the delay logic handle it
+      if (connectionStatus.status === 'connecting' && currentStatus === 'disconnected') {
+        console.log('🔄 Currently connecting, not overriding with disconnected status from server');
+        return; // Don't update status, let delay logic handle it
+      }
+      
       // Update status with delay logic
       updateStatusWithDelay(currentStatus, data);
       
@@ -309,7 +323,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     } catch (error) {
       console.error('Error getting current status:', error);
     }
-  }, [userId, sessionId]);
+  }, [userId, sessionId, connectionStatus.status]);
 
   // Manual status refresh function
   const refreshStatus = useCallback(async () => {
