@@ -3434,8 +3434,8 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
     res.json({
       success: true,
       userId,
-      timestamp: new Date().toISOString(),
-      ...statusData
+      sessions: statusData, // Fix: Put status data in 'sessions' property
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error(`❌ Error getting status for user ${req.params.userId}:`, error);
