@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import { AppContext } from '../context/AppContext';
 import { supabase } from '../services/supabase';
+import { resolveApiBaseUrl } from '../services/apiBase';
 import WebCompatibleButton from '../web/components/WebCompatibleButton';
 import useServerSideConnection from '../hooks/useServerSideConnection';
 
@@ -152,17 +153,27 @@ const WhatsAppScreen = ({ navigation }) => {
             try {
               console.log('🔧 Resolving conflict for session:', selectedSession.session_id);
               
-              const response = await fetch(
-                `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`,
-                { method: 'POST' }
-              );
+              // Get the correct base URL using the same logic as other services
+              const baseUrl = await resolveApiBaseUrl();
+              const url = `${baseUrl}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`;
+              
+              console.log('🔧 Resolving conflict at URL:', url);
+              
+              const response = await fetch(url, { 
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              });
               
               if (response.ok) {
                 const result = await response.json();
                 console.log('✅ Conflict resolved:', result);
                 Alert.alert(t('success'), 'Conflict resolved! You can now reconnect.');
               } else {
-                throw new Error('Failed to resolve conflict');
+                const errorText = await response.text();
+                console.error('❌ Server error response:', errorText);
+                throw new Error(`Server error: ${response.status} - ${errorText}`);
               }
             } catch (error) {
               console.error('Error resolving conflict:', error);
@@ -192,11 +203,19 @@ const WhatsAppScreen = ({ navigation }) => {
             try {
               console.log('🧹 Cleaning session:', selectedSession.session_id);
               
+              // Get the correct base URL using the same logic as other services
+              const baseUrl = await resolveApiBaseUrl();
+              const url = `${baseUrl}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`;
+              
+              console.log('🧹 Cleaning session at URL:', url);
+              
               // Call the server to clean the session
-              const response = await fetch(
-                `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/whatsapp/resolve-conflict/${userId}/${selectedSession.session_id}`,
-                { method: 'POST' }
-              );
+              const response = await fetch(url, { 
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+              });
               
               if (response.ok) {
                 const result = await response.json();
@@ -206,7 +225,9 @@ const WhatsAppScreen = ({ navigation }) => {
                 // Reload sessions to refresh the list
                 await loadSessions();
               } else {
-                throw new Error('Failed to clean session');
+                const errorText = await response.text();
+                console.error('❌ Server error response:', errorText);
+                throw new Error(`Server error: ${response.status} - ${errorText}`);
               }
             } catch (error) {
               console.error('❌ Error cleaning session:', error);
