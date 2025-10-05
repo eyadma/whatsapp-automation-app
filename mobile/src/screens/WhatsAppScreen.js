@@ -258,6 +258,7 @@ const WhatsAppScreen = ({ navigation }) => {
     if (sessionSwitching) return '#FFA500';
     if (connectionStatus?.status === 'conflict') return '#FF5722';
     if (connectionStatus?.status === 'qr_required') return '#9C27B0'; // Purple for QR code
+    if (connectionStatus?.status === 'error') return '#F44336'; // Red for error
     if (isConnected) return '#25D366';
     if (isConnecting) return '#FFA500';
     return '#FF3B30';
@@ -269,6 +270,7 @@ const WhatsAppScreen = ({ navigation }) => {
     if (connectionStatus?.status === 'conflict') return 'Session Conflict';
     if (connectionStatus?.status === 'conflict_resolved') return 'Conflict Resolved';
     if (connectionStatus?.status === 'qr_required') return 'QR Code Required';
+    if (connectionStatus?.status === 'error') return 'Connection Error';
     if (isConnected) {
       if (connectionStatus?.connectionType === 'saved_session') {
         return t('whatsappConnected');

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
 import serverSideConnectionAPI from '../services/serverSideConnectionAPI';
 import notificationPermissionService from '../services/notificationPermissionService';
 
@@ -15,7 +16,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   const [connectionStatus, setConnectionStatus] = useState({
     isConnected: false,
     isConnecting: false,
-    status: 'unknown',
+    status: 'disconnected',
     lastUpdate: null,
     error: null
   });
@@ -25,9 +26,23 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
   
   const statusUpdateRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
-  const previousStatusRef = useRef('unknown');
+  const previousStatusRef = useRef('disconnected');
   const connectingStartTimeRef = useRef(null);
   const connectingDelayTimeoutRef = useRef(null);
+
+  // Show error alert for connection failures
+  const showConnectionErrorAlert = useCallback(() => {
+    Alert.alert(
+      'Connection Failed',
+      'Failed to connect. Please clean session and try again.',
+      [
+        {
+          text: 'OK',
+          style: 'default'
+        }
+      ]
+    );
+  }, []);
 
   // Handle status transitions with delay logic
   const updateStatusWithDelay = useCallback((newStatus, statusData) => {
@@ -99,7 +114,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       isConnecting: newStatus === 'connecting' || newStatus === 'reconnecting',
       status: newStatus,
       lastUpdate: new Date().toISOString(),
-      error: newStatus === 'failed' ? 'Connection failed' : null,
+      error: newStatus === 'error' ? (statusData.error || 'Connection failed') : null,
       qrCode: statusData.qrCode || null,
       wsReady: statusData.wsReady || false,
       socketState: statusData.socketState || 'unknown'
@@ -215,9 +230,11 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     } catch (error) {
       console.error('Error initiating connection:', error);
       // Use delay logic for error status
-      updateStatusWithDelay('failed', { error: error.message });
+      updateStatusWithDelay('error', { error: error.message });
+      // Show error alert
+      showConnectionErrorAlert();
     }
-  }, [userId, sessionId, updateStatusWithDelay]);
+  }, [userId, sessionId, updateStatusWithDelay, showConnectionErrorAlert]);
 
   // Disconnect session
   const disconnectSession = useCallback(async () => {
@@ -265,6 +282,8 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         currentStatus = 'connecting';
       } else if (data.qrCode) {
         currentStatus = 'qr_required'; // QR code is available for scanning
+      } else if (data.error) {
+        currentStatus = 'error'; // Connection error
       } else if (data.connected && !data.wsReady) {
         currentStatus = 'disconnected'; // WebSocket not ready
       }
