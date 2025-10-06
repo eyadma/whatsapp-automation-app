@@ -1215,6 +1215,58 @@ async function connectWhatsApp(userId, sessionId = null) {
           return; // Don't proceed with normal disconnect handling
         }
         
+        // Handle device_removed disconnect - session was revoked by user
+        if (lastDisconnect?.error?.output?.statusCode === 401 && 
+            lastDisconnect?.error?.data?.content?.[0]?.attrs?.type === 'device_removed') {
+          console.log(`📱 Device removed for user ${userId} - session was revoked, cleaning up`);
+          dbLogger.warn('connection', `Device removed for user ${userId} - session was revoked by user`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: 'device_removed',
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Clean up session files since they're no longer valid
+          const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
+          try {
+            if (fs.existsSync(sessionDir)) {
+              console.log(`🧹 Cleaning up invalid session files for user: ${userId}, session: ${sessionId || 'default'}`);
+              const files = fs.readdirSync(sessionDir);
+              for (const file of files) {
+                const filePath = path.join(sessionDir, file);
+                if (fs.statSync(filePath).isFile()) {
+                  fs.unlinkSync(filePath);
+                  console.log(`🗑️ Removed invalid session file: ${file}`);
+                }
+              }
+              console.log(`✅ Invalid session files cleaned up for user: ${userId}, session: ${sessionId || 'default'}`);
+            }
+          } catch (cleanupError) {
+            console.error(`❌ Error cleaning up invalid session files for user ${userId}, session ${sessionId || 'default'}:`, cleanupError);
+          }
+          
+          // Update database status to indicate session needs QR scan
+          try {
+            await supabase
+              .from('whatsapp_sessions')
+              .update({ 
+                status: 'qr_required',
+                last_activity: new Date().toISOString()
+              })
+              .eq('session_id', sessionId || 'default')
+              .eq('user_id', userId);
+            console.log(`📊 Updated database status to 'qr_required' for user: ${userId}, session: ${sessionId || 'default'}`);
+          } catch (dbError) {
+            console.error(`❌ Error updating database status for user ${userId}, session ${sessionId || 'default'}:`, dbError);
+          }
+          
+          return; // Don't proceed with normal disconnect handling or reconnection
+        }
+        
         dbLogger.warn('connection', `Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
           connectionId,
           userId,
@@ -1238,12 +1290,19 @@ async function connectWhatsApp(userId, sessionId = null) {
           dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
         }
         
-        const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+        // Don't reconnect for loggedOut or device_removed scenarios
+        const isLoggedOut = (lastDisconnect?.error)?.output?.statusCode === DisconnectReason.loggedOut;
+        const isDeviceRemoved = (lastDisconnect?.error)?.output?.statusCode === 401 && 
+                               lastDisconnect?.error?.data?.content?.[0]?.attrs?.type === 'device_removed';
+        const shouldReconnect = !isLoggedOut && !isDeviceRemoved;
+        
         dbLogger.debug('connection', `Reconnection decision: ${shouldReconnect ? 'WILL_RECONNECT' : 'WILL_NOT_RECONNECT'}`, {
           connectionId,
           shouldReconnect,
           disconnectCode: lastDisconnect?.error?.output?.statusCode,
-          loggedOutCode: DisconnectReason.loggedOut
+          loggedOutCode: DisconnectReason.loggedOut,
+          isLoggedOut,
+          isDeviceRemoved
         }, userId, sessionId);
         
         if (shouldReconnect) {
@@ -1302,7 +1361,11 @@ async function connectWhatsApp(userId, sessionId = null) {
           
           attemptReconnect();
         } else {
-          dbLogger.info('connection', `User ${userId} logged out, removing connection`, { connectionId }, userId, sessionId);
+          if (isDeviceRemoved) {
+            dbLogger.info('connection', `Device removed for user ${userId}, not attempting reconnection`, { connectionId }, userId, sessionId);
+          } else {
+            dbLogger.info('connection', `User ${userId} logged out, removing connection`, { connectionId }, userId, sessionId);
+          }
           removeConnection(userId, sessionId || 'default');
         }
       } 
