@@ -357,6 +357,13 @@ function removeConnection(userId, sessionId) {
       userSessions.delete(userId);
     }
   }
+  
+  // Clear connection lock to prevent conflicts
+  const connectionKey = `${userId}_${sessionId || 'default'}`;
+  if (connectionLocks.has(connectionKey)) {
+    connectionLocks.delete(connectionKey);
+    console.log(`🔒 Cleared connection lock for ${connectionKey} during connection removal`);
+  }
 }
 
 function getUserConnections(userId) {
@@ -810,6 +817,14 @@ async function connectWhatsApp(userId, sessionId = null) {
     
     // Add connection lock to prevent multiple simultaneous connections
     const connectionKey = `${userId}_${sessionId || 'default'}`;
+    
+    // Check if there's already a working connection
+    const existingConnection = getConnection(userId, sessionId);
+    if (existingConnection && existingConnection.connected) {
+      dbLogger.info('connection', `Connection already exists and is connected for ${connectionKey}`, { connectionId, connectionKey }, userId, sessionId);
+      return existingConnection;
+    }
+    
     if (connectionLocks.has(connectionKey)) {
       dbLogger.info('connection', `Connection already in progress for ${connectionKey}, waiting...`, { connectionId, connectionKey }, userId, sessionId);
       // Wait for existing connection to complete
@@ -1176,6 +1191,14 @@ async function connectWhatsApp(userId, sessionId = null) {
           setTimeout(async () => {
             try {
               console.log(`🔄 Creating new socket after restart required for user ${userId}`);
+              
+              // Check if there's already a working connection before creating new one
+              const existingConnection = getConnection(userId, sessionId);
+              if (existingConnection && existingConnection.connected) {
+                console.log(`✅ Connection already exists and is connected, skipping restart for user ${userId}`);
+                return;
+              }
+              
               await connectWhatsApp(userId, sessionId);
             } catch (error) {
               console.error(`❌ Failed to create new socket after restart: ${error.message}`);
@@ -1187,7 +1210,7 @@ async function connectWhatsApp(userId, sessionId = null) {
                 stack: error.stack
               }, userId, sessionId);
             }
-          }, 2000); // Wait 2 seconds before creating new socket
+          }, 3000); // Wait 3 seconds before creating new socket to ensure old connection is fully closed
           
           return; // Don't proceed with normal disconnect handling
         }
