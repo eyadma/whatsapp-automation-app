@@ -69,12 +69,15 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
 
   // Handle connection status changes
   useEffect(() => {
-    console.log('🔄 Connection status changed:', {
+    console.log('🔄 Enhanced WhatsApp Screen - Connection status changed:', {
       isConnected,
       isConnecting: hookIsConnecting,
       hasError,
       qrCode: !!qrCode,
-      status: connectionStatus.status
+      qrCodeLength: qrCode ? qrCode.length : 0,
+      qrCodePreview: qrCode ? qrCode.substring(0, 50) + '...' : null,
+      status: connectionStatus.status,
+      showQRCode: showQRCode
     });
 
     // Update local state based on hook state
@@ -82,8 +85,13 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
     
     // Show QR code when available
     if (qrCode && !isConnected) {
+      console.log('📱 Enhanced WhatsApp Screen - Setting showQRCode to true');
       setShowQRCode(true);
     } else if (isConnected) {
+      console.log('📱 Enhanced WhatsApp Screen - Setting showQRCode to false (connected)');
+      setShowQRCode(false);
+    } else if (!qrCode) {
+      console.log('📱 Enhanced WhatsApp Screen - Setting showQRCode to false (no QR code)');
       setShowQRCode(false);
     }
 
@@ -504,6 +512,15 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
           )}
 
           {/* QR Code Display */}
+          {(() => {
+            console.log('🔍 QR Code Display Check:', {
+              showQRCode,
+              hasQRCode: !!qrCode,
+              qrCodeLength: qrCode ? qrCode.length : 0,
+              shouldShow: showQRCode && qrCode
+            });
+            return null;
+          })()}
           {showQRCode && qrCode && (
             <View style={dynamicStyles.section}>
               <Text style={dynamicStyles.sectionTitle}>Scan QR Code</Text>
