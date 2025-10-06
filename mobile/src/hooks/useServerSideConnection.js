@@ -91,7 +91,9 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           connecting: currentSessionData.connecting,
           status: currentSessionData.status,
           connectionType: currentSessionData.connectionType,
-          hasQR: !!currentSessionData.qrCode
+          hasQR: !!currentSessionData.qrCode,
+          qrCodeLength: currentSessionData.qrCode ? currentSessionData.qrCode.length : 0,
+          qrCodePreview: currentSessionData.qrCode ? currentSessionData.qrCode.substring(0, 50) + '...' : null
         });
         
         // Determine the actual status based on connection data
@@ -108,7 +110,7 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
         
         console.log(`🔍 Hook: Determined actual status: ${actualStatus}`);
         
-        setConnectionStatus(prev => ({
+        const newConnectionStatus = {
           ...prev,
           isConnected: currentSessionData.connected || actualStatus === 'connected',
           isConnecting: currentSessionData.connecting || actualStatus === 'connecting' || actualStatus === 'qr_required',
@@ -116,7 +118,17 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           qrCode: currentSessionData.qrCode || null,
           lastUpdate: new Date().toISOString(),
           error: actualStatus === 'failed' ? 'Connection failed' : null
-        }));
+        };
+        
+        console.log(`🔍 Hook: Setting new connection status:`, {
+          isConnected: newConnectionStatus.isConnected,
+          isConnecting: newConnectionStatus.isConnecting,
+          status: newConnectionStatus.status,
+          hasQRCode: !!newConnectionStatus.qrCode,
+          qrCodeLength: newConnectionStatus.qrCode ? newConnectionStatus.qrCode.length : 0
+        });
+        
+        setConnectionStatus(newConnectionStatus);
       }
     } else if (data.type === 'connection_status') {
       setStatusStreamActive(data.status === 'connected');

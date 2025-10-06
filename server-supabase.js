@@ -3765,27 +3765,102 @@ app.get('/api/whatsapp/status-stream/:userId', async (req, res) => {
       'Access-Control-Allow-Headers': 'Cache-Control'
     });
     
-    // Send initial status
-    const initialStatus = sessionId 
-      ? connectionPersistenceManager.getConnectionStatus(userId, sessionId)
-      : connectionPersistenceManager.getUserConnectionStatuses(userId);
+    // Send initial status with full connection data (including QR codes)
+    let initialStatus;
+    if (sessionId) {
+      // Get specific session status
+      const conn = getConnection(userId, sessionId);
+      if (conn) {
+        let actualStatus = 'disconnected';
+        if (conn.connected) {
+          actualStatus = 'connected';
+        } else if (conn.connecting) {
+          if (conn.qrCode) {
+            actualStatus = 'qr_required';
+          } else {
+            actualStatus = 'connecting';
+          }
+        }
+        initialStatus = {
+          status: actualStatus,
+          qrCode: conn.qrCode || null,
+          connected: conn.connected || false,
+          connecting: conn.connecting || false,
+          connectionType: conn.connectionType || 'unknown'
+        };
+      } else {
+        initialStatus = { status: 'disconnected', qrCode: null, connected: false, connecting: false };
+      }
+    } else {
+      // Get all sessions status
+      const fullConnectionData = {};
+      if (connections.has(userId)) {
+        const userConnections = connections.get(userId);
+        userConnections.forEach((conn, sessionId) => {
+          let actualStatus = 'disconnected';
+          if (conn.connected) {
+            actualStatus = 'connected';
+          } else if (conn.connecting) {
+            if (conn.qrCode) {
+              actualStatus = 'qr_required';
+            } else {
+              actualStatus = 'connecting';
+            }
+          }
+          
+          fullConnectionData[sessionId] = {
+            status: actualStatus,
+            qrCode: conn.qrCode || null,
+            connected: conn.connected || false,
+            connecting: conn.connecting || false,
+            connectionType: conn.connectionType || 'unknown'
+          };
+        });
+      }
+      initialStatus = fullConnectionData;
+    }
     
     res.write(`data: ${JSON.stringify({
       type: 'status',
       userId,
       sessionId,
-      status: initialStatus,
+      sessions: initialStatus,
       timestamp: new Date().toISOString()
     })}\n\n`);
     
     // Add status change listener
     const statusListener = (targetUserId, targetSessionId, status) => {
       if (targetUserId === userId && (!sessionId || targetSessionId === sessionId)) {
+        // Get current connection data including QR code
+        const conn = getConnection(targetUserId, targetSessionId);
+        let connectionData = { status: 'disconnected', qrCode: null, connected: false, connecting: false };
+        
+        if (conn) {
+          let actualStatus = 'disconnected';
+          if (conn.connected) {
+            actualStatus = 'connected';
+          } else if (conn.connecting) {
+            if (conn.qrCode) {
+              actualStatus = 'qr_required';
+            } else {
+              actualStatus = 'connecting';
+            }
+          }
+          
+          connectionData = {
+            status: actualStatus,
+            qrCode: conn.qrCode || null,
+            connected: conn.connected || false,
+            connecting: conn.connecting || false,
+            connectionType: conn.connectionType || 'unknown'
+          };
+        }
+        
         res.write(`data: ${JSON.stringify({
           type: 'status_change',
           userId: targetUserId,
           sessionId: targetSessionId,
-          status,
+          ...connectionData,
           timestamp: new Date().toISOString()
         })}\n\n`);
       }
@@ -3860,6 +3935,16 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
             actualStatus = 'connecting';
           }
         }
+        
+        // Debug logging for QR code issues
+        console.log(`🔍 Status endpoint - session ${sessionId}:`, {
+          connected: conn.connected,
+          connecting: conn.connecting,
+          hasQRCode: !!conn.qrCode,
+          qrCodeLength: conn.qrCode ? conn.qrCode.length : 0,
+          connectionType: conn.connectionType,
+          actualStatus: actualStatus
+        });
         
         fullConnectionData[sessionId] = {
           status: actualStatus, // Use actual connection status, not persistence manager status
