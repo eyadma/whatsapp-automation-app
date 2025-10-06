@@ -1018,16 +1018,20 @@ async function connectWhatsApp(userId, sessionId = null) {
 
     // Session health monitoring
     const sessionStartTime = new Date();
+    let streamErrorCount = 0;
+    const maxStreamErrors = 5; // Allow up to 5 stream errors before considering connection unstable
+    
     const sessionHealthCheck = setInterval(() => {
       const sessionDuration = new Date() - sessionStartTime;
       const hoursAlive = Math.floor(sessionDuration / (1000 * 60 * 60));
       const minutesAlive = Math.floor((sessionDuration % (1000 * 60 * 60)) / (1000 * 60));
       
-      dbLogger.debug('connection', `Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive`, {
+      dbLogger.debug('connection', `Session health check for user ${userId}: ${hoursAlive}h ${minutesAlive}m alive, stream errors: ${streamErrorCount}`, {
         connectionId,
         hoursAlive,
         minutesAlive,
-        sessionDuration: `${hoursAlive}h ${minutesAlive}m`
+        sessionDuration: `${hoursAlive}h ${minutesAlive}m`,
+        streamErrorCount
       }, userId, sessionId);
       
       // Log session milestone every hour
@@ -1037,6 +1041,12 @@ async function connectWhatsApp(userId, sessionId = null) {
           hoursAlive,
           milestone: true
         }, userId, sessionId);
+        
+        // Reset stream error count every hour
+        if (streamErrorCount > 0) {
+          console.log(`🔄 Resetting stream error count for user ${userId} after ${hoursAlive} hours (was ${streamErrorCount})`);
+          streamErrorCount = 0;
+        }
       }
       
       // Check if socket is still healthy
@@ -1070,8 +1080,23 @@ async function connectWhatsApp(userId, sessionId = null) {
     sock.ev.on('stream:error', (error) => {
       console.log(`❌ Stream error for user ${userId}:`, error);
       
-      // Handle specific error codes
+      // Increment stream error counter
+      streamErrorCount++;
+      
+      // Extract error information from different possible structures
       const errorCode = error?.node?.attrs?.code;
+      const errorContent = error?.node?.content;
+      const errorTag = error?.node?.tag;
+      
+      // Log detailed error information for debugging
+      console.log(`🔍 Stream error details (${streamErrorCount}/${maxStreamErrors}):`, {
+        tag: errorTag,
+        attrs: error?.node?.attrs,
+        content: errorContent,
+        fullError: error
+      });
+      
+      // Handle specific error codes
       if (errorCode === '515') {
         console.log(`⏰ 515 Stream error detected for user ${userId} - pairing timing issue`);
         dbLogger.warn('connection', `515 Stream error detected for user ${userId} - pairing timing issue`, {
@@ -1087,11 +1112,89 @@ async function connectWhatsApp(userId, sessionId = null) {
         return;
       }
       
+      // Handle 503 Service Unavailable errors
+      if (errorCode === '503') {
+        console.log(`🚫 503 Service Unavailable error for user ${userId} - WhatsApp server temporarily unavailable`);
+        dbLogger.warn('connection', `503 Service Unavailable error for user ${userId} - WhatsApp server temporarily unavailable`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          errorCode: '503',
+          error: error,
+          timestamp: new Date().toISOString()
+        }, userId, sessionId);
+        
+        // 503 errors are typically temporary, don't treat as fatal
+        console.log(`🔄 503 error is temporary, continuing connection for user ${userId}`);
+        return;
+      }
+      
+      // Handle errors with empty attrs but content
+      if (!errorCode && errorContent && Array.isArray(errorContent)) {
+        console.log(`⚠️ Stream error with content for user ${userId}:`, errorContent);
+        
+        // Try to extract more information from the content
+        let errorDetails = 'Unknown stream error';
+        if (errorContent.length > 0) {
+          const firstContent = errorContent[0];
+          if (typeof firstContent === 'object') {
+            errorDetails = JSON.stringify(firstContent);
+          } else {
+            errorDetails = String(firstContent);
+          }
+        }
+        
+        dbLogger.warn('connection', `Stream error with content for user ${userId}: ${errorDetails}`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          errorTag: errorTag,
+          errorContent: errorContent,
+          errorDetails: errorDetails,
+          error: error,
+          timestamp: new Date().toISOString()
+        }, userId, sessionId);
+        
+        // Check if this is a recoverable error
+        const isRecoverableError = errorTag === 'stream:error' && 
+                                 (!errorCode || errorCode === '0' || errorCode === '');
+        
+        // Check if we have too many stream errors
+        if (streamErrorCount >= maxStreamErrors) {
+          console.log(`🚨 Too many stream errors (${streamErrorCount}/${maxStreamErrors}) for user ${userId}, connection may be unstable`);
+          dbLogger.error('connection', `Too many stream errors for user ${userId}: ${streamErrorCount}/${maxStreamErrors}`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            streamErrorCount,
+            maxStreamErrors,
+            error: error,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Don't disconnect immediately, but log the concern
+          return;
+        }
+        
+        if (isRecoverableError) {
+          console.log(`🔄 Treating stream error as recoverable for user ${userId}, continuing connection`);
+          // Don't treat this as a fatal error, just log it and continue
+          return;
+        }
+        
+        // For non-recoverable errors, log but don't immediately disconnect
+        console.log(`⚠️ Non-recoverable stream error for user ${userId}, monitoring connection state`);
+        return;
+      }
+      
+      // Handle other stream errors
       dbLogger.error('connection', `Stream error for user ${userId}: ${error.message || 'Unknown error'}`, {
         connectionId,
         userId,
         sessionId: sessionId || 'default',
         errorCode: errorCode || 'unknown',
+        errorTag: errorTag,
+        errorContent: errorContent,
         error: error,
         timestamp: new Date().toISOString()
       }, userId, sessionId);
@@ -1329,6 +1432,48 @@ async function connectWhatsApp(userId, sessionId = null) {
           return; // Don't proceed with normal disconnect handling
         }
         
+        // Handle 503 Service Unavailable errors
+        if (lastDisconnect?.error?.output?.statusCode === 503) {
+          console.log(`🚫 503 Service Unavailable for user ${userId} - WhatsApp server temporarily unavailable, will retry`);
+          dbLogger.warn('connection', `503 Service Unavailable for user ${userId} - WhatsApp server temporarily unavailable`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: 'service_unavailable',
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Wait before reconnecting - 503 errors are temporary server issues
+          setTimeout(async () => {
+            try {
+              console.log(`🔄 Retrying connection after 503 error for user ${userId} - server should be available`);
+              
+              // Check if there's already a working connection before creating new one
+              const existingConnection = getConnection(userId, sessionId);
+              if (existingConnection && existingConnection.connected) {
+                console.log(`✅ Connection already exists and is connected, skipping retry for user ${userId}`);
+                return;
+              }
+              
+              await connectWhatsApp(userId, sessionId);
+            } catch (error) {
+              console.error(`❌ Failed to retry connection after 503 error for user ${userId}: ${error.message}`);
+              dbLogger.error('connection', `Failed to retry connection after 503 error: ${error.message}`, {
+                connectionId,
+                userId,
+                sessionId: sessionId || 'default',
+                error: error.message,
+                stack: error.stack
+              }, userId, sessionId);
+            }
+          }, 15000); // Wait 15 seconds before retrying - 503 errors may need more time
+          
+          return; // Don't proceed with normal disconnect handling
+        }
+        
         dbLogger.warn('connection', `Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
           connectionId,
           userId,
@@ -1352,11 +1497,13 @@ async function connectWhatsApp(userId, sessionId = null) {
           dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
         }
         
-        // Don't reconnect for loggedOut or device_removed scenarios
+        // Don't reconnect for loggedOut, device_removed, or handled error scenarios
         const isLoggedOut = (lastDisconnect?.error)?.output?.statusCode === DisconnectReason.loggedOut;
         const isDeviceRemoved = (lastDisconnect?.error)?.output?.statusCode === 401 && 
                                lastDisconnect?.error?.data?.content?.[0]?.attrs?.type === 'device_removed';
-        const shouldReconnect = !isLoggedOut && !isDeviceRemoved;
+        const isHandledError = (lastDisconnect?.error)?.output?.statusCode === 515 || 
+                              (lastDisconnect?.error)?.output?.statusCode === 503;
+        const shouldReconnect = !isLoggedOut && !isDeviceRemoved && !isHandledError;
         
         dbLogger.debug('connection', `Reconnection decision: ${shouldReconnect ? 'WILL_RECONNECT' : 'WILL_NOT_RECONNECT'}`, {
           connectionId,
@@ -1364,7 +1511,8 @@ async function connectWhatsApp(userId, sessionId = null) {
           disconnectCode: lastDisconnect?.error?.output?.statusCode,
           loggedOutCode: DisconnectReason.loggedOut,
           isLoggedOut,
-          isDeviceRemoved
+          isDeviceRemoved,
+          isHandledError
         }, userId, sessionId);
         
         if (shouldReconnect) {
@@ -1425,6 +1573,8 @@ async function connectWhatsApp(userId, sessionId = null) {
         } else {
           if (isDeviceRemoved) {
             dbLogger.info('connection', `Device removed for user ${userId}, not attempting reconnection`, { connectionId }, userId, sessionId);
+          } else if (isHandledError) {
+            dbLogger.info('connection', `Handled error (${lastDisconnect?.error?.output?.statusCode}) for user ${userId}, not attempting reconnection`, { connectionId }, userId, sessionId);
           } else {
             dbLogger.info('connection', `User ${userId} logged out, removing connection`, { connectionId }, userId, sessionId);
           }
