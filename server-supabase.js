@@ -957,12 +957,14 @@ async function connectWhatsApp(userId, sessionId = null) {
         logger: logger,
         // Proper browser configuration for desktop emulation
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
-        // Connection settings
+        // Connection settings - enhanced for better timing
         connectTimeoutMs: 60000,
         keepAliveIntervalMs: 30000,
-        retryRequestDelayMs: 2000,
+        retryRequestDelayMs: 3000, // Increased from 2000 to 3000ms for better timing
         maxRetries: 5,
         defaultQueryTimeoutMs: 120000,
+        // Additional timing settings to prevent 515 errors
+        requestTimeoutMs: 60000,
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1067,12 +1069,30 @@ async function connectWhatsApp(userId, sessionId = null) {
     // Handle stream errors
     sock.ev.on('stream:error', (error) => {
       console.log(`❌ Stream error for user ${userId}:`, error);
-      dbLogger.error('connection', `Stream error for user ${userId}: ${error.message}`, {
+      
+      // Handle specific error codes
+      const errorCode = error?.node?.attrs?.code;
+      if (errorCode === '515') {
+        console.log(`⏰ 515 Stream error detected for user ${userId} - pairing timing issue`);
+        dbLogger.warn('connection', `515 Stream error detected for user ${userId} - pairing timing issue`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          errorCode: '515',
+          error: error,
+          timestamp: new Date().toISOString()
+        }, userId, sessionId);
+        
+        // Don't immediately disconnect, let the connection.update handler deal with it
+        return;
+      }
+      
+      dbLogger.error('connection', `Stream error for user ${userId}: ${error.message || 'Unknown error'}`, {
         connectionId,
         userId,
         sessionId: sessionId || 'default',
-        error: error.message,
-        stack: error.stack,
+        errorCode: errorCode || 'unknown',
+        error: error,
         timestamp: new Date().toISOString()
       }, userId, sessionId);
     });
@@ -1265,6 +1285,48 @@ async function connectWhatsApp(userId, sessionId = null) {
           }
           
           return; // Don't proceed with normal disconnect handling or reconnection
+        }
+        
+        // Handle 515 stream error - pairing code timing issues
+        if (lastDisconnect?.error?.output?.statusCode === 515) {
+          console.log(`⏰ 515 Stream error for user ${userId} - pairing code timing issue, will retry`);
+          dbLogger.warn('connection', `515 Stream error for user ${userId} - pairing code timing issue`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: 'pairing_timing_error',
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Wait longer before reconnecting to allow proper timing
+          setTimeout(async () => {
+            try {
+              console.log(`🔄 Retrying connection after 515 error for user ${userId} with longer delay`);
+              
+              // Check if there's already a working connection before creating new one
+              const existingConnection = getConnection(userId, sessionId);
+              if (existingConnection && existingConnection.connected) {
+                console.log(`✅ Connection already exists and is connected, skipping retry for user ${userId}`);
+                return;
+              }
+              
+              await connectWhatsApp(userId, sessionId);
+            } catch (error) {
+              console.error(`❌ Failed to retry connection after 515 error for user ${userId}: ${error.message}`);
+              dbLogger.error('connection', `Failed to retry connection after 515 error: ${error.message}`, {
+                connectionId,
+                userId,
+                sessionId: sessionId || 'default',
+                error: error.message,
+                stack: error.stack
+              }, userId, sessionId);
+            }
+          }, 10000); // Wait 10 seconds before retrying to ensure proper timing
+          
+          return; // Don't proceed with normal disconnect handling
         }
         
         dbLogger.warn('connection', `Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`, {
