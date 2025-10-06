@@ -19,6 +19,7 @@ import AdminTemplateManagement from './src/screens/AdminTemplateManagement';
 import AdminAnalytics from './src/screens/AdminAnalytics';
 import AdminSettings from './src/screens/AdminSettings';
 import WhatsAppScreen from "./src/screens/WhatsAppScreen";
+import EnhancedWhatsAppScreen from "./src/screens/EnhancedWhatsAppScreen";
 import CustomersScreen from "./src/screens/CustomersScreen";
 import AddCustomerScreen from "./src/screens/AddCustomerScreen";
 import VCardScreen from "./src/screens/VCardScreen";
@@ -145,7 +146,7 @@ const MainAppTabs = () => {
         },
       })}
     >
-      <Tab.Screen name="WhatsApp" component={WhatsAppScreen} options={{ title: t("whatsappConnection") }} />
+      <Tab.Screen name="WhatsApp" component={EnhancedWhatsAppScreen} options={{ title: t("whatsappConnection") }} />
       <Tab.Screen name="Customers" component={CustomersScreen} options={{ title: t("manageCustomers") }} />
       <Tab.Screen 
         name="Messages" 
