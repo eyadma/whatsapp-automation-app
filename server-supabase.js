@@ -1021,8 +1021,11 @@ async function connectWhatsApp(userId, sessionId = null) {
       const socketDuration = Date.now() - socketStart;
       console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
       
+      // Declare connection timeout variable in broader scope
+      let connectionTimeout;
+      
       // Add connection timeout to prevent hanging connections
-      const connectionTimeout = setTimeout(() => {
+      connectionTimeout = setTimeout(() => {
         if (sock && !sock.user) {
           console.log(`⏰ Connection timeout for user ${userId} - no user data received within 2 minutes`);
           dbLogger.warn('connection', `Connection timeout for user ${userId} - no user data received within 2 minutes`, {
