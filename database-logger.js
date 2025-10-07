@@ -17,6 +17,9 @@ class DatabaseLogger {
     this.consecutiveFailures = 0; // Track consecutive failures
     this.maxConsecutiveFailures = 5; // Disable logging after 5 consecutive failures
     
+    // NOTE: Only ERROR level logs are saved to database to reduce load
+    // All other logs (info, warn, debug, trace) are console-only
+    
     // Start periodic flush
     this.startPeriodicFlush();
   }
@@ -53,6 +56,11 @@ class DatabaseLogger {
     
     console.log(`${consoleMessage}${consoleData}${consoleContext}${consoleSession}`);
 
+    // Only add ERROR level logs to database buffer to reduce load
+    if (level !== DatabaseLogger.LOG_LEVELS.ERROR) {
+      return; // Skip database logging for non-error logs
+    }
+
     // Only add to buffer if Supabase is available
     if (!this.isSupabaseAvailable) {
       console.log('⚠️ Database logging disabled due to Supabase unavailability');
@@ -79,13 +87,15 @@ class DatabaseLogger {
   }
 
   /**
-   * Flush logs to database
+   * Flush logs to database (only ERROR level logs)
    */
   async flush() {
     if (this.logBuffer.length === 0) return;
 
     const logsToInsert = [...this.logBuffer];
     this.logBuffer = [];
+    
+    console.log(`🔄 Flushing ${logsToInsert.length} error logs to database...`);
 
     try {
       // Check if Supabase is accessible before attempting to insert
@@ -118,7 +128,7 @@ class DatabaseLogger {
           this.logBuffer.unshift(...logsToInsert);
         }
       } else {
-        console.log(`✅ Flushed ${logsToInsert.length} logs to database`);
+        console.log(`✅ Flushed ${logsToInsert.length} error logs to database`);
         this.consecutiveFailures = 0; // Reset failure count on success
         this.isSupabaseAvailable = true; // Re-enable logging
       }
