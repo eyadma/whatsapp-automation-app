@@ -931,6 +931,14 @@ async function connectWhatsApp(userId, sessionId = null) {
     connectionLocks.set(connectionKey, connectionId);
     dbLogger.info('connection', `Set connection lock for ${connectionKey}`, { connectionId, connectionKey }, userId, sessionId);
     
+    // Set a timeout to clear the lock if connection takes too long (prevents 440 conflicts)
+    const lockTimeout = setTimeout(() => {
+      if (connectionLocks.has(connectionKey)) {
+        connectionLocks.delete(connectionKey);
+        dbLogger.warn('connection', `Connection lock timeout cleared for ${connectionKey} to prevent 440 conflicts`, { connectionId, connectionKey }, userId, sessionId);
+      }
+    }, 120000); // Clear lock after 2 minutes
+    
     const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
     dbLogger.debug('connection', `Session directory: ${sessionDir}`, {
       RAILWAY_VOLUME_MOUNT_PATH: process.env.RAILWAY_VOLUME_MOUNT_PATH,
@@ -1556,6 +1564,50 @@ async function connectWhatsApp(userId, sessionId = null) {
           return; // Don't proceed with normal disconnect handling
         }
         
+        // Handle 440 stream error (conflict) - multiple connection attempts
+        if (lastDisconnect?.error?.output?.statusCode === 440) {
+          console.log(`⚠️ 440 Stream conflict error for user ${userId} - multiple connection attempts detected`);
+          dbLogger.warn('connection', `440 Stream conflict error for user ${userId} - multiple connection attempts`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: '440_conflict_error',
+            errorMessage: lastDisconnect?.error?.message,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Wait longer before retrying to allow conflicts to resolve
+          setTimeout(async () => {
+            try {
+              console.log(`🔄 Retrying connection after 440 conflict for user ${userId} with extended delay`);
+              
+              // Check if a connection already exists before creating a new one
+              const existingConnection = getConnection(userId, sessionId);
+              if (existingConnection && existingConnection.connected) {
+                console.log(`✅ Connection already exists and is connected, skipping retry for user ${userId}`);
+                return;
+              }
+              
+              await connectWhatsApp(userId, sessionId);
+            } catch (error) {
+              console.error(`❌ Failed to retry connection after 440 conflict for user ${userId}: ${error.message}`);
+              dbLogger.error('connection', `Failed to retry connection after 440 conflict: ${error.message}`, {
+                connectionId,
+                userId,
+                sessionId: sessionId || 'default',
+                error: error.message,
+                stack: error.stack,
+                timestamp: new Date().toISOString()
+              }, userId, sessionId);
+            }
+          }, 30000); // Wait 30 seconds before retrying after 440 conflict
+          
+          return; // Don't proceed with normal disconnect handling
+        }
+        
         // Handle 401 errors (device removal, session invalid, etc.)
         if (lastDisconnect?.error?.output?.statusCode === 401) {
           const errorType = lastDisconnect?.error?.data?.content?.[0]?.attrs?.type || 'unknown';
@@ -1812,6 +1864,12 @@ async function connectWhatsApp(userId, sessionId = null) {
         if (connectionTimeout) {
           clearTimeout(connectionTimeout);
           console.log(`✅ Connection timeout cleared for user ${userId} - connection successful`);
+        }
+        
+        // Clear lock timeout since connection is successful
+        if (lockTimeout) {
+          clearTimeout(lockTimeout);
+          console.log(`✅ Lock timeout cleared for user ${userId} - connection successful`);
         }
         
         dbLogger.info('connection', `Connection opened for user: ${userId}`, {
@@ -2378,6 +2436,11 @@ async function connectWhatsApp(userId, sessionId = null) {
     if (connectionLocks.has(errorConnectionKey)) {
       connectionLocks.delete(errorConnectionKey);
       dbLogger.info('connection', `Cleared connection lock for ${errorConnectionKey} due to error`, { connectionId, connectionKey: errorConnectionKey }, userId, sessionId);
+    }
+    
+    // Clear lock timeout if it exists
+    if (lockTimeout) {
+      clearTimeout(lockTimeout);
     }
     
     dbLogger.error('connection', `Error connecting WhatsApp for user: ${userId} - ${error.message}`, {
