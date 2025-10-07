@@ -4404,16 +4404,19 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
             console.log(`📍 Location data:`, JSON.stringify(customerData, null, 2));
             
             await retryOperation(async () => {
-              const { data: insertedLocation, error: createLocationError } = await supabase
+              const { data: upsertedLocation, error: createLocationError } = await supabase
                 .from('locations')
-                .insert([customerData])
+                .upsert([customerData], { 
+                  onConflict: 'shipment_id',
+                  ignoreDuplicates: false 
+                })
                 .select();
               
               if (createLocationError) {
-                throw new Error(`Database insert error: ${createLocationError.message}`);
+                throw new Error(`Database upsert error: ${createLocationError.message}`);
               }
               
-              console.log(`✅ Created location: ${customerData.name}`, insertedLocation);
+              console.log(`✅ Upserted location: ${customerData.name}`, upsertedLocation);
             }, 3, 1000);
           }
         } catch (locationError) {
