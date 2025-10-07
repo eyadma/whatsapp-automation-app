@@ -885,6 +885,7 @@ async function connectWhatsApp(userId, sessionId = null) {
   const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const startTime = Date.now();
   let connectionTimeout; // Declare at function scope for access in event handlers
+  let lockTimeout; // Declare at function scope for access in error handling
   
   try {
     dbLogger.info('connection', `Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`, {
