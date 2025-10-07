@@ -95,6 +95,21 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       // Direct sessions data from status-all endpoint
       setAvailableSessions(data.sessions);
       
+      // Check if sessions are empty (server restarted)
+      if (Object.keys(data.sessions).length === 0) {
+        console.log('🔍 Hook: Empty sessions received, setting to disconnected (server likely restarted)');
+        setConnectionStatus(prev => ({
+          ...prev,
+          isConnected: false,
+          isConnecting: false,
+          status: 'disconnected',
+          qrCode: null,
+          lastUpdate: new Date().toISOString(),
+          error: null
+        }));
+        return;
+      }
+      
       // Update current session status
       const currentSessionData = data.sessions[sessionId];
       if (currentSessionData) {
@@ -253,6 +268,18 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             isConnecting: currentSessionStatus === 'connecting' || currentSessionStatus === 'reconnecting',
             status: currentSessionStatus,
             lastUpdate: new Date().toISOString()
+          }));
+        } else if (Object.keys(result.sessions || {}).length === 0) {
+          // No sessions available - server likely restarted, set to disconnected
+          console.log('🔍 Hook: No sessions available, setting to disconnected (server likely restarted)');
+          setConnectionStatus(prev => ({
+            ...prev,
+            isConnected: false,
+            isConnecting: false,
+            status: 'disconnected',
+            qrCode: null,
+            lastUpdate: new Date().toISOString(),
+            error: null
           }));
         }
       }
