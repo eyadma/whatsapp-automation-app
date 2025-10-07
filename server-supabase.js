@@ -800,6 +800,7 @@ setInterval(updateConnectionStates, 5000); // Check every 5 seconds
 async function connectWhatsApp(userId, sessionId = null) {
   const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const startTime = Date.now();
+  let connectionTimeout; // Declare at function scope for access in event handlers
   
   try {
     dbLogger.info('connection', `Starting WhatsApp connection for user: ${userId}, session: ${sessionId || 'default'}`, {
@@ -1020,9 +1021,6 @@ async function connectWhatsApp(userId, sessionId = null) {
       sock = makeWASocket(socketConfig);
       const socketDuration = Date.now() - socketStart;
       console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
-      
-      // Declare connection timeout variable in broader scope
-      let connectionTimeout;
       
       // Add connection timeout to prevent hanging connections
       connectionTimeout = setTimeout(() => {
