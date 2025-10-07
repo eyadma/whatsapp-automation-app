@@ -3956,6 +3956,9 @@ app.get('/api/whatsapp/status-all/:userId', async (req, res) => {
       });
     }
     
+    console.log(`🔍 Status endpoint - returning sessions:`, Object.keys(fullConnectionData));
+    console.log(`🔍 Status endpoint - fullConnectionData:`, fullConnectionData);
+    
     res.json({
       success: true,
       userId,

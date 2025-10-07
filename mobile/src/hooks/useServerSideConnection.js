@@ -158,6 +158,16 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
           
           return newConnectionStatus;
         });
+      } else {
+        // Session doesn't exist in current response - check if we have other sessions
+        const availableSessionIds = Object.keys(data.sessions);
+        if (availableSessionIds.length > 0) {
+          console.log(`🔍 Hook: Current session ${sessionId} not found, but other sessions available:`, availableSessionIds);
+          // If we have other sessions but not the current one, we might need to update the session
+          // For now, keep the current status but log the situation
+        } else {
+          console.log(`🔍 Hook: No sessions available for ${sessionId}`);
+        }
       }
     } else if (data.type === 'connection_status') {
       setStatusStreamActive(data.status === 'connected');
