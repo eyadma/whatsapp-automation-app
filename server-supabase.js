@@ -58,6 +58,9 @@ const connectionPersistenceManager = {
       this.broadcastStatusUpdates();
     }, 30000);
     
+    // Store interval reference for cleanup
+    this.intervals = [this.statusUpdateInterval];
+    
     console.log('✅ Connection persistence manager initialized');
   },
   
@@ -108,8 +111,42 @@ const connectionPersistenceManager = {
   // Remove connection from monitoring
   removeConnection(userId, sessionId) {
     const key = `${userId}_${sessionId}`;
+    const connection = this.connections.get(key);
+    
+    if (connection) {
+      // Clear any intervals associated with this connection
+      if (connection.healthCheckInterval) {
+        clearInterval(connection.healthCheckInterval);
+        console.log(`🧹 Cleared health check interval for ${key}`);
+      }
+    }
+    
     this.connections.delete(key);
     this.notifyStatusChange(userId, sessionId, 'disconnected');
+  },
+  
+  // Cleanup all intervals and connections
+  cleanup() {
+    console.log('🧹 Cleaning up connection persistence manager...');
+    
+    // Clear all intervals
+    if (this.intervals) {
+      this.intervals.forEach(interval => {
+        clearInterval(interval);
+      });
+    }
+    
+    // Clear all connection-specific intervals
+    this.connections.forEach((connection, key) => {
+      if (connection.healthCheckInterval) {
+        clearInterval(connection.healthCheckInterval);
+      }
+    });
+    
+    // Clear all connections
+    this.connections.clear();
+    
+    console.log('✅ Connection persistence manager cleaned up');
   },
   
   // Start monitoring connection health
@@ -348,6 +385,14 @@ function setConnection(userId, sessionId, connectionData) {
 function removeConnection(userId, sessionId) {
   if (connections.has(userId)) {
     const userConnections = connections.get(userId);
+    const connection = userConnections.get(sessionId);
+    
+    // Clear session health check interval if it exists
+    if (connection && connection.sessionHealthCheck) {
+      clearInterval(connection.sessionHealthCheck);
+      console.log(`🧹 Cleared session health check interval for ${userId}_${sessionId}`);
+    }
+    
     userConnections.delete(sessionId);
     userSessions.get(userId).delete(sessionId);
     
@@ -795,7 +840,46 @@ function updateConnectionStates() {
 }
 
 // Start periodic connection state updates
-setInterval(updateConnectionStates, 5000); // Check every 5 seconds
+const connectionStateInterval = setInterval(updateConnectionStates, 5000); // Check every 5 seconds
+
+// Add cleanup on process exit
+process.on('SIGINT', () => {
+  console.log('🔄 Cleaning up intervals before exit...');
+  clearInterval(connectionStateInterval);
+  connectionPersistenceManager.cleanup();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('🔄 Cleaning up intervals before exit...');
+  clearInterval(connectionStateInterval);
+  connectionPersistenceManager.cleanup();
+  process.exit(0);
+});
+
+// Add memory monitoring
+setInterval(() => {
+  const memUsage = process.memoryUsage();
+  const memUsageMB = {
+    rss: Math.round(memUsage.rss / 1024 / 1024),
+    heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+    heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+    external: Math.round(memUsage.external / 1024 / 1024)
+  };
+  
+  // Log memory usage every 5 minutes
+  if (memUsageMB.heapUsed > 1000) { // Log if heap usage > 1GB
+    console.log('⚠️ High memory usage detected:', memUsageMB);
+  }
+  
+  // Force garbage collection if memory usage is high
+  if (memUsageMB.heapUsed > 1500) { // Force GC if heap usage > 1.5GB
+    console.log('🧹 Forcing garbage collection due to high memory usage');
+    if (global.gc) {
+      global.gc();
+    }
+  }
+}, 300000); // Check every 5 minutes
 
 async function connectWhatsApp(userId, sessionId = null) {
   const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1154,6 +1238,12 @@ async function connectWhatsApp(userId, sessionId = null) {
         }, userId, sessionId);
       }
     }, 300000); // Check every 5 minutes
+    
+    // Store health check interval reference for cleanup
+    const connectionData = getConnection(userId, sessionId);
+    if (connectionData) {
+      connectionData.sessionHealthCheck = sessionHealthCheck;
+    }
 
     // Handle stream errors
     sock.ev.on('stream:error', (error) => {
