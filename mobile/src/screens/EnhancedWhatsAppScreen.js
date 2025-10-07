@@ -371,26 +371,14 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
   // Create dynamic styles based on theme
   const dynamicStyles = createStyles(paperTheme);
 
-  // Use ScrollView only when QR code is shown, otherwise use regular View
-  const MainContainer = showQRCode ? ScrollView : View;
-  const containerProps = showQRCode ? { style: dynamicStyles.container } : { style: dynamicStyles.container };
-
   return (
-    <MainContainer {...containerProps}>
+    <View style={dynamicStyles.container}>
       <Card style={dynamicStyles.card}>
         <Card.Content style={dynamicStyles.cardContent}>
           {/* Compact Header */}
           <View style={dynamicStyles.header}>
-            <Ionicons name="logo-whatsapp" size={32} color="#25D366" />
-            <View style={dynamicStyles.headerText}>
-              <Text style={dynamicStyles.title}>WhatsApp Connection</Text>
-              <View style={dynamicStyles.statusIndicator}>
-                <View style={[dynamicStyles.statusDot, { backgroundColor: getStatusColor() }]} />
-                <Text style={[dynamicStyles.statusText, { color: getStatusColor() }]}>
-                  {getStatusText()}
-                </Text>
-              </View>
-            </View>
+            <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
+            <Text style={dynamicStyles.title}>WhatsApp</Text>
             <TouchableOpacity
               onPress={handleRefresh}
               disabled={isButtonDisabled('refresh')}
@@ -401,14 +389,14 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
             >
               <Ionicons 
                 name="refresh" 
-                size={20} 
+                size={18} 
                 color={isButtonDisabled('refresh') ? '#999' : '#007AFF'} 
               />
             </TouchableOpacity>
           </View>
           
-          {/* Session Selector - Compact */}
-          <View style={dynamicStyles.section}>
+          {/* Compact Session Selector */}
+          <View style={dynamicStyles.sessionSection}>
             {sessions.length > 0 ? (
               <ScrollView 
                 horizontal 
@@ -434,59 +422,102 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
                       {session.session_name}
                     </Text>
                     {session.is_default && (
-                      <Chip 
-                        icon="star" 
-                        style={dynamicStyles.defaultChip}
-                        textStyle={dynamicStyles.defaultChipText}
-                      >
-                        Default
-                      </Chip>
+                      <View style={dynamicStyles.defaultBadge}>
+                        <Text style={dynamicStyles.defaultBadgeText}>★</Text>
+                      </View>
                     )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (
               <View style={dynamicStyles.noSessionsContainer}>
-                <Text style={dynamicStyles.noSessionsText}>No Sessions Found</Text>
+                <Text style={dynamicStyles.noSessionsText}>No Sessions</Text>
                 <CompatibleButton
                   mode="contained"
                   onPress={() => navigation.navigate('Sessions')}
                   style={dynamicStyles.createSessionButton}
                   icon="plus"
+                  compact
                 >
-                  Create Session
+                  Create
                 </CompatibleButton>
               </View>
             )}
           </View>
 
-          {/* Compact Session Info - Only show when session is selected */}
-          {selectedSession && !showQRCode && (
-            <View style={dynamicStyles.compactSessionInfo}>
-              <Text style={dynamicStyles.sessionInfoText}>
-                <Text style={dynamicStyles.sessionInfoLabel}>Name: </Text>
-                {selectedSession.session_name}
-              </Text>
-              <Text style={dynamicStyles.sessionInfoText}>
-                <Text style={dynamicStyles.sessionInfoLabel}>Phone: </Text>
-                {selectedSession.phone_number || 'Not set'}
-              </Text>
+          {/* Inline Status and Session Info */}
+          <View style={dynamicStyles.statusSection}>
+            <View style={dynamicStyles.statusRow}>
+              <View style={dynamicStyles.statusIndicator}>
+                <View style={[dynamicStyles.statusDot, { backgroundColor: getStatusColor() }]} />
+                <Text style={[dynamicStyles.statusText, { color: getStatusColor() }]}>
+                  {getStatusText()}
+                </Text>
+              </View>
+              {selectedSession && (
+                <View style={dynamicStyles.sessionInfoInline}>
+                  <Text style={dynamicStyles.sessionInfoText}>
+                    {selectedSession.session_name}
+                  </Text>
+                  {selectedSession.phone_number && (
+                    <Text style={dynamicStyles.sessionInfoSubtext}>
+                      {selectedSession.phone_number}
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
+            <Text style={dynamicStyles.statusDescription}>
+              {getStatusDescription()}
+            </Text>
+          </View>
+
+          {/* QR Code Display - Scrollable when shown */}
+          {showQRCode && qrCode && (
+            <ScrollView style={dynamicStyles.qrScrollContainer} showsVerticalScrollIndicator={false}>
+              <View style={dynamicStyles.qrSection}>
+                <Text style={dynamicStyles.qrTitle}>Scan QR Code</Text>
+                <View style={dynamicStyles.qrContainer}>
+                  <View style={dynamicStyles.qrWrapper}>
+                    <QRCode
+                      value={qrCode}
+                      size={200}
+                      color="black"
+                      backgroundColor="white"
+                      onError={(error) => {
+                        console.log('❌ QR Code Error:', error);
+                      }}
+                      onLoad={() => {
+                        console.log('✅ QR Code loaded successfully');
+                      }}
+                    />
+                  </View>
+                  <Text style={dynamicStyles.qrInstructions}>
+                    Open WhatsApp → Settings → Linked Devices → Link a Device
+                  </Text>
+                  <Text style={dynamicStyles.qrInstructions}>
+                    Then scan this QR code
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
           )}
 
-          {/* Main Action Button */}
-          <View style={dynamicStyles.section}>
+          {/* Compact Action Buttons */}
+          <View style={dynamicStyles.actionsSection}>
+            {/* Main Connect/Disconnect Button */}
             <CompatibleButton
               mode="contained"
               onPress={isConnected ? handleDisconnect : handleConnect}
               loading={loading || isConnecting}
               disabled={isButtonDisabled('connect')}
               style={[
-                dynamicStyles.primaryButton,
+                dynamicStyles.mainButton,
                 isConnected ? dynamicStyles.disconnectButton : dynamicStyles.connectButton,
                 isButtonDisabled('connect') && dynamicStyles.buttonDisabled
               ]}
               icon={isConnected ? "close" : "link"}
+              compact
             >
               {isConnected ? 'Disconnect' : 'Connect'}
             </CompatibleButton>
@@ -496,16 +527,15 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
               <CompatibleButton
                 mode="outlined"
                 onPress={handleCancelConnection}
-                style={[dynamicStyles.secondaryButton, dynamicStyles.cancelButton]}
+                style={[dynamicStyles.cancelButton, dynamicStyles.cancelButton]}
                 icon="stop"
+                compact
               >
-                Cancel Connection
+                Cancel
               </CompatibleButton>
             )}
-          </View>
 
-          {/* Compact Utility Buttons */}
-          {!showQRCode && (
+            {/* Compact Utility Buttons */}
             <View style={dynamicStyles.utilityButtonsContainer}>
               <TouchableOpacity
                 onPress={handleCleanSession}
@@ -518,7 +548,7 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
               >
                 <Ionicons 
                   name="refresh-circle" 
-                  size={16} 
+                  size={14} 
                   color={isButtonDisabled('clean') ? '#999' : '#FF6B35'} 
                 />
                 <Text style={[
@@ -540,7 +570,7 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
               >
                 <Ionicons 
                   name="trash" 
-                  size={16} 
+                  size={14} 
                   color={isButtonDisabled('delete') ? '#999' : '#FF3B30'} 
                 />
                 <Text style={[
@@ -551,72 +581,30 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
                 </Text>
               </TouchableOpacity>
             </View>
-          )}
+          </View>
 
-          {/* Connection Progress - Compact */}
+          {/* Compact Progress Indicator */}
           {isConnecting && !showQRCode && (
-            <View style={dynamicStyles.compactProgressContainer}>
+            <View style={dynamicStyles.progressSection}>
               <ActivityIndicator size="small" color="#25D366" />
-              <Text style={dynamicStyles.compactProgressText}>
-                {showQRCode ? 'Waiting for QR code scan...' : 'Connecting to WhatsApp...'}
+              <Text style={dynamicStyles.progressText}>
+                {showQRCode ? 'Waiting for QR scan...' : 'Connecting...'}
               </Text>
             </View>
           )}
 
-          {/* Error Display - Compact */}
-          {hasError && !showQRCode && (
-            <View style={dynamicStyles.compactErrorContainer}>
-              <Ionicons name="alert-circle" size={20} color="#FF3B30" />
-              <Text style={dynamicStyles.compactErrorText}>
-                Connection failed. Please try again.
+          {/* Compact Error Display */}
+          {hasError && (
+            <View style={dynamicStyles.errorSection}>
+              <Ionicons name="alert-circle" size={16} color="#FF3B30" />
+              <Text style={dynamicStyles.errorText}>
+                Connection failed. Try again.
               </Text>
-            </View>
-          )}
-
-          {/* QR Code Display - Full size when shown */}
-          {(() => {
-            console.log('🔍 QR Code Display Check:', {
-              showQRCode,
-              hasQRCode: !!qrCode,
-              qrCodeLength: qrCode ? qrCode.length : 0,
-              shouldShow: showQRCode && qrCode
-            });
-            return null;
-          })()}
-          {showQRCode && qrCode && (
-            <View style={dynamicStyles.section}>
-              <Text style={dynamicStyles.sectionTitle}>Scan QR Code</Text>
-              <View style={dynamicStyles.qrContainer}>
-                <Text style={dynamicStyles.qrTitle}>Connect WhatsApp</Text>
-                <View style={dynamicStyles.qrWrapper}>
-                  <QRCode
-                    value={qrCode}
-                    size={250}
-                    color="black"
-                    backgroundColor="white"
-                    onError={(error) => {
-                      console.log('❌ QR Code Error:', error);
-                    }}
-                    onLoad={() => {
-                      console.log('✅ QR Code loaded successfully');
-                    }}
-                  />
-                </View>
-                <Text style={dynamicStyles.qrInstructions}>
-                  Open WhatsApp on your phone → Settings → Linked Devices → Link a Device
-                </Text>
-                <Text style={dynamicStyles.qrInstructions}>
-                  Then scan this QR code
-                </Text>
-                <Text style={dynamicStyles.qrDebug}>
-                  QR Code Length: {qrCode.length} characters
-                </Text>
-              </View>
             </View>
           )}
         </Card.Content>
       </Card>
-    </MainContainer>
+    </View>
   );
 };
 
@@ -624,66 +612,57 @@ const createStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    padding: 16,
+    padding: 12,
   },
   card: {
-    marginBottom: 16,
-    elevation: 4,
+    flex: 1,
+    elevation: 2,
     backgroundColor: theme.colors.surface,
   },
   cardContent: {
-    paddingVertical: 16,
+    padding: 16,
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  headerText: {
-    marginLeft: 12,
-    flex: 1,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: theme.colors.onSurface,
-    marginBottom: 6,
+    flex: 1,
+    marginLeft: 8,
   },
-  subtitle: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-    marginTop: 2,
-  },
-  divider: {
-    marginVertical: 16,
-    backgroundColor: theme.colors.outline,
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.onSurface,
+  sessionSection: {
     marginBottom: 12,
+  },
+  statusSection: {
+    marginBottom: 12,
+  },
+  actionsSection: {
+    marginBottom: 8,
   },
   // Session Selector Styles
   sessionSelector: {
-    maxHeight: 60,
+    maxHeight: 50,
   },
   sessionSelectorContent: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   sessionChip: {
     backgroundColor: theme.colors.surfaceVariant,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-    marginRight: 12,
-    borderWidth: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
     borderColor: 'transparent',
-    minWidth: 100,
+    minWidth: 80,
     alignItems: 'center',
+    position: 'relative',
   },
   sessionChipSelected: {
     backgroundColor: '#25D366',
@@ -693,7 +672,7 @@ const createStyles = (theme) => StyleSheet.create({
     opacity: 0.5,
   },
   sessionChipText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: theme.colors.onSurfaceVariant,
   },
@@ -701,53 +680,46 @@ const createStyles = (theme) => StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  defaultChip: {
+  defaultBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
     backgroundColor: '#FFD700',
-    marginTop: 4,
-    height: 20,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  defaultChipText: {
+  defaultBadgeText: {
     fontSize: 10,
     color: '#B8860B',
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   noSessionsContainer: {
     backgroundColor: theme.colors.tertiaryContainer,
-    padding: 20,
+    padding: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.outline,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   noSessionsText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: theme.colors.onTertiaryContainer,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  noSessionsSubtext: {
-    fontSize: 14,
-    color: theme.colors.onTertiaryContainer,
-    textAlign: 'center',
-    marginBottom: 16,
   },
   createSessionButton: {
     backgroundColor: '#25D366',
   },
   // Status Styles
-  statusContainer: {
-    backgroundColor: theme.colors.surfaceVariant,
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.outline,
-  },
-  statusHeader: {
+  statusRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    marginBottom: 6,
   },
   statusIndicator: {
     flexDirection: 'row',
@@ -755,27 +727,33 @@ const createStyles = (theme) => StyleSheet.create({
     flex: 1,
   },
   statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   statusText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   statusDescription: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-    marginBottom: 8,
-  },
-  lastUpdateText: {
     fontSize: 12,
     color: theme.colors.onSurfaceVariant,
-    fontStyle: 'italic',
+  },
+  sessionInfoInline: {
+    alignItems: 'flex-end',
+  },
+  sessionInfoText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: theme.colors.onSurface,
+  },
+  sessionInfoSubtext: {
+    fontSize: 10,
+    color: theme.colors.onSurfaceVariant,
   },
   refreshButton: {
-    padding: 8,
+    padding: 6,
     borderRadius: 4,
   },
   // Session Info Styles
@@ -803,57 +781,50 @@ const createStyles = (theme) => StyleSheet.create({
     fontWeight: '500',
   },
   // QR Code Styles
+  qrScrollContainer: {
+    maxHeight: 300,
+    marginBottom: 12,
+  },
+  qrSection: {
+    marginBottom: 8,
+  },
   qrContainer: {
     alignItems: 'center',
-    padding: 24,
+    padding: 16,
     backgroundColor: theme.colors.surfaceVariant,
-    borderRadius: 16,
-    borderWidth: 2,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: theme.colors.outline,
   },
   qrTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 12,
     color: theme.colors.onSurface,
   },
   qrWrapper: {
-    padding: 20,
+    padding: 16,
     backgroundColor: theme.colors.surface,
-    borderRadius: 12,
-    marginBottom: 16,
+    borderRadius: 8,
+    marginBottom: 12,
     shadowColor: theme.colors.shadow,
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 1,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   qrInstructions: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  qrDebug: {
     fontSize: 12,
     color: theme.colors.onSurfaceVariant,
     textAlign: 'center',
-    marginTop: 8,
+    marginBottom: 2,
   },
   // Button Styles
-  buttonGrid: {
-    marginBottom: 16,
-  },
-  primaryButton: {
-    paddingVertical: 14,
-    marginBottom: 12,
-  },
-  secondaryButton: {
-    paddingVertical: 14,
-    marginTop: 8,
+  mainButton: {
+    marginBottom: 8,
   },
   connectButton: {
     backgroundColor: '#25D366',
@@ -863,6 +834,7 @@ const createStyles = (theme) => StyleSheet.create({
   },
   cancelButton: {
     borderColor: '#FF3B30',
+    marginBottom: 8,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -870,22 +842,18 @@ const createStyles = (theme) => StyleSheet.create({
   utilityButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
+    gap: 6,
   },
   utilityButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 6,
     borderWidth: 1,
     backgroundColor: 'transparent',
-  },
-  refreshUtilityButton: {
-    borderColor: '#007AFF',
   },
   cleanUtilityButton: {
     borderColor: '#FF6B35',
@@ -894,99 +862,48 @@ const createStyles = (theme) => StyleSheet.create({
     borderColor: '#FF3B30',
   },
   utilityButtonText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
-    marginLeft: 4,
+    marginLeft: 3,
     color: theme.colors.onSurface,
   },
   utilityButtonTextDisabled: {
     color: '#999',
   },
   // Progress Styles
-  progressContainer: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: theme.colors.surfaceVariant,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.outline,
-  },
-  progressText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.onSurface,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  progressSubtext: {
-    fontSize: 14,
-    color: theme.colors.onSurfaceVariant,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  // Error Styles
-  errorContainer: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: theme.colors.errorContainer,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.error,
-  },
-  errorText: {
-    fontSize: 14,
-    color: theme.colors.onErrorContainer,
-    textAlign: 'center',
-    marginVertical: 12,
-  },
-  retryButton: {
-    borderColor: theme.colors.error,
-  },
-  // Compact Styles
-  compactSessionInfo: {
-    backgroundColor: theme.colors.surfaceVariant,
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: theme.colors.outline,
-  },
-  sessionInfoText: {
-    fontSize: 14,
-    color: theme.colors.onSurface,
-    marginBottom: 6,
-  },
-  compactProgressContainer: {
+  progressSection: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    padding: 8,
     backgroundColor: theme.colors.surfaceVariant,
-    borderRadius: 8,
-    marginBottom: 16,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: theme.colors.outline,
+    marginBottom: 8,
   },
-  compactProgressText: {
-    fontSize: 14,
+  progressText: {
+    fontSize: 12,
+    fontWeight: '500',
     color: theme.colors.onSurface,
     marginLeft: 8,
   },
-  compactErrorContainer: {
+  // Error Styles
+  errorSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    justifyContent: 'center',
+    padding: 8,
     backgroundColor: theme.colors.errorContainer,
-    borderRadius: 8,
-    marginBottom: 16,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: theme.colors.error,
+    marginBottom: 8,
   },
-  compactErrorText: {
-    fontSize: 14,
+  errorText: {
+    fontSize: 12,
     color: theme.colors.onErrorContainer,
-    marginLeft: 8,
-    flex: 1,
+    marginLeft: 6,
   },
 });
 
