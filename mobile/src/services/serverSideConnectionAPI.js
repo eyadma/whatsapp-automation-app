@@ -164,13 +164,6 @@ class ServerSideConnectionAPI {
     
     console.log('📡 Starting status polling for React Native');
     
-    // Send initial connection status
-    onStatusUpdate && onStatusUpdate({
-      type: 'connection_status',
-      status: 'connected',
-      timestamp: new Date().toISOString()
-    });
-    
     // Start polling every 5 seconds
     this.pollingInterval = setInterval(async () => {
       try {
