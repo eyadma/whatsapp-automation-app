@@ -22,11 +22,9 @@
       },
       "config": {
         "usesNonExemptEncryption": false
-      },
-      "icon": "./assets/images/icon.png"
+      }
     },
     "android": {
-      "icon": "./assets/images/icon.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#4CAF50"

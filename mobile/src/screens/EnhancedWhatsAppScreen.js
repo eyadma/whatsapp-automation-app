@@ -372,31 +372,14 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
   const dynamicStyles = createStyles(paperTheme);
 
   return (
-    <View style={dynamicStyles.container}>
+    <ScrollView style={dynamicStyles.container}>
       <Card style={dynamicStyles.card}>
-        <Card.Content style={dynamicStyles.cardContent}>
-          {/* Compact Header */}
-          <View style={dynamicStyles.header}>
-            <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
-            <Text style={dynamicStyles.title}>WhatsApp</Text>
-            <TouchableOpacity
-              onPress={handleRefresh}
-              disabled={isButtonDisabled('refresh')}
-              style={[
-                dynamicStyles.refreshButton,
-                isButtonDisabled('refresh') && dynamicStyles.buttonDisabled
-              ]}
-            >
-              <Ionicons 
-                name="refresh" 
-                size={18} 
-                color={isButtonDisabled('refresh') ? '#999' : '#007AFF'} 
-              />
-            </TouchableOpacity>
-          </View>
-          
-          {/* Compact Session Selector */}
-          <View style={dynamicStyles.sessionSection}>
+        <Card.Content>
+          {/* Header */}
+      
+          {/* Session Selector */}
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>Select Session</Text>
             {sessions.length > 0 ? (
               <ScrollView 
                 horizontal 
@@ -422,121 +405,195 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
                       {session.session_name}
                     </Text>
                     {session.is_default && (
-                      <View style={dynamicStyles.defaultBadge}>
-                        <Text style={dynamicStyles.defaultBadgeText}>★</Text>
-                      </View>
+                      <Chip 
+                        icon="star" 
+                        style={dynamicStyles.defaultChip}
+                        textStyle={dynamicStyles.defaultChipText}
+                      >
+                        Default
+                      </Chip>
                     )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (
               <View style={dynamicStyles.noSessionsContainer}>
-                <Text style={dynamicStyles.noSessionsText}>No Sessions</Text>
+                <Text style={dynamicStyles.noSessionsText}>No Sessions Found</Text>
+                <Text style={dynamicStyles.noSessionsSubtext}>
+                  Create a session to get started with WhatsApp connection
+                </Text>
                 <CompatibleButton
                   mode="contained"
                   onPress={() => navigation.navigate('Sessions')}
                   style={dynamicStyles.createSessionButton}
                   icon="plus"
-                  compact
                 >
-                  Create
+                  Create Session
                 </CompatibleButton>
               </View>
             )}
           </View>
 
-          {/* Inline Status and Session Info */}
-          <View style={dynamicStyles.statusSection}>
-            <View style={dynamicStyles.statusRow}>
-              <View style={dynamicStyles.statusIndicator}>
-                <View style={[dynamicStyles.statusDot, { backgroundColor: getStatusColor() }]} />
-                <Text style={[dynamicStyles.statusText, { color: getStatusColor() }]}>
-                  {getStatusText()}
-                </Text>
-              </View>
-              {selectedSession && (
-                <View style={dynamicStyles.sessionInfoInline}>
-                  <Text style={dynamicStyles.sessionInfoText}>
-                    {selectedSession.session_name}
+          {/* Connection Status */}
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>Connection Status</Text>
+            <View style={dynamicStyles.statusContainer}>
+              <View style={dynamicStyles.statusHeader}>
+                <View style={dynamicStyles.statusIndicator}>
+                  <View style={[dynamicStyles.statusDot, { backgroundColor: getStatusColor() }]} />
+                  <Text style={[dynamicStyles.statusText, { color: getStatusColor() }]}>
+                    {getStatusText()}
                   </Text>
-                  {selectedSession.phone_number && (
-                    <Text style={dynamicStyles.sessionInfoSubtext}>
-                      {selectedSession.phone_number}
-                    </Text>
-                  )}
                 </View>
+                <TouchableOpacity
+                  onPress={handleRefresh}
+                  disabled={isButtonDisabled('refresh')}
+                  style={[
+                    dynamicStyles.refreshButton,
+                    isButtonDisabled('refresh') && dynamicStyles.buttonDisabled
+                  ]}
+                >
+                  <Ionicons 
+                    name="refresh" 
+                    size={20} 
+                    color={isButtonDisabled('refresh') ? '#999' : '#007AFF'} 
+                  />
+                </TouchableOpacity>
+              </View>
+           
+              {lastStatusUpdate && (
+                <Text style={dynamicStyles.lastUpdateText}>
+                  Last updated: {new Date(lastStatusUpdate).toLocaleTimeString()}
+                </Text>
               )}
             </View>
-            <Text style={dynamicStyles.statusDescription}>
-              {getStatusDescription()}
-            </Text>
           </View>
 
-          {/* QR Code Display - Scrollable when shown */}
-          {showQRCode && qrCode && (
-            <ScrollView style={dynamicStyles.qrScrollContainer} showsVerticalScrollIndicator={false}>
-              <View style={dynamicStyles.qrSection}>
-                <Text style={dynamicStyles.qrTitle}>Scan QR Code</Text>
-                <View style={dynamicStyles.qrContainer}>
-                  <View style={dynamicStyles.qrWrapper}>
-                    <QRCode
-                      value={qrCode}
-                      size={200}
-                      color="black"
-                      backgroundColor="white"
-                      onError={(error) => {
-                        console.log('❌ QR Code Error:', error);
-                      }}
-                      onLoad={() => {
-                        console.log('✅ QR Code loaded successfully');
-                      }}
-                    />
-                  </View>
-                  <Text style={dynamicStyles.qrInstructions}>
-                    Open WhatsApp → Settings → Linked Devices → Link a Device
+          {/* Selected Session Info */}
+          {selectedSession && (
+            <View style={dynamicStyles.section}>
+              <Text style={dynamicStyles.sectionTitle}>Session Details</Text>
+              <View style={dynamicStyles.sessionInfoContainer}>
+                <View style={dynamicStyles.sessionInfoRow}>
+                  <Text style={dynamicStyles.sessionInfoLabel}>Name:</Text>
+                  <Text style={dynamicStyles.sessionInfoValue}>{selectedSession.session_name}</Text>
+                </View>
+                <View style={dynamicStyles.sessionInfoRow}>
+                  <Text style={dynamicStyles.sessionInfoLabel}>Phone:</Text>
+                  <Text style={dynamicStyles.sessionInfoValue}>
+                    {selectedSession.phone_number || 'Not set'}
                   </Text>
-                  <Text style={dynamicStyles.qrInstructions}>
-                    Then scan this QR code
+                </View>
+            
+                <View style={dynamicStyles.sessionInfoRow}>
+                  <Text style={dynamicStyles.sessionInfoLabel}>Status:</Text>
+                  <Text style={[dynamicStyles.sessionInfoValue, { color: getStatusColor() }]}>
+                    {getStatusText()}
                   </Text>
                 </View>
               </View>
-            </ScrollView>
+            </View>
           )}
 
-          {/* Compact Action Buttons */}
-          <View style={dynamicStyles.actionsSection}>
-            {/* Main Connect/Disconnect Button */}
-            <CompatibleButton
-              mode="contained"
-              onPress={isConnected ? handleDisconnect : handleConnect}
-              loading={loading || isConnecting}
-              disabled={isButtonDisabled('connect')}
-              style={[
-                dynamicStyles.mainButton,
-                isConnected ? dynamicStyles.disconnectButton : dynamicStyles.connectButton,
-                isButtonDisabled('connect') && dynamicStyles.buttonDisabled
-              ]}
-              icon={isConnected ? "close" : "link"}
-              compact
-            >
-              {isConnected ? 'Disconnect' : 'Connect'}
-            </CompatibleButton>
+          {/* QR Code Display */}
+          {(() => {
+            console.log('🔍 QR Code Display Check:', {
+              showQRCode,
+              hasQRCode: !!qrCode,
+              qrCodeLength: qrCode ? qrCode.length : 0,
+              shouldShow: showQRCode && qrCode
+            });
+            return null;
+          })()}
+          {showQRCode && qrCode && (
+            <View style={dynamicStyles.section}>
+              <Text style={dynamicStyles.sectionTitle}>Scan QR Code</Text>
+              <View style={dynamicStyles.qrContainer}>
+                <Text style={dynamicStyles.qrTitle}>Connect WhatsApp</Text>
+                <View style={dynamicStyles.qrWrapper}>
+                  <QRCode
+                    value={qrCode}
+                    size={250}
+                    color="black"
+                    backgroundColor="white"
+                    onError={(error) => {
+                      console.log('❌ QR Code Error:', error);
+                    }}
+                    onLoad={() => {
+                      console.log('✅ QR Code loaded successfully');
+                    }}
+                  />
+                </View>
+                <Text style={dynamicStyles.qrInstructions}>
+                  Open WhatsApp on your phone → Settings → Linked Devices → Link a Device
+                </Text>
+                <Text style={dynamicStyles.qrInstructions}>
+                  Then scan this QR code
+                </Text>
+                <Text style={dynamicStyles.qrDebug}>
+                  QR Code Length: {qrCode.length} characters
+                </Text>
+              </View>
+            </View>
+          )}
 
-            {/* Cancel Connection Button */}
-            {isConnecting && (
+          {/* Action Buttons */}
+          <View style={dynamicStyles.section}>
+            <Text style={dynamicStyles.sectionTitle}>Actions</Text>
+            <View style={dynamicStyles.buttonGrid}>
+              {/* Connect/Disconnect Button */}
               <CompatibleButton
-                mode="outlined"
-                onPress={handleCancelConnection}
-                style={[dynamicStyles.cancelButton, dynamicStyles.cancelButton]}
-                icon="stop"
-                compact
+                mode="contained"
+                onPress={isConnected ? handleDisconnect : handleConnect}
+                loading={loading || isConnecting}
+                disabled={isButtonDisabled('connect')}
+                style={[
+                  dynamicStyles.primaryButton,
+                  isConnected ? dynamicStyles.disconnectButton : dynamicStyles.connectButton,
+                  isButtonDisabled('connect') && dynamicStyles.buttonDisabled
+                ]}
+                icon={isConnected ? "close" : "link"}
               >
-                Cancel
+                {isConnected ? 'Disconnect' : 'Connect'}
               </CompatibleButton>
-            )}
 
-            {/* Compact Utility Buttons */}
+              {/* Cancel Connection Button */}
+              {isConnecting && (
+                <CompatibleButton
+                  mode="outlined"
+                  onPress={handleCancelConnection}
+                  style={[dynamicStyles.secondaryButton, dynamicStyles.cancelButton]}
+                  icon="stop"
+                >
+                  Cancel Connection
+                </CompatibleButton>
+              )}
+            </View>
+
+            {/* Utility Buttons */}
             <View style={dynamicStyles.utilityButtonsContainer}>
+              <TouchableOpacity
+                onPress={handleRefresh}
+                disabled={isButtonDisabled('refresh')}
+                style={[
+                  dynamicStyles.utilityButton,
+                  dynamicStyles.refreshUtilityButton,
+                  isButtonDisabled('refresh') && dynamicStyles.buttonDisabled
+                ]}
+              >
+                <Ionicons 
+                  name="refresh" 
+                  size={16} 
+                  color={isButtonDisabled('refresh') ? '#999' : '#007AFF'} 
+                />
+                <Text style={[
+                  dynamicStyles.utilityButtonText,
+                  isButtonDisabled('refresh') && dynamicStyles.utilityButtonTextDisabled
+                ]}>
+                  Refresh
+                </Text>
+              </TouchableOpacity>
+              
               <TouchableOpacity
                 onPress={handleCleanSession}
                 disabled={isButtonDisabled('clean')}
@@ -548,14 +605,14 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
               >
                 <Ionicons 
                   name="refresh-circle" 
-                  size={14} 
+                  size={16} 
                   color={isButtonDisabled('clean') ? '#999' : '#FF6B35'} 
                 />
                 <Text style={[
                   dynamicStyles.utilityButtonText,
                   isButtonDisabled('clean') && dynamicStyles.utilityButtonTextDisabled
                 ]}>
-                  Clean
+                  Clean Session
                 </Text>
               </TouchableOpacity>
               
@@ -570,41 +627,58 @@ const EnhancedWhatsAppScreen = ({ navigation }) => {
               >
                 <Ionicons 
                   name="trash" 
-                  size={14} 
+                  size={16} 
                   color={isButtonDisabled('delete') ? '#999' : '#FF3B30'} 
                 />
                 <Text style={[
                   dynamicStyles.utilityButtonText,
                   isButtonDisabled('delete') && dynamicStyles.utilityButtonTextDisabled
                 ]}>
-                  Delete
+                  Delete Session
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Compact Progress Indicator */}
-          {isConnecting && !showQRCode && (
-            <View style={dynamicStyles.progressSection}>
-              <ActivityIndicator size="small" color="#25D366" />
-              <Text style={dynamicStyles.progressText}>
-                {showQRCode ? 'Waiting for QR scan...' : 'Connecting...'}
-              </Text>
+          {/* Connection Progress */}
+          {isConnecting && (
+            <View style={dynamicStyles.section}>
+              <Text style={dynamicStyles.sectionTitle}>Connection Progress</Text>
+              <View style={dynamicStyles.progressContainer}>
+                <ActivityIndicator size="large" color="#25D366" />
+                <Text style={dynamicStyles.progressText}>
+                  {showQRCode ? 'Waiting for QR code scan...' : 'Connecting to WhatsApp...'}
+                </Text>
+                <Text style={dynamicStyles.progressSubtext}>
+                  Please wait while we establish the connection
+                </Text>
+              </View>
             </View>
           )}
 
-          {/* Compact Error Display */}
+          {/* Error Display */}
           {hasError && (
-            <View style={dynamicStyles.errorSection}>
-              <Ionicons name="alert-circle" size={16} color="#FF3B30" />
-              <Text style={dynamicStyles.errorText}>
-                Connection failed. Try again.
-              </Text>
+            <View style={dynamicStyles.section}>
+              <Text style={dynamicStyles.sectionTitle}>Connection Error</Text>
+              <View style={dynamicStyles.errorContainer}>
+                <Ionicons name="alert-circle" size={24} color="#FF3B30" />
+                <Text style={dynamicStyles.errorText}>
+                  Connection failed. Please check your internet connection and try again.
+                </Text>
+                <CompatibleButton
+                  mode="outlined"
+                  onPress={handleConnect}
+                  style={dynamicStyles.retryButton}
+                  icon="refresh"
+                >
+                  Retry Connection
+                </CompatibleButton>
+              </View>
             </View>
           )}
         </Card.Content>
       </Card>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -612,57 +686,62 @@ const createStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    padding: 12,
+    padding: 16,
   },
   card: {
-    flex: 1,
-    elevation: 2,
+    marginBottom: 16,
+    elevation: 4,
     backgroundColor: theme.colors.surface,
-  },
-  cardContent: {
-    padding: 16,
-    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  headerText: {
+    marginLeft: 12,
+    flex: 1,
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: theme.colors.onSurface,
-    flex: 1,
-    marginLeft: 8,
   },
-  sessionSection: {
+  subtitle: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  divider: {
+    marginVertical: 16,
+    backgroundColor: theme.colors.outline,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.onSurface,
     marginBottom: 12,
-  },
-  statusSection: {
-    marginBottom: 12,
-  },
-  actionsSection: {
-    marginBottom: 8,
   },
   // Session Selector Styles
   sessionSelector: {
-    maxHeight: 50,
+    maxHeight: 60,
   },
   sessionSelectorContent: {
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
   },
   sessionChip: {
     backgroundColor: theme.colors.surfaceVariant,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    marginRight: 12,
+    borderWidth: 2,
     borderColor: 'transparent',
-    minWidth: 80,
+    minWidth: 100,
     alignItems: 'center',
-    position: 'relative',
   },
   sessionChipSelected: {
     backgroundColor: '#25D366',
@@ -672,7 +751,7 @@ const createStyles = (theme) => StyleSheet.create({
     opacity: 0.5,
   },
   sessionChipText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
     color: theme.colors.onSurfaceVariant,
   },
@@ -680,46 +759,53 @@ const createStyles = (theme) => StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  defaultBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
+  defaultChip: {
     backgroundColor: '#FFD700',
-    borderRadius: 8,
-    width: 16,
-    height: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginTop: 4,
+    height: 20,
   },
-  defaultBadgeText: {
+  defaultChipText: {
     fontSize: 10,
     color: '#B8860B',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   noSessionsContainer: {
     backgroundColor: theme.colors.tertiaryContainer,
-    padding: 12,
+    padding: 20,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.outline,
     alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
   noSessionsText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
     color: theme.colors.onTertiaryContainer,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noSessionsSubtext: {
+    fontSize: 14,
+    color: theme.colors.onTertiaryContainer,
+    textAlign: 'center',
+    marginBottom: 16,
   },
   createSessionButton: {
     backgroundColor: '#25D366',
   },
   // Status Styles
-  statusRow: {
+  statusContainer: {
+    backgroundColor: theme.colors.surfaceVariant,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.outline,
+  },
+  statusHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   statusIndicator: {
     flexDirection: 'row',
@@ -727,33 +813,27 @@ const createStyles = (theme) => StyleSheet.create({
     flex: 1,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 8,
   },
   statusText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
   },
   statusDescription: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: 8,
+  },
+  lastUpdateText: {
     fontSize: 12,
     color: theme.colors.onSurfaceVariant,
-  },
-  sessionInfoInline: {
-    alignItems: 'flex-end',
-  },
-  sessionInfoText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.onSurface,
-  },
-  sessionInfoSubtext: {
-    fontSize: 10,
-    color: theme.colors.onSurfaceVariant,
+    fontStyle: 'italic',
   },
   refreshButton: {
-    padding: 6,
+    padding: 8,
     borderRadius: 4,
   },
   // Session Info Styles
@@ -781,50 +861,56 @@ const createStyles = (theme) => StyleSheet.create({
     fontWeight: '500',
   },
   // QR Code Styles
-  qrScrollContainer: {
-    maxHeight: 300,
-    marginBottom: 12,
-  },
-  qrSection: {
-    marginBottom: 8,
-  },
   qrContainer: {
     alignItems: 'center',
-    padding: 16,
+    padding: 24,
     backgroundColor: theme.colors.surfaceVariant,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: theme.colors.outline,
   },
   qrTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 16,
     color: theme.colors.onSurface,
   },
   qrWrapper: {
-    padding: 16,
+    padding: 20,
     backgroundColor: theme.colors.surface,
-    borderRadius: 8,
-    marginBottom: 12,
+    borderRadius: 12,
+    marginBottom: 16,
     shadowColor: theme.colors.shadow,
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   qrInstructions: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  qrDebug: {
     fontSize: 12,
     color: theme.colors.onSurfaceVariant,
     textAlign: 'center',
-    marginBottom: 2,
+    marginTop: 8,
   },
   // Button Styles
-  mainButton: {
+  buttonGrid: {
+    marginBottom: 16,
+  },
+  primaryButton: {
+    paddingVertical: 12,
     marginBottom: 8,
+  },
+  secondaryButton: {
+    paddingVertical: 12,
   },
   connectButton: {
     backgroundColor: '#25D366',
@@ -834,7 +920,6 @@ const createStyles = (theme) => StyleSheet.create({
   },
   cancelButton: {
     borderColor: '#FF3B30',
-    marginBottom: 8,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -842,18 +927,21 @@ const createStyles = (theme) => StyleSheet.create({
   utilityButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 8,
   },
   utilityButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
     borderWidth: 1,
     backgroundColor: 'transparent',
+  },
+  refreshUtilityButton: {
+    borderColor: '#007AFF',
   },
   cleanUtilityButton: {
     borderColor: '#FF6B35',
@@ -862,48 +950,53 @@ const createStyles = (theme) => StyleSheet.create({
     borderColor: '#FF3B30',
   },
   utilityButtonText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
-    marginLeft: 3,
+    marginLeft: 4,
     color: theme.colors.onSurface,
   },
   utilityButtonTextDisabled: {
     color: '#999',
   },
   // Progress Styles
-  progressSection: {
-    flexDirection: 'row',
+  progressContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
+    padding: 20,
     backgroundColor: theme.colors.surfaceVariant,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.outline,
-    marginBottom: 8,
   },
   progressText: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '500',
     color: theme.colors.onSurface,
-    marginLeft: 8,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  progressSubtext: {
+    fontSize: 14,
+    color: theme.colors.onSurfaceVariant,
+    marginTop: 4,
+    textAlign: 'center',
   },
   // Error Styles
-  errorSection: {
-    flexDirection: 'row',
+  errorContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 8,
+    padding: 20,
     backgroundColor: theme.colors.errorContainer,
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: theme.colors.error,
-    marginBottom: 8,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: 14,
     color: theme.colors.onErrorContainer,
-    marginLeft: 6,
+    textAlign: 'center',
+    marginVertical: 12,
+  },
+  retryButton: {
+    borderColor: theme.colors.error,
   },
 });
 
