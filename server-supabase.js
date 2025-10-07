@@ -982,14 +982,14 @@ async function connectWhatsApp(userId, sessionId = null) {
         logger: logger,
         // Proper browser configuration for desktop emulation
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
-        // Connection settings - enhanced for better timing and stability
-        connectTimeoutMs: 90000, // Increased to 90 seconds
-        keepAliveIntervalMs: 25000, // Reduced to 25 seconds for better stability
-        retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
-        maxRetries: 3, // Reduced retries to prevent excessive attempts
-        defaultQueryTimeoutMs: 180000, // Increased to 3 minutes
-        // Additional timing settings to prevent 515 errors
-        requestTimeoutMs: 90000, // Increased to 90 seconds
+        // Connection settings - balanced for stability and performance
+        connectTimeoutMs: 120000, // Increased to 2 minutes for slow connections
+        keepAliveIntervalMs: 30000, // 30 seconds for better stability
+        retryRequestDelayMs: 3000, // 3 seconds for better timing
+        maxRetries: 5, // Allow more retries for pre-key operations
+        defaultQueryTimeoutMs: 300000, // Increased to 5 minutes for pre-key operations
+        // Additional timing settings to prevent timeouts
+        requestTimeoutMs: 120000, // Increased to 2 minutes for slow operations
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1035,11 +1035,27 @@ async function connectWhatsApp(userId, sessionId = null) {
         markOnlineOnConnect: socketConfig.markOnlineOnConnect
       }, userId, sessionId);
       
-      const socketStart = Date.now();
-      console.log(`🔧 Making WhatsApp socket for user ${userId}...`);
+    const socketStart = Date.now();
+    console.log(`🔧 Making WhatsApp socket for user ${userId}...`);
+    
+    try {
       sock = makeWASocket(socketConfig);
       const socketDuration = Date.now() - socketStart;
       console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
+    } catch (socketError) {
+      const socketDuration = Date.now() - socketStart;
+      console.error(`❌ Failed to create WhatsApp socket for user ${userId} in ${socketDuration}ms:`, socketError.message);
+      dbLogger.error('connection', `Failed to create WhatsApp socket: ${socketError.message}`, {
+        connectionId,
+        userId,
+        sessionId: sessionId || 'default',
+        error: socketError.message,
+        stack: socketError.stack,
+        duration: socketDuration,
+        timestamp: new Date().toISOString()
+      }, userId, sessionId);
+      throw socketError;
+    }
       
       // Add connection timeout to prevent hanging connections
       connectionTimeout = setTimeout(() => {
@@ -1402,6 +1418,50 @@ async function connectWhatsApp(userId, sessionId = null) {
               }, userId, sessionId);
             }
           }, 3000); // Wait 3 seconds before creating new socket to ensure old connection is fully closed
+          
+          return; // Don't proceed with normal disconnect handling
+        }
+        
+        // Handle timeout errors (408) - often recoverable with retry
+        if (lastDisconnect?.error?.output?.statusCode === 408) {
+          console.log(`⏰ Timeout error for user ${userId} - pre-key operation timed out, will retry`);
+          dbLogger.warn('connection', `Timeout error for user ${userId} - pre-key operation timed out`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: 'timeout_error',
+            errorMessage: lastDisconnect?.error?.message,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Attempt to create a new socket after a delay
+          setTimeout(async () => {
+            try {
+              console.log(`🔄 Retrying connection after timeout for user ${userId}`);
+              
+              // Check if a connection already exists before creating a new one
+              const existingConnection = getConnection(userId, sessionId);
+              if (existingConnection && existingConnection.connected) {
+                console.log(`✅ Connection already exists and is connected, skipping retry for user ${userId}`);
+                return;
+              }
+              
+              await connectWhatsApp(userId, sessionId);
+            } catch (error) {
+              console.error(`❌ Failed to retry connection after timeout for user ${userId}: ${error.message}`);
+              dbLogger.error('connection', `Failed to retry connection after timeout: ${error.message}`, {
+                connectionId,
+                userId,
+                sessionId: sessionId || 'default',
+                error: error.message,
+                stack: error.stack,
+                timestamp: new Date().toISOString()
+              }, userId, sessionId);
+            }
+          }, 10000); // Wait 10 seconds before retrying after timeout
           
           return; // Don't proceed with normal disconnect handling
         }
