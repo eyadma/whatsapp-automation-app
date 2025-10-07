@@ -41,7 +41,30 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
     } else if (data.type === 'status') {
       // Initial status or periodic update
       if (data.status && data.status.sessions) {
+        console.log('🔍 Hook: Processing status type update:', {
+          hasStatus: !!data.status,
+          hasSessions: !!data.status.sessions,
+          sessionsType: typeof data.status.sessions,
+          sessionsKeys: Object.keys(data.status.sessions || {}),
+          sessionsLength: Object.keys(data.status.sessions || {}).length
+        });
+        
         setAvailableSessions(data.status.sessions);
+        
+        // Check if sessions are empty (server restarted)
+        if (Object.keys(data.status.sessions).length === 0) {
+          console.log('🔍 Hook: Empty sessions received via status type, setting to disconnected (server likely restarted)');
+          setConnectionStatus(prev => ({
+            ...prev,
+            isConnected: false,
+            isConnecting: false,
+            status: 'disconnected',
+            qrCode: null,
+            lastUpdate: new Date().toISOString(),
+            error: null
+          }));
+          return;
+        }
         
         // Update current session status
         const currentSessionData = data.status.sessions[sessionId];
