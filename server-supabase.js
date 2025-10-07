@@ -1389,15 +1389,19 @@ async function connectWhatsApp(userId, sessionId = null) {
           return; // Don't proceed with normal disconnect handling
         }
         
-        // Handle device_removed disconnect - session was revoked by user
-        if (lastDisconnect?.error?.output?.statusCode === 401 && 
-            lastDisconnect?.error?.data?.content?.[0]?.attrs?.type === 'device_removed') {
-          console.log(`📱 Device removed for user ${userId} - session was revoked, cleaning up`);
-          dbLogger.warn('connection', `Device removed for user ${userId} - session was revoked by user`, {
+        // Handle 401 errors (device removal, session invalid, etc.)
+        if (lastDisconnect?.error?.output?.statusCode === 401) {
+          const errorType = lastDisconnect?.error?.data?.content?.[0]?.attrs?.type || 'unknown';
+          const isDeviceRemoved = errorType === 'device_removed';
+          
+          console.log(`📱 401 Error for user ${userId} - ${isDeviceRemoved ? 'device removed' : 'session invalid/expired'}, cleaning up`);
+          dbLogger.warn('connection', `401 Error for user ${userId} - ${isDeviceRemoved ? 'device removed' : 'session invalid/expired'}`, {
             connectionId,
             userId,
             sessionId: sessionId || 'default',
-            reason: 'device_removed',
+            reason: '401_error',
+            errorType: errorType,
+            isDeviceRemoved: isDeviceRemoved,
             timestamp: new Date().toISOString()
           }, userId, sessionId);
           
@@ -1550,11 +1554,12 @@ async function connectWhatsApp(userId, sessionId = null) {
         
         // Don't reconnect for loggedOut, device_removed, or handled error scenarios
         const isLoggedOut = (lastDisconnect?.error)?.output?.statusCode === DisconnectReason.loggedOut;
-        const isDeviceRemoved = (lastDisconnect?.error)?.output?.statusCode === 401 && 
+        const is401Error = (lastDisconnect?.error)?.output?.statusCode === 401;
+        const isDeviceRemoved = is401Error && 
                                lastDisconnect?.error?.data?.content?.[0]?.attrs?.type === 'device_removed';
         const isHandledError = (lastDisconnect?.error)?.output?.statusCode === 515 || 
                               (lastDisconnect?.error)?.output?.statusCode === 503;
-        const shouldReconnect = !isLoggedOut && !isDeviceRemoved && !isHandledError;
+        const shouldReconnect = !isLoggedOut && !is401Error && !isHandledError;
         
         dbLogger.debug('connection', `Reconnection decision: ${shouldReconnect ? 'WILL_RECONNECT' : 'WILL_NOT_RECONNECT'}`, {
           connectionId,
@@ -1562,6 +1567,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           disconnectCode: lastDisconnect?.error?.output?.statusCode,
           loggedOutCode: DisconnectReason.loggedOut,
           isLoggedOut,
+          is401Error,
           isDeviceRemoved,
           isHandledError
         }, userId, sessionId);
@@ -1622,8 +1628,8 @@ async function connectWhatsApp(userId, sessionId = null) {
           
           attemptReconnect();
         } else {
-          if (isDeviceRemoved) {
-            dbLogger.info('connection', `Device removed for user ${userId}, not attempting reconnection`, { connectionId }, userId, sessionId);
+          if (is401Error) {
+            dbLogger.info('connection', `401 Error for user ${userId} (${isDeviceRemoved ? 'device removed' : 'session invalid'}), not attempting reconnection`, { connectionId }, userId, sessionId);
           } else if (isHandledError) {
             dbLogger.info('connection', `Handled error (${lastDisconnect?.error?.output?.statusCode}) for user ${userId}, not attempting reconnection`, { connectionId }, userId, sessionId);
           } else {
