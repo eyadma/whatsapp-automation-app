@@ -632,22 +632,22 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   cardContent: {
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 20,
   },
   headerText: {
     marginLeft: 12,
     flex: 1,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: theme.colors.onSurface,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
@@ -659,7 +659,7 @@ const createStyles = (theme) => StyleSheet.create({
     backgroundColor: theme.colors.outline,
   },
   section: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
@@ -848,11 +848,12 @@ const createStyles = (theme) => StyleSheet.create({
     marginBottom: 16,
   },
   primaryButton: {
-    paddingVertical: 12,
-    marginBottom: 8,
+    paddingVertical: 14,
+    marginBottom: 12,
   },
   secondaryButton: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    marginTop: 8,
   },
   connectButton: {
     backgroundColor: '#25D366',
@@ -869,15 +870,16 @@ const createStyles = (theme) => StyleSheet.create({
   utilityButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 12,
+    marginTop: 8,
   },
   utilityButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
     backgroundColor: 'transparent',
@@ -943,25 +945,25 @@ const createStyles = (theme) => StyleSheet.create({
   // Compact Styles
   compactSessionInfo: {
     backgroundColor: theme.colors.surfaceVariant,
-    padding: 12,
+    padding: 16,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.colors.outline,
   },
   sessionInfoText: {
     fontSize: 14,
     color: theme.colors.onSurface,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   compactProgressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    padding: 16,
     backgroundColor: theme.colors.surfaceVariant,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.colors.outline,
   },
@@ -973,10 +975,10 @@ const createStyles = (theme) => StyleSheet.create({
   compactErrorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 16,
     backgroundColor: theme.colors.errorContainer,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.colors.error,
   },
