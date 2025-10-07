@@ -13,6 +13,9 @@ class DatabaseLogger {
     this.flushInterval = 5000; // Flush every 5 seconds
     this.maxRetries = 3;
     this.retryDelay = 1000;
+    this.isSupabaseAvailable = true; // Track Supabase availability
+    this.consecutiveFailures = 0; // Track consecutive failures
+    this.maxConsecutiveFailures = 5; // Disable logging after 5 consecutive failures
     
     // Start periodic flush
     this.startPeriodicFlush();
@@ -42,6 +45,20 @@ class DatabaseLogger {
    * Add log entry to buffer
    */
   addLog(level, category, message, data = null, userId = null, sessionId = null) {
+    // Always log to console for immediate visibility
+    const consoleMessage = `[${level.toUpperCase()}] [${category}] ${message}`;
+    const consoleData = data ? ` | Data: ${JSON.stringify(data)}` : '';
+    const consoleContext = userId ? ` | User: ${userId}` : '';
+    const consoleSession = sessionId ? ` | Session: ${sessionId}` : '';
+    
+    console.log(`${consoleMessage}${consoleData}${consoleContext}${consoleSession}`);
+
+    // Only add to buffer if Supabase is available
+    if (!this.isSupabaseAvailable) {
+      console.log('⚠️ Database logging disabled due to Supabase unavailability');
+      return;
+    }
+
     const logEntry = {
       level,
       category,
@@ -54,14 +71,6 @@ class DatabaseLogger {
     };
 
     this.logBuffer.push(logEntry);
-
-    // Also log to console for immediate visibility (but this will be limited by backend)
-    const consoleMessage = `[${level.toUpperCase()}] [${category}] ${message}`;
-    const consoleData = data ? ` | Data: ${JSON.stringify(data)}` : '';
-    const consoleContext = userId ? ` | User: ${userId}` : '';
-    const consoleSession = sessionId ? ` | Session: ${sessionId}` : '';
-    
-    console.log(`${consoleMessage}${consoleData}${consoleContext}${consoleSession}`);
 
     // Flush if buffer is full
     if (this.logBuffer.length >= this.bufferSize) {
@@ -79,25 +88,102 @@ class DatabaseLogger {
     this.logBuffer = [];
 
     try {
+      // Check if Supabase is accessible before attempting to insert
+      const { error: healthError } = await supabase
+        .from('logs')
+        .select('id')
+        .limit(1);
+
+      if (healthError) {
+        console.error('❌ Supabase health check failed:', healthError.message);
+        this.consecutiveFailures++;
+        this.checkSupabaseAvailability();
+        // Re-add logs to buffer for retry
+        if (this.logBuffer.length < this.bufferSize * 2) {
+          this.logBuffer.unshift(...logsToInsert);
+        }
+        return;
+      }
+
       const { error } = await supabase
         .from('logs')
         .insert(logsToInsert);
 
       if (error) {
         console.error('❌ Database logging error:', error);
+        this.consecutiveFailures++;
+        this.checkSupabaseAvailability();
         // Re-add logs to buffer for retry (but limit to prevent infinite growth)
         if (this.logBuffer.length < this.bufferSize * 2) {
           this.logBuffer.unshift(...logsToInsert);
         }
       } else {
         console.log(`✅ Flushed ${logsToInsert.length} logs to database`);
+        this.consecutiveFailures = 0; // Reset failure count on success
+        this.isSupabaseAvailable = true; // Re-enable logging
       }
     } catch (error) {
       console.error('❌ Database logging exception:', error);
-      // Re-add logs to buffer for retry
-      if (this.logBuffer.length < this.bufferSize * 2) {
-        this.logBuffer.unshift(...logsToInsert);
+      
+      // Check if it's a connection timeout or network error
+      if (error.message && (
+        error.message.includes('522') || 
+        error.message.includes('Connection timed out') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('ECONNREFUSED')
+      )) {
+        console.log('🔄 Supabase connection issue detected, will retry later');
+        this.consecutiveFailures++;
+        this.checkSupabaseAvailability();
+        // Re-add logs to buffer for retry
+        if (this.logBuffer.length < this.bufferSize * 2) {
+          this.logBuffer.unshift(...logsToInsert);
+        }
+      } else {
+        // For other errors, don't retry to prevent infinite loops
+        console.log('⚠️ Non-retryable error, dropping logs to prevent buffer overflow');
+        this.consecutiveFailures++;
+        this.checkSupabaseAvailability();
       }
+    }
+  }
+
+  /**
+   * Check Supabase availability and disable logging if needed
+   */
+  checkSupabaseAvailability() {
+    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+      if (this.isSupabaseAvailable) {
+        console.log('🚫 Disabling database logging due to consecutive failures');
+        this.isSupabaseAvailable = false;
+      }
+    }
+  }
+
+  /**
+   * Test Supabase connection and re-enable logging if successful
+   */
+  async testSupabaseConnection() {
+    try {
+      const { error } = await supabase
+        .from('logs')
+        .select('id')
+        .limit(1);
+
+      if (!error) {
+        if (!this.isSupabaseAvailable) {
+          console.log('✅ Supabase connection restored, re-enabling database logging');
+          this.isSupabaseAvailable = true;
+          this.consecutiveFailures = 0;
+        }
+        return true;
+      } else {
+        console.log('❌ Supabase connection test failed:', error.message);
+        return false;
+      }
+    } catch (error) {
+      console.log('❌ Supabase connection test exception:', error.message);
+      return false;
     }
   }
 
@@ -108,6 +194,13 @@ class DatabaseLogger {
     setInterval(() => {
       this.flush();
     }, this.flushInterval);
+
+    // Test Supabase connection every 30 seconds when logging is disabled
+    setInterval(async () => {
+      if (!this.isSupabaseAvailable) {
+        await this.testSupabaseConnection();
+      }
+    }, 30000);
   }
 
   /**
