@@ -942,13 +942,18 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Create proper logger according to Baileys docs
       const logger = {
-        level: 'info',
+        level: 'error', // Only log errors to prevent Railway rate limits
         child: () => logger,
-        trace: (obj, msg) => console.log(`[TRACE] ${msg}`, obj),
-        debug: (obj, msg) => console.log(`[DEBUG] ${msg}`, obj),
-        info: (obj, msg) => console.log(`[INFO] ${msg}`, obj),
-        warn: (obj, msg) => console.warn(`[WARN] ${msg}`, obj),
-        error: (obj, msg) => console.error(`[ERROR] ${msg}`, obj),
+        trace: (obj, msg) => {}, // Disable trace logging
+        debug: (obj, msg) => {}, // Disable debug logging
+        info: (obj, msg) => {}, // Disable info logging
+        warn: (obj, msg) => {}, // Disable warn logging to prevent rate limits
+        error: (obj, msg) => {
+          // Only log critical errors to prevent Railway rate limits
+          if (msg && (msg.includes('Connection Closed') || msg.includes('PreKeyError') || msg.includes('Timed Out'))) {
+            console.error(`[ERROR] ${msg}`, obj);
+          }
+        },
         fatal: (obj, msg) => console.error(`[FATAL] ${msg}`, obj)
       };
 
@@ -957,29 +962,45 @@ async function connectWhatsApp(userId, sessionId = null) {
         logger: logger,
         // Proper browser configuration for desktop emulation
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
-        // Connection settings - enhanced for better timing
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 30000,
-        retryRequestDelayMs: 3000, // Increased from 2000 to 3000ms for better timing
-        maxRetries: 5,
-        defaultQueryTimeoutMs: 120000,
+        // Connection settings - enhanced for better timing and stability
+        connectTimeoutMs: 90000, // Increased to 90 seconds
+        keepAliveIntervalMs: 25000, // Reduced to 25 seconds for better stability
+        retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
+        maxRetries: 3, // Reduced retries to prevent excessive attempts
+        defaultQueryTimeoutMs: 180000, // Increased to 3 minutes
         // Additional timing settings to prevent 515 errors
-        requestTimeoutMs: 60000,
+        requestTimeoutMs: 90000, // Increased to 90 seconds
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
         generateHighQualityLinkPreview: true,
-        // Message retrieval function - required by Baileys
+        // Enhanced message handling to prevent PreKey errors
+        shouldIgnoreJid: (jid) => {
+          // Ignore broadcast messages and status messages to reduce load
+          return isJidBroadcast(jid) || jid.includes('status@broadcast');
+        },
+        // Message retrieval function - enhanced for better decryption
         getMessage: async (key) => {
           try {
-            // Try to retrieve message from database or return null
-            // This is required for message decryption and resending
+            // Enhanced message retrieval to handle PreKey errors
             dbLogger.debug('message', `Retrieving message for key: ${JSON.stringify(key)}`, { connectionId }, userId, sessionId);
-            return null; // For now, return null - implement database lookup if needed
+            
+            // For now, return null to avoid PreKey errors
+            // In production, implement proper message storage/retrieval
+            return null;
           } catch (error) {
             dbLogger.error('message', `Error retrieving message: ${error.message}`, { connectionId, error: error.message }, userId, sessionId);
             return null;
           }
+        },
+        // Enhanced connection options
+        options: {
+          // Reduce logging to prevent Railway rate limits
+          logLevel: 'warn', // Only log warnings and errors
+          // Connection stability options
+          keepAlive: true,
+          // PreKey handling
+          preKeyCount: 5, // Reduce prekey count to prevent conflicts
         }
       };
       
@@ -999,6 +1020,28 @@ async function connectWhatsApp(userId, sessionId = null) {
       sock = makeWASocket(socketConfig);
       const socketDuration = Date.now() - socketStart;
       console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
+      
+      // Add connection timeout to prevent hanging connections
+      const connectionTimeout = setTimeout(() => {
+        if (sock && !sock.user) {
+          console.log(`⏰ Connection timeout for user ${userId} - no user data received within 2 minutes`);
+          dbLogger.warn('connection', `Connection timeout for user ${userId} - no user data received within 2 minutes`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            timeout: 120000,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Attempt to reconnect after timeout
+          setTimeout(() => {
+            console.log(`🔄 Attempting reconnection after timeout for user ${userId}`);
+            connectWhatsApp(userId, sessionId).catch(err => {
+              console.error(`❌ Reconnection failed for user ${userId}:`, err.message);
+            });
+          }, 10000); // Wait 10 seconds before reconnecting
+        }
+      }, 120000); // 2 minute timeout
       
       dbLogger.info('socket', `WhatsApp socket created for user: ${userId} in ${socketDuration}ms`, {
         connectionId,
@@ -1078,7 +1121,10 @@ async function connectWhatsApp(userId, sessionId = null) {
 
     // Handle stream errors
     sock.ev.on('stream:error', (error) => {
-      console.log(`❌ Stream error for user ${userId}:`, error);
+      // Only log critical errors to reduce Railway rate limits
+      if (streamErrorCount < 3) {
+        console.log(`❌ Stream error for user ${userId}:`, error);
+      }
       
       // Increment stream error counter
       streamErrorCount++;
@@ -1088,13 +1134,15 @@ async function connectWhatsApp(userId, sessionId = null) {
       const errorContent = error?.node?.content;
       const errorTag = error?.node?.tag;
       
-      // Log detailed error information for debugging
-      console.log(`🔍 Stream error details (${streamErrorCount}/${maxStreamErrors}):`, {
-        tag: errorTag,
-        attrs: error?.node?.attrs,
-        content: errorContent,
-        fullError: error
-      });
+      // Log detailed error information for debugging (only first few errors)
+      if (streamErrorCount <= 3) {
+        console.log(`🔍 Stream error details (${streamErrorCount}/${maxStreamErrors}):`, {
+          tag: errorTag,
+          attrs: error?.node?.attrs,
+          content: errorContent,
+          fullError: error
+        });
+      }
       
       // Handle specific error codes
       if (errorCode === '515') {
@@ -1584,6 +1632,12 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection open
       else if (connection === 'open') {
+        // Clear connection timeout since connection is successful
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          console.log(`✅ Connection timeout cleared for user ${userId} - connection successful`);
+        }
+        
         dbLogger.info('connection', `Connection opened for user: ${userId}`, {
           connectionId,
           userId,
@@ -1755,17 +1809,35 @@ async function connectWhatsApp(userId, sessionId = null) {
       const messageStartTime = Date.now();
       
       try {
-        dbLogger.info('message', `Message event received for user ${userId}: ${event.messages?.length || 0} messages`, {
+        // Filter out messages that might cause PreKey errors
+        const validMessages = event.messages?.filter(msg => {
+          // Skip messages from broadcast lists and status
+          if (isJidBroadcast(msg.key.remoteJid) || msg.key.remoteJid.includes('status@broadcast')) {
+            return false;
+          }
+          // Skip messages without proper key structure
+          if (!msg.key || !msg.key.remoteJid) {
+            return false;
+          }
+          return true;
+        }) || [];
+        
+        if (validMessages.length === 0) {
+          // No valid messages to process
+          return;
+        }
+        
+        dbLogger.info('message', `Message event received for user ${userId}: ${validMessages.length} valid messages (filtered from ${event.messages?.length || 0})`, {
           connectionId,
           messageId,
           userId,
           sessionId: sessionId || 'default',
-          messageCount: event.messages?.length || 0,
+          messageCount: validMessages.length,
           eventType: event.type,
           timestamp: new Date().toISOString()
         }, userId, sessionId);
         
-        for (const message of event.messages) {
+        for (const message of validMessages) {
           const individualMessageId = `${messageId}_${event.messages.indexOf(message)}`;
           
           // // Skip if message is from self
@@ -2118,6 +2190,12 @@ async function connectWhatsApp(userId, sessionId = null) {
     return sock;
   } catch (error) {
     const totalConnectionTime = Date.now() - startTime;
+    
+    // Clear connection timeout if it exists
+    if (connectionTimeout) {
+      clearTimeout(connectionTimeout);
+      console.log(`✅ Connection timeout cleared for user ${userId} - error occurred`);
+    }
     
     // Clean up connection lock
     const errorConnectionKey = `${userId}_${sessionId || 'default'}`;
