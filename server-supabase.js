@@ -213,7 +213,7 @@ const connectionPersistenceManager = {
             // Reset failure counter on successful health check
             currentConnection.healthCheckFailures = 0;
             console.log(`✅ Health check passed for user ${userId} (${wsState}, actuallyConnected: ${isActuallyConnected})`);
-          } else {
+  } else {
             console.log(`⚠️ Socket not ready for user ${userId} (${wsState}, hasSendMessage: ${hasSendMessage}, actuallyConnected: ${isActuallyConnected}), but not triggering reconnection yet`);
             // Don't immediately trigger reconnection - just log the issue
             currentConnection.status = 'checking';
@@ -1092,20 +1092,26 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Ignore broadcast messages and status messages to reduce load
           return isJidBroadcast(jid) || jid.includes('status@broadcast');
         },
-        // Message retrieval function - enhanced for better decryption
-        getMessage: async (key) => {
-          try {
-            // Enhanced message retrieval to handle PreKey errors
-            dbLogger.debug('message', `Retrieving message for key: ${JSON.stringify(key)}`, { connectionId }, userId, sessionId);
-            
-            // For now, return null to avoid PreKey errors
-            // In production, implement proper message storage/retrieval
-            return null;
-          } catch (error) {
-            dbLogger.error('message', `Error retrieving message: ${error.message}`, { connectionId, error: error.message }, userId, sessionId);
+      // Message retrieval function - enhanced for better decryption
+      getMessage: async (key) => {
+        try {
+          // Enhanced message retrieval to handle PreKey and Bad MAC errors
+          dbLogger.debug('message', `Retrieving message for key: ${JSON.stringify(key)}`, { connectionId }, userId, sessionId);
+          
+          // Return null to avoid PreKey and Bad MAC errors
+          // This prevents decryption issues with corrupted or invalid messages
+          return null;
+        } catch (error) {
+          // Handle Bad MAC errors in message retrieval
+          if (error.message && error.message.includes('Bad MAC')) {
+            dbLogger.warn('message', `Bad MAC error in message retrieval, returning null`, { connectionId, error: error.message }, userId, sessionId);
             return null;
           }
-        },
+          
+          dbLogger.error('message', `Error retrieving message: ${error.message}`, { connectionId, error: error.message }, userId, sessionId);
+          return null;
+        }
+      },
         // Enhanced connection options
         options: {
           // Reduce logging to prevent Railway rate limits
@@ -1247,7 +1253,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         }, userId, sessionId);
       }
     }, 300000); // Check every 5 minutes
-    
+
     // Store health check interval reference for cleanup
     const connectionData = getConnection(userId, sessionId);
     if (connectionData) {
@@ -1841,7 +1847,7 @@ async function connectWhatsApp(userId, sessionId = null) {
                 }, userId, sessionId);
                 
                 // For 24/7 operation, keep trying indefinitely
-                attemptReconnect();
+                  attemptReconnect();
               });
             }, delay);
           };
@@ -2044,7 +2050,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       const messageStartTime = Date.now();
       
       try {
-        // Filter out messages that might cause PreKey errors
+        // Filter out messages that might cause PreKey or Bad MAC errors
         const validMessages = event.messages?.filter(msg => {
           // Skip messages from broadcast lists and status
           if (isJidBroadcast(msg.key.remoteJid) || msg.key.remoteJid.includes('status@broadcast')) {
@@ -2052,6 +2058,10 @@ async function connectWhatsApp(userId, sessionId = null) {
           }
           // Skip messages without proper key structure
           if (!msg.key || !msg.key.remoteJid) {
+            return false;
+          }
+          // Skip messages that might cause Bad MAC errors (corrupted or invalid messages)
+          if (!msg.message || typeof msg.message !== 'object') {
             return false;
           }
           return true;
@@ -2188,9 +2198,9 @@ async function connectWhatsApp(userId, sessionId = null) {
               dbLogger.debug('database', `Fetching all locations for user ${userId}`, { connectionId, messageId: locationProcessingId }, userId, sessionId);
               const { data: allLocations, error: allLocationsError } = await retryOperation(async () => {
                 const { data, error } = await supabase
-                  .from('locations')
-                  .select('id, name, phone, phone2')
-                  .eq('user_id', userId);
+                .from('locations')
+                .select('id, name, phone, phone2')
+                .eq('user_id', userId);
 
                 if (error) {
                   throw new Error(`Database query error: ${error.message}`);
@@ -2246,8 +2256,8 @@ async function connectWhatsApp(userId, sessionId = null) {
                   }, userId, sessionId);
                   
                   const isMatch = locationPhoneNormalized === normalizedWhatsAppPhone || 
-                                 locationPhoneNormalized === normalizedLocalPhone ||
-                                 locationPhone2Normalized === normalizedWhatsAppPhone || 
+                      locationPhoneNormalized === normalizedLocalPhone ||
+                      locationPhone2Normalized === normalizedWhatsAppPhone || 
                                  locationPhone2Normalized === normalizedLocalPhone;
                   
                   if (isMatch) {
@@ -2300,12 +2310,12 @@ async function connectWhatsApp(userId, sessionId = null) {
                     console.log(`   Updating location: ${location.name} (ID: ${location.id})`);
                     
                     await retryOperation(async () => {
-                      const { error: updateError } = await supabase
-                        .from('locations')
-                        .update(locationUpdateData)
-                        .eq('id', location.id);
+                    const { error: updateError } = await supabase
+                      .from('locations')
+                      .update(locationUpdateData)
+                      .eq('id', location.id);
 
-                      if (updateError) {
+                    if (updateError) {
                         throw new Error(`Database update error: ${updateError.message}`);
                       }
                       
@@ -2332,11 +2342,11 @@ async function connectWhatsApp(userId, sessionId = null) {
                 };
 
                 await retryOperation(async () => {
-                  const { error: insertError } = await supabase
-                    .from('locations')
-                    .insert([newLocationData]);
+                const { error: insertError } = await supabase
+                  .from('locations')
+                  .insert([newLocationData]);
 
-                  if (insertError) {
+                if (insertError) {
                     throw new Error(`Database insert error: ${insertError.message}`);
                   }
                   
@@ -2393,6 +2403,20 @@ async function connectWhatsApp(userId, sessionId = null) {
           }
         }
       } catch (error) {
+        // Handle Bad MAC errors specifically
+        if (error.message && error.message.includes('Bad MAC')) {
+          console.log(`⚠️ Bad MAC error for user ${userId} - message decryption failed, skipping message`);
+          dbLogger.warn('message', `Bad MAC error for user ${userId} - message decryption failed`, {
+            connectionId,
+            messageId,
+            userId,
+            sessionId: sessionId || 'default',
+            error: error.message,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          return; // Skip processing this message
+        }
+        
         dbLogger.error('message', `Error in message listener for user ${userId}: ${error.message}`, {
           connectionId,
           messageId,
@@ -3932,10 +3956,10 @@ app.get('/api/locations/test/:userId', async (req, res) => {
     // Test if locations table exists and is accessible
     const { data: locations, error: locationsError } = await retryOperation(async () => {
       const { data, error } = await supabase
-        .from('locations')
-        .select('*')
-        .eq('user_id', userId)
-        .limit(5);
+      .from('locations')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(5);
       
       if (error) {
         throw new Error(`Database query error: ${error.message}`);
@@ -3965,9 +3989,9 @@ app.get('/api/locations/test/:userId', async (req, res) => {
     
     const { data: insertedTest, error: insertError } = await retryOperation(async () => {
       const { data, error } = await supabase
-        .from('locations')
-        .insert([testData])
-        .select();
+      .from('locations')
+      .insert([testData])
+      .select();
       
       if (error) {
         throw new Error(`Database insert error: ${error.message}`);
@@ -3989,9 +4013,9 @@ app.get('/api/locations/test/:userId', async (req, res) => {
     // Clean up test record
     await retryOperation(async () => {
       const { error: deleteError } = await supabase
-        .from('locations')
-        .delete()
-        .eq('id', insertedTest[0].id);
+      .from('locations')
+      .delete()
+      .eq('id', insertedTest[0].id);
       
       if (deleteError) {
         throw new Error(`Database delete error: ${deleteError.message}`);
@@ -4598,11 +4622,11 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
           // Check if location already exists (by shipment_id)
           const { data: existingLocation, error: checkLocationError } = await retryOperation(async () => {
             const { data, error } = await supabase
-              .from('locations')
-              .select('id')
-              .eq('shipment_id', shipment.id)
-              .eq('user_id', userId)
-              .single();
+            .from('locations')
+            .select('id')
+            .eq('shipment_id', shipment.id)
+            .eq('user_id', userId)
+            .single();
             
             if (error && error.code !== 'PGRST116') {
               throw new Error(`Database check error: ${error.message}`);
@@ -4620,11 +4644,11 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
             console.log(`📍 Updating existing location for ${customerData.name}`);
             
             await retryOperation(async () => {
-              const { error: updateLocationError } = await supabase
-                .from('locations')
-                .update(customerData)
-                .eq('id', existingLocation.id);
-              
+            const { error: updateLocationError } = await supabase
+              .from('locations')
+              .update(customerData)
+              .eq('id', existingLocation.id);
+            
               if (updateLocationError) {
                 throw new Error(`Database update error: ${updateLocationError.message}`);
               }
@@ -4638,13 +4662,13 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
             
             await retryOperation(async () => {
               const { data: upsertedLocation, error: createLocationError } = await supabase
-                .from('locations')
+              .from('locations')
                 .upsert([customerData], { 
                   onConflict: 'shipment_id',
                   ignoreDuplicates: false 
                 })
-                .select();
-              
+              .select();
+            
               if (createLocationError) {
                 throw new Error(`Database upsert error: ${createLocationError.message}`);
               }
@@ -4814,4 +4838,4 @@ app.get('/api/areas/test/:userId', async (req, res) => {
       error: error.message 
     });
   }
-});
+}); 
