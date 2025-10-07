@@ -11,7 +11,9 @@
     "serve:web": "npx serve dist -s -l ${PORT:-3000}",
     "start:web": "npm run build:web && npm run serve:web",
     "increment-version": "node increment-version.js",
-    "build:production": "node build-production.js"
+    "build:production": "node build-production.js",
+    "verify-icons": "node verify-icons.js",
+    "prebuild": "npm run verify-icons && expo prebuild"
   },
   "dependencies": {
     "@babel/runtime": "^7.28.4",

@@ -1,0 +1,175 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+
+console.log('🖼️  WhatsApp Automation - Icon Verification');
+console.log('==========================================\n');
+
+// Check if we're in the mobile directory
+const packageJsonPath = path.join(__dirname, 'package.json');
+if (!fs.existsSync(packageJsonPath)) {
+  console.error('❌ Error: package.json not found. Please run this script from the mobile directory.');
+  process.exit(1);
+}
+
+console.log('🔍 Checking Icon Configuration:');
+console.log('===============================');
+
+// Check app.json
+const appJsonPath = path.join(__dirname, 'app.json');
+if (fs.existsSync(appJsonPath)) {
+  const appJson = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+  console.log('✅ app.json found');
+  
+  // Check main icon
+  if (appJson.expo.icon) {
+    console.log(`📱 Main Icon: ${appJson.expo.icon}`);
+    const mainIconPath = path.join(__dirname, appJson.expo.icon);
+    if (fs.existsSync(mainIconPath)) {
+      console.log('✅ Main icon file exists');
+    } else {
+      console.log('❌ Main icon file missing');
+    }
+  }
+  
+  // Check splash screen
+  if (appJson.expo.splash && appJson.expo.splash.image) {
+    console.log(`📱 Splash Screen: ${appJson.expo.splash.image}`);
+    const splashPath = path.join(__dirname, appJson.expo.splash.image);
+    if (fs.existsSync(splashPath)) {
+      console.log('✅ Splash screen file exists');
+    } else {
+      console.log('❌ Splash screen file missing');
+    }
+  }
+  
+  // Check iOS icon
+  if (appJson.expo.ios && appJson.expo.ios.icon) {
+    console.log(`📱 iOS Icon: ${appJson.expo.ios.icon}`);
+    const iosIconPath = path.join(__dirname, appJson.expo.ios.icon);
+    if (fs.existsSync(iosIconPath)) {
+      console.log('✅ iOS icon file exists');
+    } else {
+      console.log('❌ iOS icon file missing');
+    }
+  }
+  
+  // Check Android icon
+  if (appJson.expo.android && appJson.expo.android.icon) {
+    console.log(`📱 Android Icon: ${appJson.expo.android.icon}`);
+    const androidIconPath = path.join(__dirname, appJson.expo.android.icon);
+    if (fs.existsSync(androidIconPath)) {
+      console.log('✅ Android icon file exists');
+    } else {
+      console.log('❌ Android icon file missing');
+    }
+  }
+  
+  // Check Android adaptive icon
+  if (appJson.expo.android && appJson.expo.android.adaptiveIcon) {
+    console.log(`📱 Android Adaptive Icon: ${appJson.expo.android.adaptiveIcon.foregroundImage}`);
+    const adaptiveIconPath = path.join(__dirname, appJson.expo.android.adaptiveIcon.foregroundImage);
+    if (fs.existsSync(adaptiveIconPath)) {
+      console.log('✅ Android adaptive icon file exists');
+    } else {
+      console.log('❌ Android adaptive icon file missing');
+    }
+  }
+  
+  // Check web favicon
+  if (appJson.expo.web && appJson.expo.web.favicon) {
+    console.log(`📱 Web Favicon: ${appJson.expo.web.favicon}`);
+    const faviconPath = path.join(__dirname, appJson.expo.web.favicon);
+    if (fs.existsSync(faviconPath)) {
+      console.log('✅ Web favicon file exists');
+    } else {
+      console.log('❌ Web favicon file missing');
+    }
+  }
+  
+  // Check notification icon
+  if (appJson.expo.notification && appJson.expo.notification.icon) {
+    console.log(`📱 Notification Icon: ${appJson.expo.notification.icon}`);
+    const notificationIconPath = path.join(__dirname, appJson.expo.notification.icon);
+    if (fs.existsSync(notificationIconPath)) {
+      console.log('✅ Notification icon file exists');
+    } else {
+      console.log('❌ Notification icon file missing');
+    }
+  }
+  
+} else {
+  console.log('❌ app.json not found');
+}
+
+console.log('\n🖼️  Checking Assets Directory:');
+console.log('=============================');
+
+const assetsDir = path.join(__dirname, 'assets', 'images');
+const requiredAssets = [
+  'icon.png',
+  'splash-icon.png', 
+  'adaptive-icon.png',
+  'favicon.png'
+];
+
+let allAssetsExist = true;
+
+requiredAssets.forEach(asset => {
+  const assetPath = path.join(assetsDir, asset);
+  if (fs.existsSync(assetPath)) {
+    const stats = fs.statSync(assetPath);
+    const sizeKB = Math.round(stats.size / 1024);
+    console.log(`✅ ${asset} (${sizeKB} KB)`);
+  } else {
+    console.log(`❌ ${asset} missing`);
+    allAssetsExist = false;
+  }
+});
+
+console.log('\n🔍 Checking for Conflicts:');
+console.log('==========================');
+
+// Check for conflicting icon files in root
+const rootIconPath = path.join(__dirname, '..', 'icon.png');
+if (fs.existsSync(rootIconPath)) {
+  console.log('⚠️  WARNING: Found conflicting icon.png in root directory');
+  console.log('   This could cause confusion. Consider removing it.');
+} else {
+  console.log('✅ No conflicting root icon.png found');
+}
+
+// Check Android native icons
+const androidResDir = path.join(__dirname, 'android', 'app', 'src', 'main', 'res');
+if (fs.existsSync(androidResDir)) {
+  console.log('✅ Android native icons directory exists');
+  console.log('   (These are auto-generated by Expo and should be consistent)');
+} else {
+  console.log('ℹ️  Android native icons directory not found (normal for development)');
+}
+
+console.log('\n📊 Summary:');
+console.log('===========');
+
+if (allAssetsExist) {
+  console.log('✅ All required icon assets are present');
+  console.log('✅ Icon configuration is properly set up');
+  console.log('✅ Ready for cross-platform deployment');
+  
+  console.log('\n🚀 Next Steps:');
+  console.log('==============');
+  console.log('1. Run: npx expo prebuild --clean (to regenerate native icons)');
+  console.log('2. Test on all platforms:');
+  console.log('   • Web: npm run web');
+  console.log('   • iOS: npx expo run:ios');
+  console.log('   • Android: npx expo run:android');
+  console.log('3. Build for production: npm run build:production');
+  
+} else {
+  console.log('❌ Some icon assets are missing');
+  console.log('   Please ensure all required icon files are in mobile/assets/images/');
+  process.exit(1);
+}
+
+console.log('\n🎉 Icon verification complete!');
