@@ -901,7 +901,26 @@ async function connectWhatsApp(userId, sessionId = null) {
       const authStart = Date.now();
       dbLogger.debug('auth', 'Starting auth state loading...', { connectionId }, userId, sessionId);
       
-      const authResult = await useMultiFileAuthState(sessionDir);
+      // Ensure session directory exists before calling useMultiFileAuthState
+      if (!fs.existsSync(sessionDir)) {
+        console.log(`📁 Session directory missing, creating: ${sessionDir}`);
+        fs.mkdirSync(sessionDir, { recursive: true });
+        dbLogger.info('auth', `Created missing session directory: ${sessionDir}`, { connectionId, sessionDir }, userId, sessionId);
+      }
+      
+      let authResult;
+      try {
+        authResult = await useMultiFileAuthState(sessionDir);
+      } catch (authError) {
+        // If auth fails due to directory issues, try to recreate and retry
+        if (authError.code === 'ENOENT' || authError.message.includes('no such file or directory')) {
+          console.log(`🔄 Auth failed due to missing directory, recreating and retrying...`);
+          fs.mkdirSync(sessionDir, { recursive: true });
+          authResult = await useMultiFileAuthState(sessionDir);
+        } else {
+          throw authError;
+        }
+      }
       state = authResult.state;
       saveCreds = authResult.saveCreds;
       
