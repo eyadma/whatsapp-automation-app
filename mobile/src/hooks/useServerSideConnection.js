@@ -93,6 +93,13 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       }
     } else if (data.sessions) {
       // Direct sessions data from status-all endpoint
+      console.log('🔍 Hook: Processing sessions data:', {
+        hasSessions: !!data.sessions,
+        sessionsType: typeof data.sessions,
+        sessionsKeys: Object.keys(data.sessions || {}),
+        sessionsLength: Object.keys(data.sessions || {}).length
+      });
+      
       setAvailableSessions(data.sessions);
       
       // Check if sessions are empty (server restarted)
