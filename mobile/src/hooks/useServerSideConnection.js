@@ -164,6 +164,11 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
       
       if (data.status === 'error') {
         console.error('📡 Status stream error:', data.error);
+        setConnectionStatus(prev => ({
+          ...prev,
+          error: data.error,
+          lastUpdate: new Date().toISOString()
+        }));
         // Attempt to reconnect after delay
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
@@ -173,6 +178,17 @@ export const useServerSideConnection = (userId, sessionId = 'default') => {
             startStatusStream();
           }
         }, 5000);
+      } else {
+        // Update connection status based on the status string
+        console.log(`🔍 Hook: Processing connection_status update: ${data.status}`);
+        setConnectionStatus(prev => ({
+          ...prev,
+          isConnected: data.status === 'connected',
+          isConnecting: data.status === 'connecting' || data.status === 'reconnecting',
+          status: data.status,
+          lastUpdate: new Date().toISOString(),
+          error: data.status === 'error' ? data.error : null
+        }));
       }
     }
   }, [sessionId, userId]);
