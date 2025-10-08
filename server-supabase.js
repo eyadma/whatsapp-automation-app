@@ -36,6 +36,34 @@ setInterval(() => {
   }
 }, 300000); // Check every 5 minutes (optimized for 8GB plan)
 
+// Helper function to send connection status notifications to users
+async function sendConnectionStatusNotification(userId, status, title, message) {
+  try {
+    // Store notification in database for the user to retrieve
+    const { error } = await supabase
+      .from('connection_notifications')
+      .insert([{
+        user_id: userId,
+        status,
+        title,
+        message,
+        timestamp: new Date().toISOString(),
+        read: false
+      }]);
+    
+    if (error) {
+      console.error('❌ Error storing notification:', error);
+    } else {
+      console.log(`📬 Connection notification stored for user ${userId}: ${status}`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Error sending connection status notification:', error);
+    return false;
+  }
+}
+
 // Helper function to safely logout from WhatsApp connection
 async function safeLogout(connection, userId, sessionId) {
   if (!connection || !connection.sock) {
@@ -1588,13 +1616,22 @@ async function connectWhatsApp(userId, sessionId = null) {
       }
       
       // Handle connection close according to Baileys documentation
-      if (connection === 'close') {
+        if (connection === 'close') {
         console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
         console.log(`📊 Disconnect details:`, {
           reason: lastDisconnect?.error?.output?.statusCode,
           message: lastDisconnect?.error?.message,
           timestamp: new Date().toISOString()
         });
+        
+        // Send push notification about connection closure
+        try {
+          const statusMessage = lastDisconnect?.error?.message || 'Connection closed';
+          const reasonCode = lastDisconnect?.error?.output?.statusCode;
+          await sendConnectionStatusNotification(userId, 'disconnected', `WhatsApp Disconnected`, `Reason: ${statusMessage}${reasonCode ? ` (${reasonCode})` : ''}`);
+        } catch (notifError) {
+          console.error('⚠️ Failed to send disconnection notification:', notifError.message);
+        }
         
         // Handle restartRequired disconnect - this is normal after QR scan
         if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.restartRequired) {
@@ -2007,6 +2044,13 @@ async function connectWhatsApp(userId, sessionId = null) {
           timestamp: new Date().toISOString(),
           totalConnectionTime: Date.now() - startTime
         }, userId, sessionId);
+        
+        // Send push notification about successful connection
+        try {
+          await sendConnectionStatusNotification(userId, 'connected', 'WhatsApp Connected', `Session: ${sessionId || 'default'} - Connected successfully`);
+        } catch (notifError) {
+          console.error('⚠️ Failed to send connection notification:', notifError.message);
+        }
         
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
@@ -2691,7 +2735,76 @@ async function connectWhatsApp(userId, sessionId = null) {
 
 // API Routes
 
-// 0. Logging Management
+// 0. Connection Status Notifications
+app.get('/api/notifications/connection/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { unreadOnly = 'false' } = req.query;
+    
+    let query = supabase
+      .from('connection_notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false })
+      .limit(50);
+    
+    if (unreadOnly === 'true') {
+      query = query.eq('read', false);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    res.json({
+      success: true,
+      notifications: data || [],
+      unreadCount: data?.filter(n => !n.read).length || 0
+    });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/notifications/mark-read/:notificationId', async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+    
+    const { error } = await supabase
+      .from('connection_notifications')
+      .update({ read: true })
+      .eq('id', notificationId);
+    
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/notifications/mark-all-read/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { error } = await supabase
+      .from('connection_notifications')
+      .update({ read: true })
+      .eq('user_id', userId)
+      .eq('read', false);
+    
+    if (error) throw error;
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 1. Logging Management
 app.get('/api/logs', async (req, res) => {
   try {
     const { level, category, userId, sessionId, limit = 100, startDate, endDate } = req.query;
