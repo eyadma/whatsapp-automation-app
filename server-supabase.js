@@ -2340,6 +2340,38 @@ async function connectWhatsApp(userId, sessionId = null) {
           // // Skip if message is from self
           // if (message.key.fromMe) continue;
           
+          // Handle "status" message - respond with "✅ connected" if connected
+          const messageText = message.message?.conversation || 
+                             message.message?.extendedTextMessage?.text || '';
+          
+          if (messageText.toLowerCase().trim() === 'status' && !message.key.fromMe) {
+            try {
+              const contactJid = message.key.remoteJid;
+              const currentConnection = getConnection(userId, sessionId);
+              
+              if (currentConnection && currentConnection.connected) {
+                console.log(`📱 Status request from ${contactJid}, responding with connection status`);
+                await sock.sendMessage(contactJid, { text: '✅ connected' });
+                console.log(`✅ Status response sent to ${contactJid}`);
+                
+                dbLogger.info('message', `Status request handled for user ${userId}`, {
+                  connectionId,
+                  messageId: individualMessageId,
+                  from: contactJid,
+                  response: '✅ connected',
+                  timestamp: new Date().toISOString()
+                }, userId, sessionId);
+              } else {
+                console.log(`⚠️ Status request from ${contactJid}, but not connected - no response sent`);
+              }
+              
+              // Continue to next message after handling status
+              continue;
+            } catch (statusError) {
+              console.error('❌ Error handling status message:', statusError.message);
+            }
+          }
+          
           dbLogger.debug('message', `Processing message for user ${userId}`, {
             connectionId,
             messageId: individualMessageId,
