@@ -1121,14 +1121,17 @@ async function connectWhatsApp(userId, sessionId = null) {
         logger: logger,
         // Proper browser configuration for desktop emulation
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
-        // Connection settings - balanced for stability and performance
-        connectTimeoutMs: 120000, // Increased to 2 minutes for slow connections
+        // Connection settings - optimized for Railway environment
+        connectTimeoutMs: 300000, // Increased to 5 minutes for Railway's slower connections
         keepAliveIntervalMs: 30000, // 30 seconds for better stability
-        retryRequestDelayMs: 3000, // 3 seconds for better timing
-        maxRetries: 5, // Allow more retries for pre-key operations
-        defaultQueryTimeoutMs: 300000, // Increased to 5 minutes for pre-key operations
+        retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
+        maxRetries: 10, // Allow more retries for Railway environment
+        defaultQueryTimeoutMs: 600000, // Increased to 10 minutes for pre-key operations
         // Additional timing settings to prevent timeouts
-        requestTimeoutMs: 120000, // Increased to 2 minutes for slow operations
+        requestTimeoutMs: 300000, // Increased to 5 minutes for slow operations
+        // Railway-specific optimizations
+        fetchAgent: undefined, // Let Node.js handle HTTP requests
+        keepAliveIntervalMs: 30000, // Keep connection alive
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1188,27 +1191,27 @@ async function connectWhatsApp(userId, sessionId = null) {
       const socketDuration = Date.now() - socketStart;
       console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
       
-      // Add connection timeout to prevent hanging connections
+      // Add connection timeout to prevent hanging connections - extended for Railway
       connectionTimeout = setTimeout(() => {
         if (sock && !sock.user) {
-          console.log(`⏰ Connection timeout for user ${userId} - no user data received within 2 minutes`);
-          dbLogger.warn('connection', `Connection timeout for user ${userId} - no user data received within 2 minutes`, {
+          console.log(`⏰ Connection timeout for user ${userId} - no user data received within 5 minutes`);
+          dbLogger.warn('connection', `Connection timeout for user ${userId} - no user data received within 5 minutes`, {
             connectionId,
             userId,
             sessionId: sessionId || 'default',
-            timeout: 120000,
+            timeout: 300000,
             timestamp: new Date().toISOString()
           }, userId, sessionId);
           
-          // Attempt to reconnect after timeout
+          // Attempt to reconnect after timeout with longer delay for Railway
           setTimeout(() => {
-            console.log(`🔄 Attempting reconnection after timeout for user ${userId}`);
+            console.log(`🔄 Attempting reconnection after timeout for user ${userId} with extended delay`);
             connectWhatsApp(userId, sessionId).catch(err => {
               console.error(`❌ Reconnection failed for user ${userId}:`, err.message);
             });
-          }, 10000); // Wait 10 seconds before reconnecting
+          }, 30000); // Wait 30 seconds before reconnecting for Railway
         }
-      }, 120000); // 2 minute timeout
+      }, 300000); // 5 minute timeout for Railway environment
       
       dbLogger.info('socket', `WhatsApp socket created for user: ${userId} in ${socketDuration}ms`, {
         connectionId,
@@ -1590,10 +1593,10 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Clean up current connection
           removeConnection(userId, sessionId || 'default');
           
-          // Attempt to create a new socket after a delay
+          // Attempt to create a new socket after a longer delay for Railway
           setTimeout(async () => {
             try {
-              console.log(`🔄 Retrying connection after timeout for user ${userId}`);
+              console.log(`🔄 Retrying connection after timeout for user ${userId} with extended delay`);
               
               // Check if a connection already exists before creating a new one
               const existingConnection = getConnection(userId, sessionId);
@@ -1614,7 +1617,7 @@ async function connectWhatsApp(userId, sessionId = null) {
                 timestamp: new Date().toISOString()
               }, userId, sessionId);
             }
-          }, 10000); // Wait 10 seconds before retrying after timeout
+          }, 30000); // Wait 30 seconds before retrying for Railway environment after timeout
           
           return; // Don't proceed with normal disconnect handling
         }
