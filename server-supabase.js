@@ -410,10 +410,20 @@ function removeConnection(userId, sessionId) {
     const userConnections = connections.get(userId);
     const connection = userConnections.get(sessionId);
     
-    // Clear session health check interval if it exists
-    if (connection && connection.sessionHealthCheck) {
-      clearInterval(connection.sessionHealthCheck);
-      console.log(`🧹 Cleared session health check interval for ${userId}_${sessionId}`);
+    // Clear all intervals if they exist
+    if (connection) {
+      if (connection.sessionHealthCheck) {
+        clearInterval(connection.sessionHealthCheck);
+        console.log(`🧹 Cleared session health check interval for ${userId}_${sessionId}`);
+      }
+      if (connection.keepAliveInterval) {
+        clearInterval(connection.keepAliveInterval);
+        console.log(`🧹 Cleared keep-alive interval for ${userId}_${sessionId}`);
+      }
+      if (connection.healthCheckInterval) {
+        clearInterval(connection.healthCheckInterval);
+        console.log(`🧹 Cleared health check interval for ${userId}_${sessionId}`);
+      }
     }
     
     userConnections.delete(sessionId);
@@ -1146,7 +1156,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
         // Connection settings - optimized for Railway environment
         connectTimeoutMs: 300000, // Increased to 5 minutes for Railway's slower connections
-        keepAliveIntervalMs: 30000, // 30 seconds for better stability
+        keepAliveIntervalMs: 15000, // 15 seconds to prevent 1-hour disconnections
         retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
         maxRetries: 10, // Allow more retries for Railway environment
         defaultQueryTimeoutMs: 600000, // Increased to 10 minutes for pre-key operations
@@ -1154,7 +1164,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         requestTimeoutMs: 300000, // Increased to 5 minutes for slow operations
         // Railway-specific optimizations
         fetchAgent: undefined, // Let Node.js handle HTTP requests
-        keepAliveIntervalMs: 30000, // Keep connection alive
+        keepAliveIntervalMs: 15000, // Keep connection alive - prevent 1-hour disconnections
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1845,11 +1855,17 @@ async function connectWhatsApp(userId, sessionId = null) {
           dbLogger.debug('connection', `Cleared health check interval for user: ${userId}`, { connectionId }, userId, sessionId);
         }
         
-        // Clear the keep-alive interval
+        // Clear the keep-alive and health check intervals
         const connection = getConnection(userId, sessionId || 'default');
-        if (connection && connection.keepAliveInterval) {
-          clearInterval(connection.keepAliveInterval);
-          dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
+        if (connection) {
+          if (connection.keepAliveInterval) {
+            clearInterval(connection.keepAliveInterval);
+            dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
+          }
+          if (connection.healthCheckInterval) {
+            clearInterval(connection.healthCheckInterval);
+            dbLogger.debug('connection', `Cleared health check interval for user: ${userId}`, { connectionId }, userId, sessionId);
+          }
         }
         
         // Don't reconnect for loggedOut, device_removed, or handled error scenarios
@@ -1980,12 +1996,49 @@ async function connectWhatsApp(userId, sessionId = null) {
               timestamp: new Date().toISOString()
             }, userId, sessionId);
           }
-        }, 300000); // Send ping every 5 minutes
+        }, 15000); // Send ping every 15 seconds to prevent 1-hour disconnections
         
         // Store the keep-alive interval for cleanup
         const connection = getConnection(userId, sessionId || 'default');
         if (connection) {
           connection.keepAliveInterval = keepAliveInterval;
+        }
+        
+        // Add secondary connection health monitoring to prevent 1-hour disconnections
+        const healthCheckInterval = setInterval(async () => {
+          try {
+            if (sock && sock.ws) {
+              const readyState = sock.ws.readyState;
+              const connectionAge = Date.now() - connectionStartTime;
+              const hoursAlive = Math.floor(connectionAge / (1000 * 60 * 60));
+              
+              console.log(`🔍 Connection health check for user ${userId}: readyState=${readyState}, age=${hoursAlive}h ${Math.floor((connectionAge % (1000 * 60 * 60)) / (1000 * 60))}m`);
+              
+              // If connection is closed or closing, attempt to reconnect
+              if (readyState === 2 || readyState === 3) {
+                console.log(`⚠️ Connection is closing/closed for user ${userId}, attempting reconnection`);
+                clearInterval(healthCheckInterval);
+                removeConnection(userId, sessionId || 'default');
+                
+                // Attempt reconnection after a short delay
+                setTimeout(async () => {
+                  try {
+                    console.log(`🔄 Attempting reconnection due to health check failure for user ${userId}`);
+                    await connectWhatsApp(userId, sessionId);
+                  } catch (reconnectError) {
+                    console.error(`❌ Health check reconnection failed for user ${userId}:`, reconnectError.message);
+                  }
+                }, 5000);
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Health check failed for user ${userId}:`, error.message);
+          }
+        }, 30000); // Check every 30 seconds
+        
+        // Store health check interval for cleanup
+        if (connection) {
+          connection.healthCheckInterval = healthCheckInterval;
         }
         
         // Wait a moment for WebSocket to be fully initialized
