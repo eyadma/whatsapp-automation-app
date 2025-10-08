@@ -941,6 +941,25 @@ async function connectWhatsApp(userId, sessionId = null) {
     }, 120000); // Clear lock after 2 minutes
     
     const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
+    console.log(`📁 Session directory: ${sessionDir}`);
+    
+    // Ensure session directory exists at the very beginning
+    try {
+      if (!fs.existsSync(sessionDir)) {
+        console.log(`📁 Creating session directory: ${sessionDir}`);
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+      
+      // Verify directory is writable
+      const testFile = path.join(sessionDir, '.test-write');
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+      console.log(`✅ Session directory verified and writable: ${sessionDir}`);
+    } catch (dirError) {
+      console.error(`❌ Failed to create/verify session directory: ${sessionDir}`, dirError.message);
+      throw new Error(`Session directory creation failed: ${dirError.message}`);
+    }
+    
     dbLogger.debug('connection', `Session directory: ${sessionDir}`, {
       RAILWAY_VOLUME_MOUNT_PATH: process.env.RAILWAY_VOLUME_MOUNT_PATH,
       __dirname: __dirname,
@@ -1001,6 +1020,21 @@ async function connectWhatsApp(userId, sessionId = null) {
         dbLogger.info('auth', `Created missing session directory: ${sessionDir}`, { connectionId, sessionDir }, userId, sessionId);
       }
       
+      // Double-check directory exists and is writable
+      if (!fs.existsSync(sessionDir)) {
+        throw new Error(`Failed to create session directory: ${sessionDir}`);
+      }
+      
+      // Verify directory is writable by creating a test file
+      const testFile = path.join(sessionDir, '.test-write');
+      try {
+        fs.writeFileSync(testFile, 'test');
+        fs.unlinkSync(testFile);
+        console.log(`✅ Session directory is writable: ${sessionDir}`);
+      } catch (writeError) {
+        throw new Error(`Session directory is not writable: ${sessionDir} - ${writeError.message}`);
+      }
+      
       let authResult;
       try {
         authResult = await useMultiFileAuthState(sessionDir);
@@ -1008,7 +1042,19 @@ async function connectWhatsApp(userId, sessionId = null) {
         // If auth fails due to directory issues, try to recreate and retry
         if (authError.code === 'ENOENT' || authError.message.includes('no such file or directory')) {
           console.log(`🔄 Auth failed due to missing directory, recreating and retrying...`);
+          // Ensure parent directories exist
+          const parentDir = path.dirname(sessionDir);
+          if (!fs.existsSync(parentDir)) {
+            fs.mkdirSync(parentDir, { recursive: true });
+            console.log(`📁 Created parent directory: ${parentDir}`);
+          }
           fs.mkdirSync(sessionDir, { recursive: true });
+          
+          // Verify directory was created successfully
+          if (!fs.existsSync(sessionDir)) {
+            throw new Error(`Failed to create session directory after retry: ${sessionDir}`);
+          }
+          
           authResult = await useMultiFileAuthState(sessionDir);
         } else {
           throw authError;
@@ -2032,7 +2078,25 @@ async function connectWhatsApp(userId, sessionId = null) {
       }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    // Save credentials on update with error handling
+    sock.ev.on('creds.update', async (creds) => {
+      try {
+        // Ensure session directory exists before saving credentials
+        if (!fs.existsSync(sessionDir)) {
+          console.log(`📁 Session directory missing during creds update, creating: ${sessionDir}`);
+          fs.mkdirSync(sessionDir, { recursive: true });
+        }
+        await saveCreds(creds);
+      } catch (saveError) {
+        console.error(`❌ Error saving credentials for user ${userId}:`, saveError.message);
+        dbLogger.error('auth', `Error saving credentials: ${saveError.message}`, {
+          connectionId,
+          error: saveError.message,
+          sessionDir,
+          timestamp: new Date().toISOString()
+        }, userId, sessionId);
+      }
+    });
     
     // Add error handling for the socket
     sock.ev.on('error', (error) => {
