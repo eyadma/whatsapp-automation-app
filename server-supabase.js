@@ -13,6 +13,29 @@ const { dbLogger } = require('./database-logger');
 
 require('dotenv').config();
 
+// Helper function to safely logout from WhatsApp connection
+async function safeLogout(connection, userId, sessionId) {
+  if (!connection || !connection.sock) {
+    console.log(`⚠️ No connection or socket found for user ${userId}, session ${sessionId}`);
+    return false;
+  }
+  
+  try {
+    // Check if socket is still connected
+    if (connection.sock.ws && connection.sock.ws.readyState === 1) {
+      console.log(`✅ Socket is connected, proceeding with logout for user ${userId}`);
+      await connection.sock.logout();
+      return true;
+    } else {
+      console.log(`⚠️ Socket is already disconnected (readyState: ${connection.sock.ws?.readyState}) for user ${userId}, skipping logout`);
+      return false;
+    }
+  } catch (logoutError) {
+    console.log(`⚠️ Logout failed (connection already closed) for user ${userId}: ${logoutError.message}`);
+    return false;
+  }
+}
+
 // Retry utility function for database operations
 async function retryOperation(operation, maxRetries = 3, delay = 1000) {
   let lastError;
@@ -2896,7 +2919,10 @@ app.post('/api/whatsapp/disconnect/:userId', async (req, res) => {
     
     if (connection && connection.sock) {
       console.log(`🔌 Logging out WhatsApp session for user: ${userId}, session: ${sessionId || 'default'}`);
-      await connection.sock.logout();
+      
+      // Safely logout using helper function
+      await safeLogout(connection, userId, sessionId || 'default');
+      
       removeConnection(userId, sessionId);
       
       // Clean up session files after logout to allow fresh reconnection
@@ -2950,7 +2976,10 @@ app.post('/api/whatsapp/disconnect/:userId/:sessionId', async (req, res) => {
     
     if (connection && connection.sock) {
       console.log(`🔌 Logging out WhatsApp session for user: ${userId}, session: ${sessionId}`);
-      await connection.sock.logout();
+      
+      // Safely logout using helper function
+      await safeLogout(connection, userId, sessionId || 'default');
+      
       removeConnection(userId, sessionId);
       
       // Clean up session files after logout to allow fresh reconnection
