@@ -1185,6 +1185,16 @@ async function connectWhatsApp(userId, sessionId = null) {
       }, userId, sessionId);
       throw socketError;
     }
+    } catch (socketSetupError) {
+      console.error(`❌ Socket setup error for user ${userId}:`, socketSetupError.message);
+      dbLogger.error('connection', `Socket setup error: ${socketSetupError.message}`, {
+        connectionId,
+        error: socketSetupError.message,
+        stack: socketSetupError.stack,
+        timestamp: new Date().toISOString()
+      }, userId, sessionId);
+      throw socketSetupError;
+    }
 
     // Session health monitoring
     const sessionStartTime = new Date();
