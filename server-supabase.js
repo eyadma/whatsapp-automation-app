@@ -1141,20 +1141,6 @@ async function connectWhatsApp(userId, sessionId = null) {
       sock = makeWASocket(socketConfig);
       const socketDuration = Date.now() - socketStart;
       console.log(`✅ WhatsApp socket created for user ${userId} in ${socketDuration}ms`);
-    } catch (socketError) {
-      const socketDuration = Date.now() - socketStart;
-      console.error(`❌ Failed to create WhatsApp socket for user ${userId} in ${socketDuration}ms:`, socketError.message);
-      dbLogger.error('connection', `Failed to create WhatsApp socket: ${socketError.message}`, {
-        connectionId,
-        userId,
-        sessionId: sessionId || 'default',
-        error: socketError.message,
-        stack: socketError.stack,
-        duration: socketDuration,
-        timestamp: new Date().toISOString()
-      }, userId, sessionId);
-      throw socketError;
-    }
       
       // Add connection timeout to prevent hanging connections
       connectionTimeout = setTimeout(() => {
@@ -1184,14 +1170,20 @@ async function connectWhatsApp(userId, sessionId = null) {
         duration: socketDuration,
         timestamp: new Date().toISOString()
       }, userId, sessionId);
+      
     } catch (socketError) {
-      dbLogger.error('socket', `Socket creation error for user ${userId}: ${socketError.message}`, {
+      const socketDuration = Date.now() - socketStart;
+      console.error(`❌ Failed to create WhatsApp socket for user ${userId} in ${socketDuration}ms:`, socketError.message);
+      dbLogger.error('connection', `Failed to create WhatsApp socket: ${socketError.message}`, {
         connectionId,
+        userId,
+        sessionId: sessionId || 'default',
         error: socketError.message,
         stack: socketError.stack,
+        duration: socketDuration,
         timestamp: new Date().toISOString()
       }, userId, sessionId);
-      throw new Error(`Failed to create WhatsApp socket: ${socketError.message}`);
+      throw socketError;
     }
 
     // Session health monitoring
