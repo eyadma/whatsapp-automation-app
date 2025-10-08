@@ -13,6 +13,29 @@ const { dbLogger } = require('./database-logger');
 
 require('dotenv').config();
 
+// Global memory management to prevent heap out of memory
+setInterval(() => {
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+  
+  // Log memory usage occasionally
+  if (Math.random() < 0.001) { // Only log 0.1% of checks
+    console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+  }
+  
+  // Force garbage collection if memory usage is high
+  if (heapUsedMB > 1800) { // If using more than 1.8GB
+    console.log(`🧹 High global memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
+    if (global.gc) {
+      global.gc();
+      const newMemUsage = process.memoryUsage();
+      const newHeapUsedMB = Math.round(newMemUsage.heapUsed / 1024 / 1024);
+      console.log(`✅ Global garbage collection completed, memory reduced to ${newHeapUsedMB}MB`);
+    }
+  }
+}, 600000); // Check every 10 minutes
+
 // Helper function to safely logout from WhatsApp connection
 async function safeLogout(connection, userId, sessionId) {
   if (!connection || !connection.sock) {
@@ -423,6 +446,10 @@ function removeConnection(userId, sessionId) {
       if (connection.healthCheckInterval) {
         clearInterval(connection.healthCheckInterval);
         console.log(`🧹 Cleared health check interval for ${userId}_${sessionId}`);
+      }
+      if (connection.memoryCheckInterval) {
+        clearInterval(connection.memoryCheckInterval);
+        console.log(`🧹 Cleared memory check interval for ${userId}_${sessionId}`);
       }
     }
     
@@ -1156,7 +1183,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
         // Connection settings - optimized for Railway environment
         connectTimeoutMs: 300000, // Increased to 5 minutes for Railway's slower connections
-        keepAliveIntervalMs: 15000, // 15 seconds to prevent 1-hour disconnections
+        keepAliveIntervalMs: 60000, // 60 seconds to reduce memory usage and logging
         retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
         maxRetries: 10, // Allow more retries for Railway environment
         defaultQueryTimeoutMs: 600000, // Increased to 10 minutes for pre-key operations
@@ -1164,7 +1191,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         requestTimeoutMs: 300000, // Increased to 5 minutes for slow operations
         // Railway-specific optimizations
         fetchAgent: undefined, // Let Node.js handle HTTP requests
-        keepAliveIntervalMs: 15000, // Keep connection alive - prevent 1-hour disconnections
+        keepAliveIntervalMs: 60000, // Keep connection alive - reduce memory usage and logging
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1866,6 +1893,10 @@ async function connectWhatsApp(userId, sessionId = null) {
             clearInterval(connection.healthCheckInterval);
             dbLogger.debug('connection', `Cleared health check interval for user: ${userId}`, { connectionId }, userId, sessionId);
           }
+          if (connection.memoryCheckInterval) {
+            clearInterval(connection.memoryCheckInterval);
+            dbLogger.debug('connection', `Cleared memory check interval for user: ${userId}`, { connectionId }, userId, sessionId);
+          }
         }
         
         // Don't reconnect for loggedOut, device_removed, or handled error scenarios
@@ -1983,7 +2014,10 @@ async function connectWhatsApp(userId, sessionId = null) {
             if (sock && sock.ws && sock.ws.readyState === 1) {
               // Send a ping to keep the connection alive
               await sock.ping();
-              dbLogger.debug('connection', `Keep-alive ping sent for user: ${userId}`, { connectionId }, userId, sessionId);
+              // Reduced logging to prevent Railway rate limiting
+              if (Math.random() < 0.1) { // Only log 10% of pings
+                console.log(`💓 Keep-alive ping sent for user: ${userId} (${new Date().toLocaleTimeString()})`);
+              }
             } else {
               dbLogger.warn('connection', `Cannot send keep-alive ping for user ${userId} - socket not ready`, { connectionId }, userId, sessionId);
             }
@@ -1996,7 +2030,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               timestamp: new Date().toISOString()
             }, userId, sessionId);
           }
-        }, 15000); // Send ping every 15 seconds to prevent 1-hour disconnections
+        }, 60000); // Send ping every 60 seconds to reduce memory usage and logging
         
         // Store the keep-alive interval for cleanup
         const connection = getConnection(userId, sessionId || 'default');
@@ -2012,7 +2046,10 @@ async function connectWhatsApp(userId, sessionId = null) {
               const connectionAge = Date.now() - connectionStartTime;
               const hoursAlive = Math.floor(connectionAge / (1000 * 60 * 60));
               
-              console.log(`🔍 Connection health check for user ${userId}: readyState=${readyState}, age=${hoursAlive}h ${Math.floor((connectionAge % (1000 * 60 * 60)) / (1000 * 60))}m`);
+              // Reduced logging to prevent Railway rate limiting
+              if (Math.random() < 0.05) { // Only log 5% of health checks
+                console.log(`🔍 Connection health check for user ${userId}: readyState=${readyState}, age=${hoursAlive}h ${Math.floor((connectionAge % (1000 * 60 * 60)) / (1000 * 60))}m`);
+              }
               
               // If connection is closed or closing, attempt to reconnect
               if (readyState === 2 || readyState === 3) {
@@ -2034,11 +2071,37 @@ async function connectWhatsApp(userId, sessionId = null) {
           } catch (error) {
             console.error(`❌ Health check failed for user ${userId}:`, error.message);
           }
-        }, 30000); // Check every 30 seconds
+        }, 120000); // Check every 2 minutes to reduce memory usage and logging
         
         // Store health check interval for cleanup
         if (connection) {
           connection.healthCheckInterval = healthCheckInterval;
+        }
+        
+        // Add memory management to prevent heap out of memory
+        const memoryCheckInterval = setInterval(() => {
+          const memUsage = process.memoryUsage();
+          const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+          const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+          
+          // Log memory usage only occasionally to prevent rate limiting
+          if (Math.random() < 0.01) { // Only log 1% of memory checks
+            console.log(`🧠 Memory usage for user ${userId}: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+          }
+          
+          // Force garbage collection if memory usage is high
+          if (heapUsedMB > 1500) { // If using more than 1.5GB
+            console.log(`🧹 High memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
+            if (global.gc) {
+              global.gc();
+              console.log(`✅ Garbage collection completed`);
+            }
+          }
+        }, 300000); // Check every 5 minutes
+        
+        // Store memory check interval for cleanup
+        if (connection) {
+          connection.memoryCheckInterval = memoryCheckInterval;
         }
         
         // Wait a moment for WebSocket to be fully initialized
