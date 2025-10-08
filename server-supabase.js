@@ -1230,7 +1230,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           return isJidBroadcast(jid) || jid.includes('status@broadcast');
         },
       // Message retrieval function - enhanced for better decryption
-      getMessage: async (key) => {
+        getMessage: async (key) => {
         try {
           // Enhanced message retrieval to handle PreKey and Bad MAC errors
           dbLogger.debug('message', `Retrieving message for key: ${JSON.stringify(key)}`, { connectionId }, userId, sessionId);
@@ -1242,8 +1242,8 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Handle Bad MAC errors in message retrieval
           if (error.message && error.message.includes('Bad MAC')) {
             dbLogger.warn('message', `Bad MAC error in message retrieval, returning null`, { connectionId, error: error.message }, userId, sessionId);
-            return null;
-          }
+          return null;
+        }
           
           dbLogger.error('message', `Error retrieving message: ${error.message}`, { connectionId, error: error.message }, userId, sessionId);
           return null;
@@ -1616,7 +1616,7 @@ async function connectWhatsApp(userId, sessionId = null) {
       }
       
       // Handle connection close according to Baileys documentation
-        if (connection === 'close') {
+      if (connection === 'close') {
         console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
         console.log(`📊 Disconnect details:`, {
           reason: lastDisconnect?.error?.output?.statusCode,
@@ -1923,7 +1923,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         const connection = getConnection(userId, sessionId || 'default');
         if (connection) {
           if (connection.keepAliveInterval) {
-            clearInterval(connection.keepAliveInterval);
+          clearInterval(connection.keepAliveInterval);
             dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
           }
           if (connection.healthCheckInterval) {
@@ -2351,14 +2351,33 @@ async function connectWhatsApp(userId, sessionId = null) {
               
               if (currentConnection && currentConnection.connected) {
                 console.log(`📱 Status request from ${contactJid}, responding with connection status`);
-                await sock.sendMessage(contactJid, { text: '✅ connected' });
-                console.log(`✅ Status response sent to ${contactJid}`);
+                
+                // Calculate connection duration
+                let durationText = '';
+                if (currentConnection.startTime) {
+                  const connectionStart = new Date(currentConnection.startTime);
+                  const now = new Date();
+                  const durationMs = now - connectionStart;
+                  
+                  const hours = Math.floor(durationMs / (1000 * 60 * 60));
+                  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+                  
+                  if (hours > 0) {
+                    durationText = `\n⏱️ Duration: ${hours}h ${minutes}min`;
+                  } else {
+                    durationText = `\n⏱️ Duration: ${minutes}min`;
+                  }
+                }
+                
+                const statusResponse = `✅ connected${durationText}`;
+                await sock.sendMessage(contactJid, { text: statusResponse });
+                console.log(`✅ Status response sent to ${contactJid}: ${statusResponse.replace('\n', ' ')}`);
                 
                 dbLogger.info('message', `Status request handled for user ${userId}`, {
                   connectionId,
                   messageId: individualMessageId,
                   from: contactJid,
-                  response: '✅ connected',
+                  response: statusResponse.replace('\n', ' '),
                   timestamp: new Date().toISOString()
                 }, userId, sessionId);
               } else {
