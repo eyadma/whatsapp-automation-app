@@ -19,13 +19,13 @@ setInterval(() => {
   const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
   const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
   
-  // Log memory usage occasionally
-  if (Math.random() < 0.001) { // Only log 0.1% of checks
-    console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+  // Log memory usage optimized for 8GB plan
+  if (Math.random() < 0.01) { // Log 1% of checks for better global monitoring
+    console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB (8GB plan)`);
   }
   
-  // Force garbage collection if memory usage is high
-  if (heapUsedMB > 1800) { // If using more than 1.8GB
+  // Force garbage collection if memory usage is high (8GB plan)
+  if (heapUsedMB > 6000) { // If using more than 6GB (75% of 8GB)
     console.log(`🧹 High global memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
     if (global.gc) {
       global.gc();
@@ -34,7 +34,7 @@ setInterval(() => {
       console.log(`✅ Global garbage collection completed, memory reduced to ${newHeapUsedMB}MB`);
     }
   }
-}, 600000); // Check every 10 minutes
+}, 300000); // Check every 5 minutes (optimized for 8GB plan)
 
 // Helper function to safely logout from WhatsApp connection
 async function safeLogout(connection, userId, sessionId) {
@@ -1183,7 +1183,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
         // Connection settings - optimized for Railway environment
         connectTimeoutMs: 300000, // Increased to 5 minutes for Railway's slower connections
-        keepAliveIntervalMs: 60000, // 60 seconds to reduce memory usage and logging
+        keepAliveIntervalMs: 30000, // 30 seconds (optimized for 8GB plan)
         retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
         maxRetries: 10, // Allow more retries for Railway environment
         defaultQueryTimeoutMs: 600000, // Increased to 10 minutes for pre-key operations
@@ -1191,7 +1191,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         requestTimeoutMs: 300000, // Increased to 5 minutes for slow operations
         // Railway-specific optimizations
         fetchAgent: undefined, // Let Node.js handle HTTP requests
-        keepAliveIntervalMs: 60000, // Keep connection alive - reduce memory usage and logging
+        keepAliveIntervalMs: 30000, // Keep connection alive (optimized for 8GB plan)
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -2014,8 +2014,8 @@ async function connectWhatsApp(userId, sessionId = null) {
             if (sock && sock.ws && sock.ws.readyState === 1) {
               // Send a ping to keep the connection alive
               await sock.ping();
-              // Reduced logging to prevent Railway rate limiting
-              if (Math.random() < 0.1) { // Only log 10% of pings
+              // Logging optimized for 8GB plan
+              if (Math.random() < 0.2) { // Log 20% of pings for better monitoring
                 console.log(`💓 Keep-alive ping sent for user: ${userId} (${new Date().toLocaleTimeString()})`);
               }
             } else {
@@ -2030,7 +2030,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               timestamp: new Date().toISOString()
             }, userId, sessionId);
           }
-        }, 60000); // Send ping every 60 seconds to reduce memory usage and logging
+        }, 30000); // Send ping every 30 seconds (optimized for 8GB plan)
         
         // Store the keep-alive interval for cleanup
         const connection = getConnection(userId, sessionId || 'default');
@@ -2046,8 +2046,8 @@ async function connectWhatsApp(userId, sessionId = null) {
               const connectionAge = Date.now() - connectionStartTime;
               const hoursAlive = Math.floor(connectionAge / (1000 * 60 * 60));
               
-              // Reduced logging to prevent Railway rate limiting
-              if (Math.random() < 0.05) { // Only log 5% of health checks
+              // Logging optimized for 8GB plan
+              if (Math.random() < 0.15) { // Log 15% of health checks for better monitoring
                 console.log(`🔍 Connection health check for user ${userId}: readyState=${readyState}, age=${hoursAlive}h ${Math.floor((connectionAge % (1000 * 60 * 60)) / (1000 * 60))}m`);
               }
               
@@ -2071,7 +2071,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           } catch (error) {
             console.error(`❌ Health check failed for user ${userId}:`, error.message);
           }
-        }, 120000); // Check every 2 minutes to reduce memory usage and logging
+        }, 60000); // Check every 60 seconds (optimized for 8GB plan)
         
         // Store health check interval for cleanup
         if (connection) {
@@ -2084,20 +2084,20 @@ async function connectWhatsApp(userId, sessionId = null) {
           const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
           const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
           
-          // Log memory usage only occasionally to prevent rate limiting
-          if (Math.random() < 0.01) { // Only log 1% of memory checks
+          // Log memory usage optimized for 8GB plan
+          if (Math.random() < 0.05) { // Log 5% of memory checks for better monitoring
             console.log(`🧠 Memory usage for user ${userId}: ${heapUsedMB}MB / ${heapTotalMB}MB`);
           }
           
-          // Force garbage collection if memory usage is high
-          if (heapUsedMB > 1500) { // If using more than 1.5GB
+          // Force garbage collection if memory usage is high (8GB plan)
+          if (heapUsedMB > 5500) { // If using more than 5.5GB (per-connection threshold)
             console.log(`🧹 High memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
             if (global.gc) {
               global.gc();
               console.log(`✅ Garbage collection completed`);
             }
           }
-        }, 300000); // Check every 5 minutes
+        }, 180000); // Check every 3 minutes (optimized for 8GB plan)
         
         // Store memory check interval for cleanup
         if (connection) {
