@@ -24,8 +24,9 @@ setInterval(() => {
     console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB (8GB plan)`);
   }
   
-  // Force garbage collection if memory usage is high (8GB plan)
-  if (heapUsedMB > 6000) { // If using more than 6GB (75% of 8GB)
+  // Force garbage collection if memory usage is high (8GB plan, 20-25 users)
+  // Target: ~300MB per user = 7.5GB for 25 users
+  if (heapUsedMB > 7000) { // If using more than 7GB (87.5% of 8GB)
     console.log(`🧹 High global memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
     if (global.gc) {
       global.gc();
@@ -33,6 +34,13 @@ setInterval(() => {
       const newHeapUsedMB = Math.round(newMemUsage.heapUsed / 1024 / 1024);
       console.log(`✅ Global garbage collection completed, memory reduced to ${newHeapUsedMB}MB`);
     }
+  }
+  
+  // Warning if approaching per-user memory limit
+  const estimatedUsers = 25; // Estimate for 20-25 users
+  const memoryPerUser = heapUsedMB / estimatedUsers;
+  if (memoryPerUser > 350) { // Warn if >350MB per user
+    console.log(`⚠️ High memory per user: ~${Math.round(memoryPerUser)}MB/user (${estimatedUsers} estimated users)`);
   }
 }, 300000); // Check every 5 minutes (optimized for 8GB plan)
 
@@ -2124,8 +2132,9 @@ async function connectWhatsApp(userId, sessionId = null) {
             console.log(`🧠 Memory usage for user ${userId}: ${heapUsedMB}MB / ${heapTotalMB}MB`);
           }
           
-          // Force garbage collection if memory usage is high (8GB plan)
-          if (heapUsedMB > 5500) { // If using more than 5.5GB (per-connection threshold)
+          // Force garbage collection if memory usage is high (8GB plan, 20-25 users)
+          // Target: ~300-350MB per user
+          if (heapUsedMB > 6500) { // If using more than 6.5GB (per-connection threshold)
             console.log(`🧹 High memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
             if (global.gc) {
               global.gc();
@@ -2189,7 +2198,8 @@ async function connectWhatsApp(userId, sessionId = null) {
           return { wsReady: false, wsState: 'timeout' };
         };
         
-        setTimeout(async () => {
+        // Immediately check WebSocket (no setTimeout delay)
+        (async () => {
           const { wsReady, wsState } = await waitAndCheckWebSocket();
           
           if (wsReady) {
@@ -2273,7 +2283,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               isDefault: !sessionId || sessionId === 'default'
             });
           }
-        }, 2000); // Wait 2 seconds for WebSocket initialization
+        })(); // Execute immediately (IIFE)
       }
     });
 
