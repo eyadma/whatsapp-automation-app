@@ -2139,36 +2139,58 @@ async function connectWhatsApp(userId, sessionId = null) {
           connection.memoryCheckInterval = memoryCheckInterval;
         }
         
-        // Wait a moment for WebSocket to be fully initialized
-        setTimeout(async () => {
-          console.log(`🔍 Checking WebSocket state for user: ${userId}`);
-          console.log(`📊 Socket details:`, {
-            hasSock: !!sock,
-            hasWs: !!(sock && sock.ws),
-            readyState: sock?.ws?.readyState,
-            sockKeys: sock ? Object.keys(sock) : []
-          });
+        // Wait for WebSocket to be fully initialized with retry logic
+        const waitAndCheckWebSocket = async () => {
+          const maxAttempts = 10;
+          const delayMs = 500;
           
-          // Check if WebSocket is ready
-          let wsReady = false;
-          let wsState = 'unknown';
-          
-          if (sock?.ws?.readyState === 1) {
-            wsReady = true;
-            wsState = 'sock.ws.readyState === 1';
-          } else if (sock?.ws?.socket?.readyState === 1) {
-            wsReady = true;
-            wsState = 'sock.ws.socket.readyState === 1';
-          } else if (sock?.conn?.readyState === 1) {
-            wsReady = true;
-            wsState = 'sock.conn.readyState === 1';
-          } else if (sock?.connection?.readyState === 1) {
-            wsReady = true;
-            wsState = 'sock.connection.readyState === 1';
-          } else if (sock?.socket?.readyState === 1) {
-            wsReady = true;
-            wsState = 'sock.socket.readyState === 1';
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            console.log(`🔍 Checking WebSocket state for user: ${userId} (attempt ${attempt}/${maxAttempts})`);
+            console.log(`📊 Socket details:`, {
+              hasSock: !!sock,
+              hasWs: !!(sock && sock.ws),
+              readyState: sock?.ws?.readyState,
+              sockKeys: sock ? Object.keys(sock).slice(0, 5) : []
+            });
+            
+            // Check if WebSocket is ready
+            let wsReady = false;
+            let wsState = 'unknown';
+            
+            if (sock?.ws?.readyState === 1) {
+              wsReady = true;
+              wsState = 'sock.ws.readyState === 1';
+            } else if (sock?.ws?.socket?.readyState === 1) {
+              wsReady = true;
+              wsState = 'sock.ws.socket.readyState === 1';
+            } else if (sock?.conn?.readyState === 1) {
+              wsReady = true;
+              wsState = 'sock.conn.readyState === 1';
+            } else if (sock?.connection?.readyState === 1) {
+              wsReady = true;
+              wsState = 'sock.connection.readyState === 1';
+            } else if (sock?.socket?.readyState === 1) {
+              wsReady = true;
+              wsState = 'sock.socket.readyState === 1';
+            }
+            
+            if (wsReady) {
+              console.log(`✅ WebSocket is ready for user: ${userId} (${wsState}) after ${attempt} attempt(s)`);
+              return { wsReady, wsState };
+            }
+            
+            if (attempt < maxAttempts) {
+              console.log(`⏳ WebSocket not ready yet, waiting ${delayMs}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
           }
+          
+          console.log(`⚠️ WebSocket did not become ready after ${maxAttempts} attempts for user: ${userId}`);
+          return { wsReady: false, wsState: 'timeout' };
+        };
+        
+        setTimeout(async () => {
+          const { wsReady, wsState } = await waitAndCheckWebSocket();
           
           if (wsReady) {
             console.log(`✅ WebSocket is ready for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
