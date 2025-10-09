@@ -19,14 +19,13 @@ setInterval(() => {
   const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
   const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
   
-  // Log memory usage optimized for 8GB plan
-  if (Math.random() < 0.01) { // Log 1% of checks for better global monitoring
-    console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB (8GB plan)`);
+  // Log memory usage occasionally
+  if (Math.random() < 0.001) { // Only log 0.1% of checks
+    console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
   }
   
-  // Force garbage collection if memory usage is high (8GB plan, 20-25 users)
-  // Target: ~300MB per user = 7.5GB for 25 users
-  if (heapUsedMB > 7000) { // If using more than 7GB (87.5% of 8GB)
+  // Force garbage collection if memory usage is high
+  if (heapUsedMB > 1800) { // If using more than 1.8GB
     console.log(`🧹 High global memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
     if (global.gc) {
       global.gc();
@@ -35,30 +34,7 @@ setInterval(() => {
       console.log(`✅ Global garbage collection completed, memory reduced to ${newHeapUsedMB}MB`);
     }
   }
-  
-  // Warning if approaching per-user memory limit
-  const estimatedUsers = 25; // Estimate for 20-25 users
-  const memoryPerUser = heapUsedMB / estimatedUsers;
-  if (memoryPerUser > 350) { // Warn if >350MB per user
-    console.log(`⚠️ High memory per user: ~${Math.round(memoryPerUser)}MB/user (${estimatedUsers} estimated users)`);
-  }
-}, 300000); // Check every 5 minutes (optimized for 8GB plan)
-
-// Helper function to send connection status notifications to users
-async function sendConnectionStatusNotification(userId, status, title, message) {
-  try {
-    // Log notification (database table not required)
-    console.log(`📬 Connection notification for user ${userId}: ${status} - ${title} - ${message}`);
-    
-    // TODO: Implement notification delivery system when needed
-    // For now, just log the notification
-    
-    return true;
-  } catch (error) {
-    console.error('❌ Error sending connection status notification:', error);
-    return false;
-  }
-}
+}, 600000); // Check every 10 minutes
 
 // Helper function to safely logout from WhatsApp connection
 async function safeLogout(connection, userId, sessionId) {
@@ -1207,7 +1183,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
         // Connection settings - optimized for Railway environment
         connectTimeoutMs: 300000, // Increased to 5 minutes for Railway's slower connections
-        keepAliveIntervalMs: 30000, // 30 seconds (optimized for 8GB plan)
+        keepAliveIntervalMs: 60000, // 60 seconds to reduce memory usage and logging
         retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
         maxRetries: 10, // Allow more retries for Railway environment
         defaultQueryTimeoutMs: 600000, // Increased to 10 minutes for pre-key operations
@@ -1215,7 +1191,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         requestTimeoutMs: 300000, // Increased to 5 minutes for slow operations
         // Railway-specific optimizations
         fetchAgent: undefined, // Let Node.js handle HTTP requests
-        keepAliveIntervalMs: 30000, // Keep connection alive (optimized for 8GB plan)
+        keepAliveIntervalMs: 60000, // Keep connection alive - reduce memory usage and logging
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1620,15 +1596,6 @@ async function connectWhatsApp(userId, sessionId = null) {
           timestamp: new Date().toISOString()
         });
         
-        // Send push notification about connection closure
-        try {
-          const statusMessage = lastDisconnect?.error?.message || 'Connection closed';
-          const reasonCode = lastDisconnect?.error?.output?.statusCode;
-          await sendConnectionStatusNotification(userId, 'disconnected', `WhatsApp Disconnected`, `Reason: ${statusMessage}${reasonCode ? ` (${reasonCode})` : ''}`);
-        } catch (notifError) {
-          console.error('⚠️ Failed to send disconnection notification:', notifError.message);
-        }
-        
         // Handle restartRequired disconnect - this is normal after QR scan
         if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.restartRequired) {
           console.log(`🔄 Restart required for user ${userId} - this is normal after QR scan`);
@@ -2021,31 +1988,6 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection open
       else if (connection === 'open') {
-        // Wait for WebSocket to be ready before proceeding
-        console.log(`🔄 Connection opened, waiting for WebSocket to be ready for user: ${userId}`);
-        
-        const waitForWebSocketReady = async (maxAttempts = 10, delayMs = 500) => {
-          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            console.log(`🔍 Checking WebSocket readyState (attempt ${attempt}/${maxAttempts})`);
-            
-            if (sock && sock.ws && sock.ws.readyState === 1) {
-              console.log(`✅ WebSocket ready after ${attempt} attempt(s)`);
-              return true;
-            }
-            
-            console.log(`⏳ WebSocket not ready (readyState: ${sock?.ws?.readyState}), waiting ${delayMs}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-          }
-          
-          console.log(`⚠️ WebSocket did not become ready after ${maxAttempts} attempts`);
-          return false;
-        };
-        
-        const isReady = await waitForWebSocketReady();
-        if (!isReady) {
-          console.log(`⚠️ Proceeding despite WebSocket not being ready`);
-        }
-        
         // Clear connection timeout since connection is successful
         if (connectionTimeout) {
           clearTimeout(connectionTimeout);
@@ -2066,24 +2008,14 @@ async function connectWhatsApp(userId, sessionId = null) {
           totalConnectionTime: Date.now() - startTime
         }, userId, sessionId);
         
-        // Send push notification about successful connection
-        try {
-          await sendConnectionStatusNotification(userId, 'connected', 'WhatsApp Connected', `Session: ${sessionId || 'default'} - Connected successfully`);
-        } catch (notifError) {
-          console.error('⚠️ Failed to send connection notification:', notifError.message);
-        }
-        
-        // Track connection start time for duration calculations (store in connection object)
-        const connectionStartTime = Date.now();
-        
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
           try {
             if (sock && sock.ws && sock.ws.readyState === 1) {
               // Send a ping to keep the connection alive
               await sock.ping();
-              // Logging optimized for 8GB plan
-              if (Math.random() < 0.2) { // Log 20% of pings for better monitoring
+              // Reduced logging to prevent Railway rate limiting
+              if (Math.random() < 0.1) { // Only log 10% of pings
                 console.log(`💓 Keep-alive ping sent for user: ${userId} (${new Date().toLocaleTimeString()})`);
               }
             } else {
@@ -2098,7 +2030,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               timestamp: new Date().toISOString()
             }, userId, sessionId);
           }
-        }, 30000); // Send ping every 30 seconds (optimized for 8GB plan)
+        }, 60000); // Send ping every 60 seconds to reduce memory usage and logging
         
         // Store the keep-alive interval for cleanup
         const connection = getConnection(userId, sessionId || 'default');
@@ -2114,8 +2046,8 @@ async function connectWhatsApp(userId, sessionId = null) {
               const connectionAge = Date.now() - connectionStartTime;
               const hoursAlive = Math.floor(connectionAge / (1000 * 60 * 60));
               
-              // Logging optimized for 8GB plan
-              if (Math.random() < 0.15) { // Log 15% of health checks for better monitoring
+              // Reduced logging to prevent Railway rate limiting
+              if (Math.random() < 0.05) { // Only log 5% of health checks
                 console.log(`🔍 Connection health check for user ${userId}: readyState=${readyState}, age=${hoursAlive}h ${Math.floor((connectionAge % (1000 * 60 * 60)) / (1000 * 60))}m`);
               }
               
@@ -2139,7 +2071,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           } catch (error) {
             console.error(`❌ Health check failed for user ${userId}:`, error.message);
           }
-        }, 60000); // Check every 60 seconds (optimized for 8GB plan)
+        }, 120000); // Check every 2 minutes to reduce memory usage and logging
         
         // Store health check interval for cleanup
         if (connection) {
@@ -2152,80 +2084,56 @@ async function connectWhatsApp(userId, sessionId = null) {
           const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
           const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
           
-          // Log memory usage optimized for 8GB plan
-          if (Math.random() < 0.05) { // Log 5% of memory checks for better monitoring
+          // Log memory usage only occasionally to prevent rate limiting
+          if (Math.random() < 0.01) { // Only log 1% of memory checks
             console.log(`🧠 Memory usage for user ${userId}: ${heapUsedMB}MB / ${heapTotalMB}MB`);
           }
           
-          // Force garbage collection if memory usage is high (8GB plan, 20-25 users)
-          // Target: ~300-350MB per user
-          if (heapUsedMB > 6500) { // If using more than 6.5GB (per-connection threshold)
+          // Force garbage collection if memory usage is high
+          if (heapUsedMB > 1500) { // If using more than 1.5GB
             console.log(`🧹 High memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
             if (global.gc) {
               global.gc();
               console.log(`✅ Garbage collection completed`);
             }
           }
-        }, 180000); // Check every 3 minutes (optimized for 8GB plan)
+        }, 300000); // Check every 5 minutes
         
         // Store memory check interval for cleanup
         if (connection) {
           connection.memoryCheckInterval = memoryCheckInterval;
         }
         
-        // Wait for WebSocket to be fully initialized with retry logic
-        const waitAndCheckWebSocket = async () => {
-          const maxAttempts = 10;
-          const delayMs = 500;
+        // Wait a moment for WebSocket to be fully initialized
+        setTimeout(async () => {
+          console.log(`🔍 Checking WebSocket state for user: ${userId}`);
+          console.log(`📊 Socket details:`, {
+            hasSock: !!sock,
+            hasWs: !!(sock && sock.ws),
+            readyState: sock?.ws?.readyState,
+            sockKeys: sock ? Object.keys(sock) : []
+          });
           
-          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            console.log(`🔍 Checking WebSocket state for user: ${userId} (attempt ${attempt}/${maxAttempts})`);
-            console.log(`📊 Socket details:`, {
-              hasSock: !!sock,
-              hasWs: !!(sock && sock.ws),
-              readyState: sock?.ws?.readyState,
-              sockKeys: sock ? Object.keys(sock).slice(0, 5) : []
-            });
-            
-            // Check if WebSocket is ready
-            let wsReady = false;
-            let wsState = 'unknown';
-            
-            if (sock?.ws?.readyState === 1) {
-              wsReady = true;
-              wsState = 'sock.ws.readyState === 1';
-            } else if (sock?.ws?.socket?.readyState === 1) {
-              wsReady = true;
-              wsState = 'sock.ws.socket.readyState === 1';
-            } else if (sock?.conn?.readyState === 1) {
-              wsReady = true;
-              wsState = 'sock.conn.readyState === 1';
-            } else if (sock?.connection?.readyState === 1) {
-              wsReady = true;
-              wsState = 'sock.connection.readyState === 1';
-            } else if (sock?.socket?.readyState === 1) {
-              wsReady = true;
-              wsState = 'sock.socket.readyState === 1';
-            }
-            
-            if (wsReady) {
-              console.log(`✅ WebSocket is ready for user: ${userId} (${wsState}) after ${attempt} attempt(s)`);
-              return { wsReady, wsState };
-            }
-            
-            if (attempt < maxAttempts) {
-              console.log(`⏳ WebSocket not ready yet, waiting ${delayMs}ms before retry...`);
-              await new Promise(resolve => setTimeout(resolve, delayMs));
-            }
+          // Check if WebSocket is ready
+          let wsReady = false;
+          let wsState = 'unknown';
+          
+          if (sock?.ws?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.ws.readyState === 1';
+          } else if (sock?.ws?.socket?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.ws.socket.readyState === 1';
+          } else if (sock?.conn?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.conn.readyState === 1';
+          } else if (sock?.connection?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.connection.readyState === 1';
+          } else if (sock?.socket?.readyState === 1) {
+            wsReady = true;
+            wsState = 'sock.socket.readyState === 1';
           }
-          
-          console.log(`⚠️ WebSocket did not become ready after ${maxAttempts} attempts for user: ${userId}`);
-          return { wsReady: false, wsState: 'timeout' };
-        };
-        
-        // Immediately check WebSocket (no setTimeout delay)
-        (async () => {
-          const { wsReady, wsState } = await waitAndCheckWebSocket();
           
           if (wsReady) {
             console.log(`✅ WebSocket is ready for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
@@ -2244,8 +2152,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               sessionId: sessionId || 'default',
               sessionName: sessionId ? `Session ${sessionId}` : 'Default Session',
               isDefault: !sessionId || sessionId === 'default',
-              connectionType: connectionType,
-              startTime: new Date().toISOString() // Add startTime for duration calculations
+              connectionType: connectionType
             };
             console.log(`🔗 Setting connected connection data:`, {
               userId,
@@ -2309,7 +2216,7 @@ async function connectWhatsApp(userId, sessionId = null) {
               isDefault: !sessionId || sessionId === 'default'
             });
           }
-        })(); // Execute immediately (IIFE)
+        }, 2000); // Wait 2 seconds for WebSocket initialization
       }
     });
 
@@ -2388,57 +2295,6 @@ async function connectWhatsApp(userId, sessionId = null) {
           
           // // Skip if message is from self
           // if (message.key.fromMe) continue;
-          
-          // Handle "status" message - respond with "✅ connected" if connected
-          const messageText = message.message?.conversation || 
-                             message.message?.extendedTextMessage?.text || '';
-          
-          if (messageText.toLowerCase().trim() === 'status' && !message.key.fromMe) {
-            try {
-              const contactJid = message.key.remoteJid;
-              const currentConnection = getConnection(userId, sessionId);
-              
-              if (currentConnection && currentConnection.connected) {
-                console.log(`📱 Status request from ${contactJid}, responding with connection status`);
-                
-                // Calculate connection duration
-                let durationText = '';
-                if (currentConnection.startTime) {
-                  const connectionStart = new Date(currentConnection.startTime);
-                  const now = new Date();
-                  const durationMs = now - connectionStart;
-                  
-                  const hours = Math.floor(durationMs / (1000 * 60 * 60));
-                  const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-                  
-                  if (hours > 0) {
-                    durationText = `\n⏱️ Duration: ${hours}h ${minutes}min`;
-                  } else {
-                    durationText = `\n⏱️ Duration: ${minutes}min`;
-                  }
-                }
-                
-                const statusResponse = `✅ connected${durationText}`;
-                await sock.sendMessage(contactJid, { text: statusResponse });
-                console.log(`✅ Status response sent to ${contactJid}: ${statusResponse.replace('\n', ' ')}`);
-                
-                dbLogger.info('message', `Status request handled for user ${userId}`, {
-                  connectionId,
-                  messageId: individualMessageId,
-                  from: contactJid,
-                  response: statusResponse.replace('\n', ' '),
-                  timestamp: new Date().toISOString()
-                }, userId, sessionId);
-              } else {
-                console.log(`⚠️ Status request from ${contactJid}, but not connected - no response sent`);
-              }
-              
-              // Continue to next message after handling status
-              continue;
-            } catch (statusError) {
-              console.error('❌ Error handling status message:', statusError.message);
-            }
-          }
           
           dbLogger.debug('message', `Processing message for user ${userId}`, {
             connectionId,
