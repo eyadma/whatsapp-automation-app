@@ -2021,6 +2021,31 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection open
       else if (connection === 'open') {
+        // Wait for WebSocket to be ready before proceeding
+        console.log(`🔄 Connection opened, waiting for WebSocket to be ready for user: ${userId}`);
+        
+        const waitForWebSocketReady = async (maxAttempts = 10, delayMs = 500) => {
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            console.log(`🔍 Checking WebSocket readyState (attempt ${attempt}/${maxAttempts})`);
+            
+            if (sock && sock.ws && sock.ws.readyState === 1) {
+              console.log(`✅ WebSocket ready after ${attempt} attempt(s)`);
+              return true;
+            }
+            
+            console.log(`⏳ WebSocket not ready (readyState: ${sock?.ws?.readyState}), waiting ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+          }
+          
+          console.log(`⚠️ WebSocket did not become ready after ${maxAttempts} attempts`);
+          return false;
+        };
+        
+        const isReady = await waitForWebSocketReady();
+        if (!isReady) {
+          console.log(`⚠️ Proceeding despite WebSocket not being ready`);
+        }
+        
         // Clear connection timeout since connection is successful
         if (connectionTimeout) {
           clearTimeout(connectionTimeout);
@@ -2048,7 +2073,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           console.error('⚠️ Failed to send connection notification:', notifError.message);
         }
         
-        // Track connection start time for duration calculations
+        // Track connection start time for duration calculations (store in connection object)
         const connectionStartTime = Date.now();
         
         // Start session keep-alive mechanism
@@ -2219,7 +2244,8 @@ async function connectWhatsApp(userId, sessionId = null) {
               sessionId: sessionId || 'default',
               sessionName: sessionId ? `Session ${sessionId}` : 'Default Session',
               isDefault: !sessionId || sessionId === 'default',
-              connectionType: connectionType
+              connectionType: connectionType,
+              startTime: new Date().toISOString() // Add startTime for duration calculations
             };
             console.log(`🔗 Setting connected connection data:`, {
               userId,
