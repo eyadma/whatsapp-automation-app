@@ -54,9 +54,9 @@ class DatabaseLogger {
     const consoleContext = userId ? ` | User: ${userId}` : '';
     const consoleSession = sessionId ? ` | Session: ${sessionId}` : '';
     
-    // Reduce console logging frequency to prevent Railway rate limiting
-    if (level === 'ERROR' || Math.random() < 0.1) { // Only log errors and 10% of other logs
-      console.log(`${consoleMessage}${consoleData}${consoleContext}${consoleSession}`);
+    // Only log errors to console to prevent Railway rate limiting
+    if (level === 'ERROR') {
+      console.error(`${consoleMessage}${consoleData}${consoleContext}${consoleSession}`);
     }
 
     // Only add ERROR level logs to database buffer to reduce load
