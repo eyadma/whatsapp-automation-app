@@ -17,33 +17,44 @@ require('dotenv').config();
 setInterval(() => {
   const memUsage = process.memoryUsage();
   const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
   
-  // Force garbage collection if memory usage is high (no logging unless critical)
-  if (heapUsedMB > 1500) { // If using more than 1.5GB
+  // Log memory usage optimized for 8GB plan
+  if (Math.random() < 0.01) { // Log 1% of checks for better global monitoring
+    console.log(`🌍 Global memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB (8GB plan)`);
+  }
+  
+  // Force garbage collection if memory usage is high (8GB plan)
+  if (heapUsedMB > 6000) { // If using more than 6GB (75% of 8GB)
+    console.log(`🧹 High global memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
     if (global.gc) {
       global.gc();
-    }
-    // Only log if memory is critically high
-    if (heapUsedMB > 1800) {
-      console.error(`❌ CRITICAL: Memory ${heapUsedMB}MB`);
+      const newMemUsage = process.memoryUsage();
+      const newHeapUsedMB = Math.round(newMemUsage.heapUsed / 1024 / 1024);
+      console.log(`✅ Global garbage collection completed, memory reduced to ${newHeapUsedMB}MB`);
     }
   }
-}, 300000); // Check every 5 minutes
+}, 300000); // Check every 5 minutes (optimized for 8GB plan)
 
 // Helper function to safely logout from WhatsApp connection
 async function safeLogout(connection, userId, sessionId) {
   if (!connection || !connection.sock) {
+    console.log(`⚠️ No connection or socket found for user ${userId}, session ${sessionId}`);
     return false;
   }
   
   try {
+    // Check if socket is still connected
     if (connection.sock.ws && connection.sock.ws.readyState === 1) {
+      console.log(`✅ Socket is connected, proceeding with logout for user ${userId}`);
       await connection.sock.logout();
       return true;
+    } else {
+      console.log(`⚠️ Socket is already disconnected (readyState: ${connection.sock.ws?.readyState}) for user ${userId}, skipping logout`);
+      return false;
     }
-    return false;
   } catch (logoutError) {
-    // Silent fail - connection already closed
+    console.log(`⚠️ Logout failed (connection already closed) for user ${userId}: ${logoutError.message}`);
     return false;
   }
 }
@@ -1172,7 +1183,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
         // Connection settings - optimized for Railway environment
         connectTimeoutMs: 300000, // Increased to 5 minutes for Railway's slower connections
-        keepAliveIntervalMs: 60000, // 60 seconds to reduce memory usage and logging
+        keepAliveIntervalMs: 30000, // 30 seconds (optimized for 8GB plan)
         retryRequestDelayMs: 5000, // Increased to 5 seconds for better timing
         maxRetries: 10, // Allow more retries for Railway environment
         defaultQueryTimeoutMs: 600000, // Increased to 10 minutes for pre-key operations
@@ -1180,7 +1191,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         requestTimeoutMs: 300000, // Increased to 5 minutes for slow operations
         // Railway-specific optimizations
         fetchAgent: undefined, // Let Node.js handle HTTP requests
-        keepAliveIntervalMs: 60000, // Keep connection alive - reduce memory usage and logging
+        keepAliveIntervalMs: 30000, // Keep connection alive (optimized for 8GB plan)
         // Session settings
         emitOwnEvents: false,
         markOnlineOnConnect: false, // Don't mark online to avoid notification issues
@@ -1191,7 +1202,7 @@ async function connectWhatsApp(userId, sessionId = null) {
           return isJidBroadcast(jid) || jid.includes('status@broadcast');
         },
       // Message retrieval function - enhanced for better decryption
-        getMessage: async (key) => {
+      getMessage: async (key) => {
         try {
           // Enhanced message retrieval to handle PreKey and Bad MAC errors
           dbLogger.debug('message', `Retrieving message for key: ${JSON.stringify(key)}`, { connectionId }, userId, sessionId);
@@ -1203,8 +1214,8 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Handle Bad MAC errors in message retrieval
           if (error.message && error.message.includes('Bad MAC')) {
             dbLogger.warn('message', `Bad MAC error in message retrieval, returning null`, { connectionId, error: error.message }, userId, sessionId);
-          return null;
-        }
+            return null;
+          }
           
           dbLogger.error('message', `Error retrieving message: ${error.message}`, { connectionId, error: error.message }, userId, sessionId);
           return null;
@@ -1578,9 +1589,12 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection close according to Baileys documentation
       if (connection === 'close') {
-        // Minimal logging - one line for disconnection
-        const reason = lastDisconnect?.error?.output?.statusCode;
-        console.log(`❌ Disconnected: ${userId}/${sessionId || 'default'} (${reason || 'unknown'})`);
+        console.log(`❌ Connection closed for user: ${userId}${sessionId ? `, session: ${sessionId}` : ''}`);
+        console.log(`📊 Disconnect details:`, {
+          reason: lastDisconnect?.error?.output?.statusCode,
+          message: lastDisconnect?.error?.message,
+          timestamp: new Date().toISOString()
+        });
         
         // Handle restartRequired disconnect - this is normal after QR scan
         if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.restartRequired) {
@@ -1872,7 +1886,7 @@ async function connectWhatsApp(userId, sessionId = null) {
         const connection = getConnection(userId, sessionId || 'default');
         if (connection) {
           if (connection.keepAliveInterval) {
-          clearInterval(connection.keepAliveInterval);
+            clearInterval(connection.keepAliveInterval);
             dbLogger.debug('connection', `Cleared keep-alive interval for user: ${userId}`, { connectionId }, userId, sessionId);
           }
           if (connection.healthCheckInterval) {
@@ -1974,26 +1988,49 @@ async function connectWhatsApp(userId, sessionId = null) {
       
       // Handle connection open
       else if (connection === 'open') {
-        // Clear timeouts
-        if (connectionTimeout) clearTimeout(connectionTimeout);
-        if (lockTimeout) clearTimeout(lockTimeout);
+        // Clear connection timeout since connection is successful
+        if (connectionTimeout) {
+          clearTimeout(connectionTimeout);
+          console.log(`✅ Connection timeout cleared for user ${userId} - connection successful`);
+        }
         
-        // Minimal logging - one line for connection
-        console.log(`✅ Connected: ${userId}/${sessionId || 'default'}`);
+        // Clear lock timeout since connection is successful
+        if (lockTimeout) {
+          clearTimeout(lockTimeout);
+          console.log(`✅ Lock timeout cleared for user ${userId} - connection successful`);
+        }
+        
+        dbLogger.info('connection', `Connection opened for user: ${userId}`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          timestamp: new Date().toISOString(),
+          totalConnectionTime: Date.now() - startTime
+        }, userId, sessionId);
         
         // Start session keep-alive mechanism
         const keepAliveInterval = setInterval(async () => {
           try {
             if (sock && sock.ws && sock.ws.readyState === 1) {
+              // Send a ping to keep the connection alive
               await sock.ping();
+              // Logging optimized for 8GB plan
+              if (Math.random() < 0.2) { // Log 20% of pings for better monitoring
+                console.log(`💓 Keep-alive ping sent for user: ${userId} (${new Date().toLocaleTimeString()})`);
+              }
+            } else {
+              dbLogger.warn('connection', `Cannot send keep-alive ping for user ${userId} - socket not ready`, { connectionId }, userId, sessionId);
             }
           } catch (error) {
-            // Silent fail - log only critical errors
-            if (error.message && !error.message.includes('Timed Out')) {
-              console.error(`❌ Ping failed ${userId}: ${error.message}`);
-            }
+            dbLogger.error('connection', `Keep-alive ping failed for user ${userId}: ${error.message}`, {
+              connectionId,
+              userId,
+              error: error.message,
+              stack: error.stack,
+              timestamp: new Date().toISOString()
+            }, userId, sessionId);
           }
-        }, 60000); // Send ping every 60 seconds
+        }, 30000); // Send ping every 30 seconds (optimized for 8GB plan)
         
         // Store the keep-alive interval for cleanup
         const connection = getConnection(userId, sessionId || 'default');
@@ -2001,37 +2038,71 @@ async function connectWhatsApp(userId, sessionId = null) {
           connection.keepAliveInterval = keepAliveInterval;
         }
         
-        // Add secondary connection health monitoring
+        // Add secondary connection health monitoring to prevent 1-hour disconnections
         const healthCheckInterval = setInterval(async () => {
           try {
             if (sock && sock.ws) {
               const readyState = sock.ws.readyState;
+              const connectionAge = Date.now() - connectionStartTime;
+              const hoursAlive = Math.floor(connectionAge / (1000 * 60 * 60));
+              
+              // Logging optimized for 8GB plan
+              if (Math.random() < 0.15) { // Log 15% of health checks for better monitoring
+                console.log(`🔍 Connection health check for user ${userId}: readyState=${readyState}, age=${hoursAlive}h ${Math.floor((connectionAge % (1000 * 60 * 60)) / (1000 * 60))}m`);
+              }
               
               // If connection is closed or closing, attempt to reconnect
               if (readyState === 2 || readyState === 3) {
+                console.log(`⚠️ Connection is closing/closed for user ${userId}, attempting reconnection`);
                 clearInterval(healthCheckInterval);
                 removeConnection(userId, sessionId || 'default');
                 
+                // Attempt reconnection after a short delay
                 setTimeout(async () => {
                   try {
+                    console.log(`🔄 Attempting reconnection due to health check failure for user ${userId}`);
                     await connectWhatsApp(userId, sessionId);
                   } catch (reconnectError) {
-                    console.error(`❌ Reconnect failed ${userId}`);
+                    console.error(`❌ Health check reconnection failed for user ${userId}:`, reconnectError.message);
                   }
                 }, 5000);
               }
             }
           } catch (error) {
-            // Silent fail
+            console.error(`❌ Health check failed for user ${userId}:`, error.message);
           }
-        }, 120000); // Check every 2 minutes
+        }, 60000); // Check every 60 seconds (optimized for 8GB plan)
         
         // Store health check interval for cleanup
         if (connection) {
           connection.healthCheckInterval = healthCheckInterval;
         }
         
-        // Memory management handled globally - no per-connection monitoring
+        // Add memory management to prevent heap out of memory
+        const memoryCheckInterval = setInterval(() => {
+          const memUsage = process.memoryUsage();
+          const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+          const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
+          
+          // Log memory usage optimized for 8GB plan
+          if (Math.random() < 0.05) { // Log 5% of memory checks for better monitoring
+            console.log(`🧠 Memory usage for user ${userId}: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+          }
+          
+          // Force garbage collection if memory usage is high (8GB plan)
+          if (heapUsedMB > 5500) { // If using more than 5.5GB (per-connection threshold)
+            console.log(`🧹 High memory usage detected (${heapUsedMB}MB), forcing garbage collection`);
+            if (global.gc) {
+              global.gc();
+              console.log(`✅ Garbage collection completed`);
+            }
+          }
+        }, 180000); // Check every 3 minutes (optimized for 8GB plan)
+        
+        // Store memory check interval for cleanup
+        if (connection) {
+          connection.memoryCheckInterval = memoryCheckInterval;
+        }
         
         // Wait a moment for WebSocket to be fully initialized
         setTimeout(async () => {
@@ -2183,6 +2254,9 @@ async function connectWhatsApp(userId, sessionId = null) {
 
     // Add message listener for location handling
     sock.ev.on('messages.upsert', async (event) => {
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const messageStartTime = Date.now();
+      
       try {
         // Filter out messages that might cause PreKey or Bad MAC errors
         const validMessages = event.messages?.filter(msg => {
@@ -2217,6 +2291,25 @@ async function connectWhatsApp(userId, sessionId = null) {
         }, userId, sessionId);
         
         for (const message of validMessages) {
+          const individualMessageId = `${messageId}_${event.messages.indexOf(message)}`;
+          
+          // // Skip if message is from self
+          // if (message.key.fromMe) continue;
+          
+          dbLogger.debug('message', `Processing message for user ${userId}`, {
+            connectionId,
+            messageId: individualMessageId,
+            userId,
+            sessionId: sessionId || 'default',
+            messageType: message.message?.conversation ? 'text' : Object.keys(message.message || {}).join(', '),
+            from: message.key.remoteJid,
+            fromMe: message.key.fromMe,
+            timestamp: message.messageTimestamp,
+            messageTimestamp: new Date(message.messageTimestamp * 1000).toISOString(),
+            hasLocation: !!(message.message?.locationMessage || message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage),
+            messageKeys: Object.keys(message.message || {}),
+            processingStartTime: new Date().toISOString()
+          }, userId, sessionId);
 
           // Check if message is a location or has quoted location
           let locationData = null;
@@ -2224,12 +2317,38 @@ async function connectWhatsApp(userId, sessionId = null) {
           // Check direct location message
           if (message.message?.locationMessage) {
             locationData = message.message.locationMessage;
-            console.log(`📍 Location: ${userId}/${sessionId || 'default'}`);
+            dbLogger.info('location', `Direct location received for user ${userId}`, {
+              connectionId,
+              messageId: individualMessageId,
+              userId,
+              sessionId: sessionId || 'default',
+              latitude: locationData.degreesLatitude,
+              longitude: locationData.degreesLongitude,
+              name: locationData.name,
+              address: locationData.address,
+              accuracy: locationData.accuracyInMeters,
+              speed: locationData.speedInMps,
+              degreesClockwiseFromMagneticNorth: locationData.degreesClockwiseFromMagneticNorth,
+              timestamp: new Date().toISOString()
+            }, userId, sessionId);
           }
           // Check quoted message for location
           else if (message.message?.extendedTextMessage?.contextInfo?.quotedMessage?.locationMessage) {
             locationData = message.message.extendedTextMessage.contextInfo.quotedMessage.locationMessage;
-            console.log(`📍 Location: ${userId}/${sessionId || 'default'}`);
+            dbLogger.info('location', `Quoted location received for user ${userId}`, {
+              connectionId,
+              messageId: individualMessageId,
+              userId,
+              sessionId: sessionId || 'default',
+              latitude: locationData.degreesLatitude,
+              longitude: locationData.degreesLongitude,
+              name: locationData.name,
+              address: locationData.address,
+              accuracy: locationData.accuracyInMeters,
+              speed: locationData.speedInMps,
+              degreesClockwiseFromMagneticNorth: locationData.degreesClockwiseFromMagneticNorth,
+              timestamp: new Date().toISOString()
+            }, userId, sessionId);
           }
 
           // If we have location data, process it
