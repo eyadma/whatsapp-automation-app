@@ -4,8 +4,8 @@
   "description": "Mobile app with Node.js backend for automated WhatsApp messaging using Baileys",
   "main": "server-supabase.js",
   "scripts": {
-    "start": "node server-supabase.js",
-    "dev": "nodemon server-supabase.js",
+    "start": "node --max-old-space-size=4096 server-supabase.js",
+    "dev": "nodemon --max-old-space-size=4096 server-supabase.js",
     "mobile": "cd mobile && npm start"
   },
   "dependencies": {

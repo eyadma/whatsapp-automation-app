@@ -5073,6 +5073,46 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`📱 Mobile Access: http://192.168.0.113:${PORT}/api`);
   console.log(`🛡️ Global error handlers initialized for Baileys timeout errors`);
   
+  // Log initial memory usage
+  const initialMemory = process.memoryUsage();
+  console.log(`💾 Initial Memory Usage:`, {
+    heapUsed: `${(initialMemory.heapUsed / 1024 / 1024).toFixed(2)} MB`,
+    heapTotal: `${(initialMemory.heapTotal / 1024 / 1024).toFixed(2)} MB`,
+    rss: `${(initialMemory.rss / 1024 / 1024).toFixed(2)} MB`,
+    external: `${(initialMemory.external / 1024 / 1024).toFixed(2)} MB`
+  });
+  
+  // Memory monitoring - log memory usage every 30 minutes
+  setInterval(() => {
+    const usage = process.memoryUsage();
+    const memoryInfo = {
+      heapUsed: `${(usage.heapUsed / 1024 / 1024).toFixed(2)} MB`,
+      heapTotal: `${(usage.heapTotal / 1024 / 1024).toFixed(2)} MB`,
+      rss: `${(usage.rss / 1024 / 1024).toFixed(2)} MB`,
+      external: `${(usage.external / 1024 / 1024).toFixed(2)} MB`,
+      heapUsedPercent: `${((usage.heapUsed / usage.heapTotal) * 100).toFixed(2)}%`
+    };
+    
+    console.log(`💾 Memory Usage:`, memoryInfo);
+    
+    // Warning if heap usage is over 80%
+    if ((usage.heapUsed / usage.heapTotal) > 0.8) {
+      console.warn(`⚠️ WARNING: Heap usage is over 80% - consider restarting or investigating memory leaks`);
+      dbLogger.warn('system', 'High memory usage detected', {
+        memoryUsage: memoryInfo,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Force garbage collection if available (requires --expose-gc flag)
+    if (global.gc && (usage.heapUsed / usage.heapTotal) > 0.7) {
+      console.log(`🧹 Running garbage collection...`);
+      global.gc();
+      const afterGC = process.memoryUsage();
+      console.log(`🧹 After GC: ${(afterGC.heapUsed / 1024 / 1024).toFixed(2)} MB (freed ${((usage.heapUsed - afterGC.heapUsed) / 1024 / 1024).toFixed(2)} MB)`);
+    }
+  }, 1800000); // 30 minutes
+  
   // Initialize connection persistence manager for 24/7 operation
   connectionPersistenceManager.initialize();
 });
