@@ -1497,6 +1497,28 @@ async function connectWhatsApp(userId, sessionId = null) {
     // Handle connection errors
     sock.ev.on('connection.error', (error) => {
       console.log(`❌ Connection error for user ${userId}:`, error);
+      
+      // Check if it's a timeout error
+      const isTimeoutError = error?.message === 'Timed Out' || 
+                            error?.output?.statusCode === 408 ||
+                            (error?.data && error?.data?.stack && error?.data?.stack.includes('waitForMessage'));
+      
+      if (isTimeoutError) {
+        console.log(`⏰ Timeout error detected in connection.error for user ${userId} - pre-key operation failed`);
+        dbLogger.warn('connection', `Timeout error in connection.error for user ${userId}`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          error: error.message || 'Timed Out',
+          statusCode: error?.output?.statusCode || 408,
+          errorData: error?.data,
+          timestamp: new Date().toISOString()
+        }, userId, sessionId);
+        
+        // Don't treat as fatal - the connection.update handler will handle reconnection
+        return;
+      }
+      
       dbLogger.error('connection', `Connection error for user ${userId}: ${error.message}`, {
         connectionId,
         userId,
@@ -1506,6 +1528,46 @@ async function connectWhatsApp(userId, sessionId = null) {
         timestamp: new Date().toISOString()
       }, userId, sessionId);
     });
+    
+    // Add a general error catcher for the socket to prevent crashes
+    try {
+      sock.ev.on('error', (error) => {
+        console.log(`⚠️ Socket general error for user ${userId}:`, error);
+        
+        // Check if it's a Baileys timeout error
+        const isBaileysTimeout = error?.message === 'Timed Out' || 
+                                error?.output?.statusCode === 408 ||
+                                error?.isBoom === true;
+        
+        if (isBaileysTimeout) {
+          console.log(`🔧 Baileys timeout error caught in socket error handler for user ${userId}`);
+          dbLogger.warn('connection', `Baileys timeout in socket error handler for user ${userId}`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            error: error.message || 'Timed Out',
+            statusCode: error?.output?.statusCode || 408,
+            isBoom: error?.isBoom,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Log but don't crash - connection.update will handle reconnection
+          return;
+        }
+        
+        dbLogger.error('socket', `General socket error for user ${userId}: ${error.message || 'Unknown error'}`, {
+          connectionId,
+          userId,
+          sessionId: sessionId || 'default',
+          error: error.message || 'Unknown error',
+          stack: error.stack,
+          timestamp: new Date().toISOString()
+        }, userId, sessionId);
+      });
+    } catch (errorHandlerError) {
+      // If we can't even attach the error handler, log it but continue
+      console.log(`⚠️ Failed to attach error handler for user ${userId}:`, errorHandlerError.message);
+    }
 
     // Handle connection updates according to Baileys documentation
     sock.ev.on('connection.update', async (update) => {
@@ -4939,12 +5001,77 @@ app.post('/api/customers/fetch/:userId', async (req, res) => {
   }
 });
 
+// Global error handlers for unhandled errors
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ Unhandled Promise Rejection:', reason);
+  
+  // Check if it's a Baileys timeout error
+  if (reason && typeof reason === 'object') {
+    const isBaileysTimeout = reason.message === 'Timed Out' || 
+                            reason.output?.statusCode === 408 ||
+                            (reason.data && reason.data.stack && reason.data.stack.includes('baileys'));
+    
+    if (isBaileysTimeout) {
+      console.log('🔧 Baileys timeout error detected in unhandled rejection - gracefully handling');
+      dbLogger.warn('connection', 'Baileys timeout error in unhandled rejection', {
+        error: reason.message || 'Timed Out',
+        statusCode: reason.output?.statusCode || 408,
+        stack: reason.stack || reason.data?.stack,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Don't crash the server for Baileys timeouts - they're recoverable
+      return;
+    }
+  }
+  
+  // Log other unhandled rejections but don't crash
+  dbLogger.error('system', 'Unhandled Promise Rejection', {
+    reason: reason?.message || String(reason),
+    stack: reason?.stack,
+    timestamp: new Date().toISOString()
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('⚠️ Uncaught Exception:', error);
+  
+  // Check if it's a Baileys timeout error
+  const isBaileysTimeout = error.message === 'Timed Out' || 
+                          error.output?.statusCode === 408 ||
+                          (error.data && error.data.stack && error.data.stack.includes('baileys'));
+  
+  if (isBaileysTimeout) {
+    console.log('🔧 Baileys timeout error detected in uncaught exception - gracefully handling');
+    dbLogger.warn('connection', 'Baileys timeout error in uncaught exception', {
+      error: error.message,
+      statusCode: error.output?.statusCode || 408,
+      stack: error.stack || error.data?.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Don't crash the server for Baileys timeouts
+    return;
+  }
+  
+  // Log critical errors
+  dbLogger.error('system', 'Uncaught Exception - Server may be unstable', {
+    error: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString()
+  });
+  
+  // For non-Baileys errors, log but continue (avoid crash in production)
+  console.log('⚠️ Server continuing despite uncaught exception - monitor for stability');
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 WhatsApp Automation API running on port ${PORT}`);
   console.log(`📱 API Base URL: http://localhost:${PORT}/api`);
   console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
   console.log(`📱 Mobile Access: http://192.168.0.113:${PORT}/api`);
+  console.log(`🛡️ Global error handlers initialized for Baileys timeout errors`);
   
   // Initialize connection persistence manager for 24/7 operation
   connectionPersistenceManager.initialize();
