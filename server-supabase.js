@@ -368,6 +368,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const connections = new Map(); // userId -> Map of sessionId -> connection
 const userSessions = new Map(); // userId -> Set of active sessionIds
 const connectionLocks = new Map(); // connectionKey -> connectionId (prevents multiple simultaneous connections)
+const connectionAttempts = new Map(); // connectionKey -> { count: number, lastAttempt: timestamp, errorType: string }
 
 // Background message processing management
 const backgroundProcesses = new Map();
@@ -1179,8 +1180,8 @@ async function connectWhatsApp(userId, sessionId = null) {
       const socketConfig = {
         auth: state,
         logger: logger,
-        // Proper browser configuration for desktop emulation
-        browser: ['WhatsApp Desktop', 'Chrome', '1.0.0'],
+        // Updated browser configuration to avoid 405 errors
+        browser: ['WhatsApp Desktop', 'Chrome', '2.2413.51'],
         // Connection settings - optimized for Railway environment with aggressive timeouts
         connectTimeoutMs: 120000, // 2 minutes - faster fail for quicker retry
         keepAliveIntervalMs: 25000, // 25 seconds for better stability
@@ -1730,6 +1731,62 @@ async function connectWhatsApp(userId, sessionId = null) {
           return; // Don't proceed with normal disconnect handling
         }
         
+        // Handle 405 Method Not Allowed errors - WhatsApp rejecting connection method
+        if (lastDisconnect?.error?.output?.statusCode === 405) {
+          const connectionKey = `${userId}_${sessionId || 'default'}`;
+          
+          // Track 405 error attempts for exponential backoff
+          const now = Date.now();
+          const attempts = connectionAttempts.get(connectionKey) || { count: 0, lastAttempt: 0, errorType: '405' };
+          attempts.count++;
+          attempts.lastAttempt = now;
+          attempts.errorType = '405';
+          connectionAttempts.set(connectionKey, attempts);
+          
+          // Calculate exponential backoff delay (30s, 60s, 120s, 240s, max 600s)
+          const baseDelay = 30000; // 30 seconds
+          const maxDelay = 600000; // 10 minutes
+          const delay = Math.min(baseDelay * Math.pow(2, attempts.count - 1), maxDelay);
+          
+          console.log(`🚫 405 Method Not Allowed error for user ${userId} (attempt ${attempts.count}) - waiting ${delay/1000}s before retry`);
+          dbLogger.warn('connection', `405 Method Not Allowed error for user ${userId} - attempt ${attempts.count}`, {
+            connectionId,
+            userId,
+            sessionId: sessionId || 'default',
+            reason: '405_method_not_allowed',
+            attempt: attempts.count,
+            delay: delay,
+            errorMessage: lastDisconnect?.error?.message,
+            errorData: lastDisconnect?.error?.data,
+            timestamp: new Date().toISOString()
+          }, userId, sessionId);
+          
+          // Clean up current connection
+          removeConnection(userId, sessionId || 'default');
+          
+          // Wait with exponential backoff before retrying 405 errors
+          setTimeout(async () => {
+            try {
+              console.log(`🔄 Retrying connection after 405 error for user ${userId} (attempt ${attempts.count})`);
+              
+              // Check if a connection already exists before creating a new one
+              const existingConnection = getConnection(userId, sessionId);
+              if (existingConnection && existingConnection.connected) {
+                console.log(`✅ Connection already exists, skipping retry for user ${userId}`);
+                // Reset attempt counter on successful connection
+                connectionAttempts.delete(connectionKey);
+                return;
+              }
+              
+              await connectWhatsApp(userId, sessionId);
+            } catch (error) {
+              console.error(`❌ Retry failed after 405 error for ${userId}: ${error.message}`);
+            }
+          }, delay);
+          
+          return; // Don't proceed with normal disconnect handling
+        }
+        
         // Handle 440 stream error (conflict) - multiple connection attempts
         if (lastDisconnect?.error?.output?.statusCode === 440) {
           console.log(`⚠️ 440 Stream conflict error for user ${userId} - multiple connection attempts detected`);
@@ -2046,6 +2103,13 @@ async function connectWhatsApp(userId, sessionId = null) {
         if (lockTimeout) {
           clearTimeout(lockTimeout);
           console.log(`✅ Lock timeout cleared for user ${userId} - connection successful`);
+        }
+        
+        // Reset connection attempt counter on successful connection
+        const connectionKey = `${userId}_${sessionId || 'default'}`;
+        if (connectionAttempts.has(connectionKey)) {
+          connectionAttempts.delete(connectionKey);
+          console.log(`✅ Reset connection attempt counter for user ${userId} - connection successful`);
         }
         
         dbLogger.info('connection', `Connection opened for user: ${userId}`, {
