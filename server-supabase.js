@@ -3380,6 +3380,65 @@ app.post('/api/whatsapp/clean-session/:userId', async (req, res) => {
   }
 });
 
+// Clear 405 error session and force fresh QR generation
+app.post('/api/whatsapp/clear-405-session/:userId/:sessionId', async (req, res) => {
+  try {
+    const { userId, sessionId } = req.params;
+    console.log(`🚫 Clearing 405 error session for user: ${userId}, session: ${sessionId}`);
+    
+    // Remove connection from memory
+    removeConnection(userId, sessionId);
+    
+    // Clear connection attempt counter for 405 errors
+    const connectionKey = `${userId}_${sessionId}`;
+    if (connectionAttempts.has(connectionKey)) {
+      connectionAttempts.delete(connectionKey);
+      console.log(`✅ Cleared 405 error attempt counter for ${connectionKey}`);
+    }
+    
+    // Clear connection lock
+    if (connectionLocks.has(connectionKey)) {
+      connectionLocks.delete(connectionKey);
+      console.log(`✅ Cleared connection lock for ${connectionKey}`);
+    }
+    
+    // Force delete session directory to force fresh QR
+    const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId);
+    try {
+      if (fs.existsSync(sessionDir)) {
+        console.log(`🗑️ Force deleting 405 error session directory: ${sessionDir}`);
+        fs.rmSync(sessionDir, { recursive: true, force: true });
+        console.log(`✅ 405 error session directory completely removed for fresh start`);
+      }
+    } catch (deleteError) {
+      console.error(`❌ Error deleting 405 error session directory:`, deleteError);
+      // Continue anyway
+    }
+    
+    // Update session status in Supabase
+    await supabase
+      .from('whatsapp_sessions')
+      .update({ 
+        status: 'cleared_405',
+        last_activity: new Date().toISOString()
+      })
+      .eq('session_id', sessionId)
+      .eq('user_id', userId);
+
+    console.log(`✅ 405 error session cleared for user: ${userId}, session: ${sessionId} - ready for fresh QR generation`);
+    res.json({ 
+      success: true, 
+      message: '405 error session cleared successfully. Next connection will generate fresh QR code.',
+      sessionId: sessionId,
+      userId: userId,
+      clearedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error clearing 405 error session:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 2. Customer Management
 app.get('/api/customers/:userId', async (req, res) => {
   try {
