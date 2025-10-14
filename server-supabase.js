@@ -1180,8 +1180,32 @@ async function connectWhatsApp(userId, sessionId = null) {
       const socketConfig = {
         auth: state,
         logger: logger,
-        // Updated browser configuration to avoid 405 errors
-        browser: ['WhatsApp Desktop', 'Chrome', '2.2413.51'],
+        // Dynamic browser configuration based on 405 error attempts
+        browser: (() => {
+          const connectionKey = `${userId}_${sessionId || 'default'}`;
+          const attempts = connectionAttempts.get(connectionKey);
+          
+          if (attempts && attempts.count >= 3) {
+            // Try different browser configurations for persistent 405 errors
+            const configs = [
+              ['WhatsApp Desktop', 'Chrome', '2.2413.51'],
+              ['WhatsApp Desktop', 'Chrome', '2.2412.10'],
+              ['WhatsApp Desktop', 'Chrome', '2.2410.0'],
+              ['WhatsApp Desktop', 'Chrome', '2.2400.0'],
+              ['WhatsApp Desktop', 'Chrome', '2.2300.0']
+            ];
+            const configIndex = Math.min(attempts.count - 3, configs.length - 1);
+            console.log(`🔄 Using alternative browser config ${configIndex + 1} for persistent 405 errors`);
+            return configs[configIndex];
+          }
+          
+          return ['WhatsApp Desktop', 'Chrome', '2.2413.51'];
+        })(),
+        // Additional connection parameters to avoid 405 errors
+        printQRInTerminal: false,
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+        emitOwnEvents: false,
         // Connection settings - optimized for Railway environment with aggressive timeouts
         connectTimeoutMs: 120000, // 2 minutes - faster fail for quicker retry
         keepAliveIntervalMs: 25000, // 25 seconds for better stability
@@ -1749,6 +1773,27 @@ async function connectWhatsApp(userId, sessionId = null) {
           const delay = Math.min(baseDelay * Math.pow(2, attempts.count - 1), maxDelay);
           
           console.log(`🚫 405 Method Not Allowed error for user ${userId} (attempt ${attempts.count}) - waiting ${delay/1000}s before retry`);
+          
+          // If we've had multiple 405 errors, try a different browser configuration
+          if (attempts.count >= 3) {
+            console.log(`🔄 Attempting browser configuration change for persistent 405 errors (attempt ${attempts.count})`);
+            attempts.browserConfigChanged = true;
+          }
+          
+          // If we've had many 405 errors, completely clear the session directory
+          if (attempts.count >= 5) {
+            console.log(`🧹 Completely clearing session directory for persistent 405 errors (attempt ${attempts.count})`);
+            const sessionDir = path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname, 'sessions', userId, sessionId || 'default');
+            try {
+              if (fs.existsSync(sessionDir)) {
+                fs.rmSync(sessionDir, { recursive: true, force: true });
+                console.log(`✅ Session directory completely removed for fresh start`);
+              }
+            } catch (deleteError) {
+              console.error(`❌ Error deleting session directory:`, deleteError);
+            }
+          }
+          
           dbLogger.warn('connection', `405 Method Not Allowed error for user ${userId} - attempt ${attempts.count}`, {
             connectionId,
             userId,
@@ -1756,6 +1801,7 @@ async function connectWhatsApp(userId, sessionId = null) {
             reason: '405_method_not_allowed',
             attempt: attempts.count,
             delay: delay,
+            browserConfigChanged: attempts.browserConfigChanged || false,
             errorMessage: lastDisconnect?.error?.message,
             errorData: lastDisconnect?.error?.data,
             timestamp: new Date().toISOString()
