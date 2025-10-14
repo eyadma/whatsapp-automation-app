@@ -1179,6 +1179,7 @@ async function connectWhatsApp(userId, sessionId = null) {
 
       const socketConfig = {
         auth: state,
+        version: [2, 3000, 1027934701],
         logger: logger,
         // Dynamic browser configuration based on 405 error attempts
         browser: (() => {
